@@ -1,2 +1,4 @@
-# OnBoardVMInsights
-Scripts to enable On-Boarding to VM Insights
+# On-Boarding for VM Insights
+Documentation and Scripts / ARM templates on how to OnBoard to VM Insights
+
+TODO: Add documentation here
