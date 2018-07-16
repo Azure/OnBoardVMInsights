@@ -1,0 +1,58 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2015-01-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+        "WorkspaceName": {
+            "type": "string"
+        },
+        "WorkspaceLocation": {
+            "type": "string"
+        }
+    },
+    "resources": [
+        {
+            "apiVersion": "2017-03-15-preview",
+            "type": "Microsoft.OperationalInsights/workspaces",
+            "name": "[parameters('WorkspaceName')]",
+            "location": "[parameters('WorkspaceLocation')]",
+            "resources": [
+                {
+                    "apiVersion": "2015-11-01-preview",
+                    "location": "[parameters('WorkspaceLocation')]",
+                    "name": "[concat('ServiceMap', '(', parameters('WorkspaceName'),')')]",
+                    "type": "Microsoft.OperationsManagement/solutions",
+                    "dependsOn": [
+                        "[concat('Microsoft.OperationalInsights/workspaces/', parameters('WorkspaceName'))]"
+                    ],
+                    "properties": {
+                        "workspaceResourceId": "[resourceId('Microsoft.OperationalInsights/workspaces/', parameters('WorkspaceName'))]"
+                    },
+                    "plan": {
+                        "name": "[concat('ServiceMap', '(', parameters('WorkspaceName'),')')]",
+                        "publisher": "Microsoft",
+                        "product": "[Concat('OMSGallery/', 'ServiceMap')]",
+                        "promotionCode": ""
+                    }
+                },
+                {
+                    "apiVersion": "2015-11-01-preview",
+                    "location": "[parameters('WorkspaceLocation')]",
+                    "name": "[concat('InfrastructureInsights', '(', parameters('WorkspaceName'),')')]",
+                    "type": "Microsoft.OperationsManagement/solutions",
+                    "dependsOn": [
+                        "[concat('Microsoft.OperationalInsights/workspaces/', parameters('WorkspaceName'))]"
+                    ],
+                    "properties": {
+                        "workspaceResourceId": "[resourceId('Microsoft.OperationalInsights/workspaces/', parameters('WorkspaceName'))]"
+                    },
+                    "plan": {
+                        "name": "[concat('InfrastructureInsights', '(', parameters('WorkspaceName'),')')]",
+                        "publisher": "Microsoft",
+                        "product": "[Concat('OMSGallery/', 'InfrastructureInsights')]",
+                        "promotionCode": ""
+                    }
+                }
+            ]
+        }
+    ]
+}
