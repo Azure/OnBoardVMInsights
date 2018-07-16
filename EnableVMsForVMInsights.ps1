@@ -3,6 +3,7 @@
   Configure VM's and VM Scale Sets for VM Insights:
   - Installs Log Analytics VM Extension configured to supplied Log Analytics Workspace
   - Installs Dependency Agent VM Extension
+  - Adds 'Workload' resource for Health feature (VM's only) <To Add>
 
   Can be applied to:
   - Subscription
@@ -39,10 +40,11 @@
     <Optional> Set this flag to trigger update of VM instances in a scale set whose upgrade policy is set to Manual
 
 .PARAMETER Approve
-    <Optional> No initial confirmation prompt to start install of listed VM�s/VM Scale Sets
+    <Optional> Set to start with no confirmation prompt to start install of listed VM�s/VM Scale Sets
 
 .PARAMETER Whatif
-    <Optional> See what would happen in terms of installs, what workspace configured to, and status of the extension
+    <Optional> See what would happen in terms of installs.
+    If extension is already installed will show what workspace is currently configured, and status of the VM extension
 
 .PARAMETER Confirm
     <Optional> Confirm every action
@@ -87,12 +89,12 @@ function Get-VMExtension {
 
     foreach ($extension in $extensions) {
         if ($ExtensionType -eq $extension.VirtualMachineExtensionType) {
-            Write-Verbose("Extension: " + $ExtensionType + " found on VM: " + $VMName)
+            Write-Verbose("$VMName : Extension: $ExtensionType found on VM")
             $extension
             return
         }
     }
-    Write-Verbose("Extension: " + $ExtensionType + " not found on VM: " + $VMName)
+    Write-Verbose("$VMName : Extension: $ExtensionType not found on VM")
 }
 
 function Install-VMExtension {
@@ -112,15 +114,37 @@ function Install-VMExtension {
         [Parameter(mandatory = $true)][string]$ExtensionVersion,
         [Parameter(mandatory = $false)][hashtable]$PublicSettings,
         [Parameter(mandatory = $false)][hashtable]$ProtectedSettings,
-        [Parameter(mandatory = $false)][boolean]$ReInstall
+        [Parameter(mandatory = $false)][boolean]$ReInstall,
+        [Parameter(mandatory = $true)][hashtable]$OnboardingStatus
     )
     # Use supplied name unless already deployed, use same name
     $extensionName = $ExtensionName
 
     $extension = Get-VMExtension -VMName $VMName -VMResourceGroup $VMResourceGroupName -ExtensionType $ExtensionType
     if ($extension) {
-        Write-Output("$VMName $ExtensionType extension with name " + $extension.Name + " already installed. Provisioning State: " + $extension.ProvisioningState + " " + $extension.Settings)
         $extensionName = $extension.Name
+
+        # of has Settings - it is LogAnalytics extension
+        if ($extension.Settings) {
+            if ($extension.Settings.ToString().Contains($PublicSettings.workspaceId)) {
+                $message = "$VMName : Extension $ExtensionType already configured for this workspace. Provisioning State: " + $extension.ProvisioningState + " " + $extension.Settings
+                $OnboardingStatus.AlreadyOnboarded += $message
+                Write-Output($message)
+            }
+            else {
+                if ($ReInstall -ne $true)
+                {
+                    $message = "$VMName : Extension $ExtensionType already configured for a different workspace. Run with /ReInstall to move to new workspace. Provisioning State: " + $extension.ProvisioningState + " " + $extension.Settings
+                    Write-Warning($message)
+                    $OnboardingStatus.DifferentWorkspace += $message
+                }
+            }
+        }
+        else
+        {
+            $message = "$VMName : $ExtensionType extension with name " + $extension.Name + " already installed. Provisioning State: " + $extension.ProvisioningState + " " + $extension.Settings
+            Write-Output($message)
+        }
     }
 
     if ($PSCmdlet.ShouldProcess($VMName, "install extension $ExtensionType") -and ($ReInstall -eq $true -or !$extension)) {
@@ -140,17 +164,18 @@ function Install-VMExtension {
             $parameters.Add("ProtectedSettings", $ProtectedSettings)
         }
 
-        Write-Output("$VMName Deploying $ExtensionType with name $extensionName...")
+        Write-Output("$VMName : Deploying $ExtensionType with name $extensionName")
         $result = Set-AzureRmVMExtension @parameters
 
         if ($result -and $result.IsSuccessStatusCode) {
-            Write-Output("$VMName Successfully deployed $ExtensionType")
-            Write-Output("-------------------------------")
+            $message = "$VMName : Successfully deployed $ExtensionType"
+            Write-Output($message)
+            $OnboardingStatus.Succeeded += $message
         }
         else {
-            Write-Warning("$VMName Failed to deploy $ExtensionType")
-            Write-Output("-------------------------------")
-            throw "$VMResourceGroupName : $VMName : $ExtensionType"
+            $message = "$VMName : Failed to deploy $ExtensionType"
+            Write-Warning($message)
+            $OnboardingStatus.Failed += $message
         }
     }
 }
@@ -168,12 +193,12 @@ function Get-VMssExtension {
     )
     foreach ($extension in $VMss.VirtualMachineProfile.ExtensionProfile.Extensions) {
         if ($ExtensionType -eq $extension.Type) {
-            Write-Verbose("Extension: " + $ExtensionType + " found on VMSS: " + $VMScaleSetName)
+            Write-Verbose("$VMScaleSetName : Extension: $ExtensionType found on VMSS")
             $extension
             return
         }
     }
-    Write-Verbose("Extension: " + $ExtensionType + " not found on VMSS: " + $VMScaleSetName)
+    Write-Verbose("$VMScaleSetName : Extension: $ExtensionType not found on VMSS")
 }
 
 function Install-VMssExtension {
@@ -201,7 +226,7 @@ function Install-VMssExtension {
 
     $extension = Get-VMssExtension -VMss $scalesetObject -ExtensionType $ExtensionType
     if ($extension) {
-        Write-Output("$VMScaleSetName $ExtensionType extension with name " + $extension.Name + " already installed. Provisioning State: " + $extension.ProvisioningState + " " + $extension.Settings)
+        Write-Output("$VMScaleSetName : $ExtensionType extension with name " + $extension.Name + " already installed. Provisioning State: " + $extension.ProvisioningState + " " + $extension.Settings)
         $extensionName = $extension.Name
     }
 
@@ -221,17 +246,20 @@ function Install-VMssExtension {
             $parameters.Add("ProtectedSetting", $ProtectedSettings)
         }
 
-        Write-Verbose("$VMScaleSetName Adding $ExtensionType with name $extensionName")
+        Write-Verbose("$VMScaleSetName : Adding $ExtensionType with name $extensionName")
         $scalesetObject = Add-AzureRmVmssExtension @parameters
 
         Write-Output("$VMScaleSetName Updating scale set with $ExtensionType extension")
         $result = Update-AzureRmVmss -VMScaleSetName $VMScaleSetName -ResourceGroupName $VMScaleSetResourceGroupName -VirtualMachineScaleSet $scalesetObject
         if ($result -and $result.ProvisioningState -eq "Succeeded") {
-            Write-Output("$VMScaleSetName Successfully updated scale set with $ExtensionType extension")
+            $message = "$VMScaleSetName : Successfully updated scale set with $ExtensionType extension"
+            Write-Output($message)
+            $OnboardingStatus.Succeeded += $message
         }
         else {
-            Write-Warning("$VMScaleSetName failed updating scale set with $ExtensionType extension")
-            throw "$VMScaleSetResourceGroupName : $VMScaleSetName : $ExtensionType"
+            $message = "$VMScaleSetName : failed updating scale set with $ExtensionType extension"
+            Write-Warning($message)
+            $OnboardingStatus.Failed += $message
         }
     }
 }
@@ -262,8 +290,21 @@ else {
 }
 
 $VMs = @()
-$failedDeployments = @()
 $ScaleSets = @()
+
+# To report on overall status
+$AlreadyOnboarded = @()
+$OnboardingSucceeded = @()
+$OnboardingFailed = @()
+$OnboardingBlockedNotRunning = @()
+$OnboardingBlockedDifferentWorkspace = @()
+$OnboardingStatus = @{
+    AlreadyOnboarded = $AlreadyOnboarded;
+    Succeeded = $OnboardingSucceeded;
+    Failed    = $OnboardingFailed;
+    NotRunning = $OnboardingBlockedNotRunning;
+    DifferentWorkspace = $OnboardingBlockedDifferentWorkspace;
+}
 
 # Log Analytics Extension constants
 $MMAExtensionMap = @{ "Windows" = "MicrosoftMonitoringAgent"; "Linux" = "OmsAgentForLinux" }
@@ -300,8 +341,8 @@ Write-Output("`nVM's or VM ScaleSets matching criteria:`n")
 $VMS | ForEach-Object { Write-Output ($_.Name + " " + $_.PowerState) }
 
 # Validate customer wants to continue
-Write-Output("`nThis operation will install the Log Analytics and Dependency Agent extensions on above $($VMS.Count) VM's or VM ScaleSets.")
-Write-Output("VM's in a non-running state will be skipped")
+Write-Output("`nThis operation will install the Log Analytics and Dependency Agent extensions on above $($VMS.Count) VM's or VM Scale Sets.")
+Write-Output("VM's in a non-running state will be skipped.")
 Write-Output("Extension will not be re-installed if already installed. Use /ReInstall if desired, for example to update workspace ")
 if ($Approve -eq $true -or $PSCmdlet.ShouldContinue("Continue?", "")) {
     Write-Output ""
@@ -315,137 +356,141 @@ else {
 # Loop through each VM/VM Scale set, as appropriate handle installing VM Extensions
 #
 Foreach ($vm in $VMs) {
-    try {
-        # set as variabels so easier to use in output strings
-        $vmName = $vm.Name
-        $vmLocation = $vm.Location
-        $vmResourceGroupName = $vm.ResourceGroupName
+    # set as variabels so easier to use in output strings
+    $vmName = $vm.Name
+    $vmLocation = $vm.Location
+    $vmResourceGroupName = $vm.ResourceGroupName
 
-        #
-        # Find OS Type
-        #
-        if ($vm.type -eq 'Microsoft.Compute/virtualMachineScaleSets') {
-            $isScaleset = $true
+    #
+    # Find OS Type
+    #
+    if ($vm.type -eq 'Microsoft.Compute/virtualMachineScaleSets') {
+        $isScaleset = $true
 
-            $scalesetVMs = @()
-            $scalesetVMs = Get-AzureRmVMssVM -ResourceGroupName $vmResourceGroupName -VMScaleSetName $vmName
-            if ($scalesetVMs.length -gt 0) {
-                if ($scalesetVMs[0]) {
-                    $osType = $scalesetVMs[0].storageprofile.osdisk.ostype
-                }
+        $scalesetVMs = @()
+        $scalesetVMs = Get-AzureRmVMssVM -ResourceGroupName $vmResourceGroupName -VMScaleSetName $vmName
+        if ($scalesetVMs.length -gt 0) {
+            if ($scalesetVMs[0]) {
+                $osType = $scalesetVMs[0].storageprofile.osdisk.ostype
             }
         }
-        else {
-            $isScaleset = $false
-            $osType = $vm.StorageProfile.OsDisk.OsType
-        }
+    }
+    else {
+        $isScaleset = $false
+        $osType = $vm.StorageProfile.OsDisk.OsType
+    }
 
-        #
-        # Map to correct extension for OS type
-        #
-        $mmaExt = $MMAExtensionMap.($osType.ToString())
-        if (! $mmaExt) {
-            Write-Warning("$vmName has an unsupported OS: $osType")
+    #
+    # Map to correct extension for OS type
+    #
+    $mmaExt = $MMAExtensionMap.($osType.ToString())
+    if (! $mmaExt) {
+        Write-Warning("$vmName : has an unsupported OS: $osType")
+        continue
+    }
+    $mmaExtVersion = $MMAExtensionVersionMap.($osType.ToString())
+    $daExt = $DAExtensionMap.($osType.ToString())
+    $daExtVersion = $DAExtensionVersionMap.($osType.ToString())
+
+    Write-Verbose("Deployment settings: ")
+    Write-Verbose("ResourceGroup: $vmResourceGroupName")
+    Write-Verbose("VM: $vmName")
+    Write-Verbose("Location: $vmLocation")
+    Write-Verbose("OS Type: $ext")
+    Write-Verbose("Dependency Agent: $daExt, HandlerVersion: $daExtVersion")
+    Write-Verbose("Monitoring Agent: $mmaExt, HandlerVersion: $mmaExtVersion")
+
+    if ($isScaleset) {
+
+        Install-VMssExtension `
+            -VMScaleSetName $vmName `
+            -VMScaleSetResourceGroupName $vmResourceGroupName `
+            -ExtensionType $daExt `
+            -ExtensionName $daExtensionName `
+            -ExtensionPublisher $DAExtensionPublisher `
+            -ExtensionVersion $daExtVersion `
+            -ReInstall $ReInstall
+
+        Install-VMssExtension `
+            -VMScaleSetName $vmName `
+            -VMScaleSetResourceGroupName $vmResourceGroupName `
+            -ExtensionType $mmaExt `
+            -ExtensionName $mmaExtensionName `
+            -ExtensionPublisher $MMAExtensionPublisher `
+            -ExtensionVersion $mmaExtVersion `
+            -PublicSettings $PublicSettings `
+            -ProtectedSettings $ProtectedSettings `
+            -ReInstall $ReInstall
+
+        $scalesetObject = Get-AzureRMVMSS -VMScaleSetName $vmName -ResourceGroupName $vmResourceGroupName
+        if ($scalesetObject.UpgradePolicy.mode -eq 'Manual') {
+            if ($TriggerVmssManualVMUpdate -eq $true) {
+
+                Write-Output("$vmName : Upgrading scale set instances since the upgrade policy is set to Manual")
+                $scaleSetInstances = @{}
+                $scaleSetInstances = Get-AzureRMVMSSvm -ResourceGroupName $vmResourceGroupName -VMScaleSetName $vmName -InstanceView
+                $i = 0
+                $instanceCount = $scaleSetInstances.Length
+                Foreach ($scaleSetInstance in $scaleSetInstances) {
+                    $i++
+                    Write-Output("$vmName : Updating instance " + $scaleSetInstance.Name + " $i of $instanceCount")
+                    Update-AzureRmVmssInstance -ResourceGroupName $vmResourceGroupName -VMScaleSetName $vmName -InstanceId $scaleSetInstance.InstanceId
+                }
+                Write-Output("$vmName All scale set instances upgraded")
+            }
+            else {
+                $message = "$vmName : has UpgradePolicy of Manual. Please trigger upgrade of VM Scale Set or call with -TriggerVmssManualVMUpdate"
+                Write-Warning($message)
+                $OnboardingStatus.Blocked += $message
+            }
+        }
+    }
+    #
+    # Handle VM's
+    #
+    else {
+        if ("VM Running" -ne $vm.PowerState) {
+            $message = "$vmName : has a PowerState " + $vm.PowerState + " Skipping"
+            Write-Output($message)
+            $OnboardingStatus.Blocked += $message
             continue
         }
-        $mmaExtVersion = $MMAExtensionVersionMap.($osType.ToString())
-        $daExt = $DAExtensionMap.($osType.ToString())
-        $daExtVersion = $DAExtensionVersionMap.($osType.ToString())
 
-        Write-Verbose("Deployment settings: ")
-        Write-Verbose("ResourceGroup: $vmResourceGroupName")
-        Write-Verbose("VM: $vmName")
-        Write-Verbose("Location: $vmLocation")
-        Write-Verbose("OS Type: $ext")
-        Write-Verbose("Dependency Agent: $daExt, HandlerVersion: $daExtVersion")
-        Write-Verbose("Monitoring Agent: $mmaExt, HandlerVersion: $mmaExtVersion")
+        Install-VMExtension `
+            -VMName $vmName `
+            -VMLocation $vmLocation `
+            -VMResourceGroupName $vmResourceGroupName `
+            -ExtensionType $daExt `
+            -ExtensionName $daExtensionName `
+            -ExtensionPublisher $DAExtensionPublisher `
+            -ExtensionVersion $daExtVersion `
+            -ReInstall $ReInstall `
+            -OnboardingStatus $OnboardingStatus
 
-        if ($isScaleset) {
-
-            Install-VMssExtension `
-                -VMScaleSetName $vmName `
-                -VMScaleSetResourceGroupName $vmResourceGroupName `
-                -ExtensionType $daExt `
-                -ExtensionName $daExtensionName `
-                -ExtensionPublisher $DAExtensionPublisher `
-                -ExtensionVersion $daExtVersion `
-                -ReInstall $ReInstall
-
-            Install-VMssExtension `
-                -VMScaleSetName $vmName `
-                -VMScaleSetResourceGroupName $vmResourceGroupName `
-                -ExtensionType $mmaExt `
-                -ExtensionName $mmaExtensionName `
-                -ExtensionPublisher $MMAExtensionPublisher `
-                -ExtensionVersion $mmaExtVersion `
-                -PublicSettings $PublicSettings `
-                -ProtectedSettings $ProtectedSettings `
-                -ReInstall $ReInstall
-
-            $scalesetObject = Get-AzureRMVMSS -VMScaleSetName $vmName -ResourceGroupName $vmResourceGroupName
-            if ($scalesetObject.UpgradePolicy.mode -eq 'Manual') {
-                if ($TriggerVmssManualVMUpdate -eq $true) {
-
-                    Write-Output("$vmName Upgrading scale set instances since the upgrade policy is set to Manual")
-                    $scaleSetInstances = @{}
-                    $scaleSetInstances = Get-AzureRMVMSSvm -ResourceGroupName $vmResourceGroupName -VMScaleSetName $vmName -InstanceView
-                    $i = 0
-                    $instanceCount = $scaleSetInstances.Length
-                    Foreach ($scaleSetInstance in $scaleSetInstances) {
-                        $i++
-                        Write-Output("$vmName Updating instance " + $scaleSetInstance.Name + " $i of $instanceCount")
-                        Update-AzureRmVmssInstance -ResourceGroupName $vmResourceGroupName -VMScaleSetName $vmName -InstanceId $scaleSetInstance.InstanceId
-                    }
-                    Write-Output("$vmName All scale set instances upgraded")
-                }
-                else {
-                    Write-Warning("$vmName has UpgradePolicy of Manual. Please trigger upgrade or call with -TriggerVmssManualVMUpdate")
-                }
-            }
-        }
-        #
-        # Handle VM's
-        #
-        else {
-            if ("VM Running" -ne $vm.PowerState) {
-                Write-Output("$vmName has a PowerState " + $vm.PowerState + " Skipping")
-                continue
-            }
-
-            $failedDeployments += Install-VMExtension `
-                -VMName $vmName `
-                -VMLocation $vmLocation `
-                -VMResourceGroupName $vmResourceGroupName `
-                -ExtensionType $daExt `
-                -ExtensionName $daExtensionName `
-                -ExtensionPublisher $DAExtensionPublisher `
-                -ExtensionVersion $daExtVersion `
-                -ReInstall $ReInstall
-
-            $failedDeployments += Install-VMExtension `
-                -VMName $vmName `
-                -VMLocation $vmLocation `
-                -VMResourceGroupName $vmResourceGroupName `
-                -ExtensionType $mmaExt `
-                -ExtensionName $mmaExtensionName `
-                -ExtensionPublisher $MMAExtensionPublisher `
-                -ExtensionVersion $mmaExtVersion `
-                -PublicSettings $PublicSettings `
-                -ProtectedSettings $ProtectedSettings `
-                -ReInstall $ReInstall
-        }
+        Install-VMExtension `
+            -VMName $vmName `
+            -VMLocation $vmLocation `
+            -VMResourceGroupName $vmResourceGroupName `
+            -ExtensionType $mmaExt `
+            -ExtensionName $mmaExtensionName `
+            -ExtensionPublisher $MMAExtensionPublisher `
+            -ExtensionVersion $mmaExtVersion `
+            -PublicSettings $PublicSettings `
+            -ProtectedSettings $ProtectedSettings `
+            -ReInstall $ReInstall `
+            -OnboardingStatus $OnboardingStatus
     }
-
-    catch {
-        $failedDeployments += $_.Exception.Message
-    }
-
 }
-if ($failedDeployments -gt 0) {
-    Write-Output("")
-    Write-Warning("Failed to deploy extnsion on below VM's/VM Scale Sets")
-    Write-Output("")
-    Write-Output("ResourceGroupName : VM/Scaleset Name : Extension Name")
-    Write-Output("---------------------------------------------------")
-    $failedDeployments
-}
+
+Write-Output("`nSummary:")
+Write-Output("`nAlready Onboarded: (" + $OnboardingStatus.AlreadyOnboarded.Count + ")")
+$OnboardingStatus.AlreadyOnboarded  | ForEach-Object { Write-Output ($_) }
+Write-Output("`nSucceeded: (" + $OnboardingStatus.Succeeded.Count + ")")
+$OnboardingStatus.Succeeded | ForEach-Object { Write-Output ($_) }
+Write-Output("`nConnected to different workspace: (" + $OnboardingStatus.DifferentWorkspace.Count + ")")
+$OnboardingStatus.DifferentWorkspace | ForEach-Object { Write-Output ($_) }
+Write-Output("`nNot running - start VM to configure: (" + $OnboardingStatus.NotRunning.Count + ")")
+$OnboardingStatus.NotRunning  | ForEach-Object { Write-Output ($_) }
+Write-Output("`nFailed: (" + $OnboardingStatus.Failed.Count + ")")
+$OnboardingStatus.Failed | ForEach-Object { Write-Output ($_) }
+# VM SCaleSet that needs upgrade
