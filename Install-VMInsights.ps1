@@ -3,7 +3,7 @@
   Configure VM's and VM Scale Sets for VM Insights:
   - Installs Log Analytics VM Extension configured to supplied Log Analytics Workspace
   - Installs Dependency Agent VM Extension
-  - Adds 'Workload' resource for Health feature (VM's only) <To Add>
+  - Installs Workload resource for Health feature (VM's only) <To Add>
 
   Can be applied to:
   - Subscription
@@ -40,7 +40,7 @@
     <Optional> Set this flag to trigger update of VM instances in a scale set whose upgrade policy is set to Manual
 
 .PARAMETER Approve
-    <Optional> Set to start with no confirmation prompt to start install of listed VM�s/VM Scale Sets
+    <Optional> Gives the approval for the installation to start with no confirmation prompt for the listed VM's/VM Scale Sets
 
 .PARAMETER Whatif
     <Optional> See what would happen in terms of installs.
@@ -50,7 +50,7 @@
     <Optional> Confirm every action
 
 .EXAMPLE
-  .\EnableVMsForVMInsights.ps1 -WorkspaceId <WorkspaceId> -WorkspaceKey <WorkspaceKey> -SubscriptionId <SubscriptionId> -ResourceGroup <ResourceGroup>
+  .\Install-VMInsights.ps1 -WorkspaceId <WorkspaceId> -WorkspaceKey <WorkspaceKey> -SubscriptionId <SubscriptionId> -ResourceGroup <ResourceGroup>
 
 .LINK
     This script is posted to and further documented at the following location:

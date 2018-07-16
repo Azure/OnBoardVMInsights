@@ -1,9 +1,9 @@
 # On-Boarding for VM Insights
-This document gives steps on how to On-Board to VM Insights using scripts and ARM templates.
+This readme gives steps on how to On-Board to VM Insights using scripts and ARM templates.
 
 We can organize steps as follows:
 - [Log Analytics Workspace setup](#Log-Analytics-Workspace-setup)
-- [Per VM, VM Scale Set setup](#Per-VM,-VM-Scale-Set-setup)
+- [Per VM and VM Scale Set setup](#Per-VM-and-VM-Scale-Set-setup)
 
 For details on VM Insights, included supported VM operating systems and regions, see < TODO: Add Link >
 ## Log Analytics Workspace setup
@@ -26,12 +26,12 @@ Example of deploying with PowerShell:
 New-AzureRmResourceGroupDeployment -Name DeploySolutions -TemplateFile InstallSolutionsForVMInsights.json -ResourceGroupName <workspace resource group name> -WorkspaceName <workspace name> -WorkspaceLocation <workspace location- example: eastus>
 ```
 
-You can also deploy directly from Azure Portal using this [link](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2Fdougbrad%2Fmaster%2FOnBoardVMInsights%2FInstallSolutionsForVMInsights.json)
+You can also deploy directly from Azure Portal using<a href="https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2Fdougbrad%2FOnBoardVMInsights%2Fmaster%2FInstallSolutionsForVMInsights.json" target="_blank">this link</a>
 #### Configure the workspace to collect performance counters
 
 TODO: Update with script to enable performance counter collection
 
-## Per VM, VM Scale Set setup
+## Per VM and VM Scale Set setup
 
 On each VM or VM Scale Set the following is needed
 - Log Analytics VM Extension pointing to a supported workspace
