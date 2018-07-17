@@ -298,12 +298,14 @@ $OnboardingSucceeded = @()
 $OnboardingFailed = @()
 $OnboardingBlockedNotRunning = @()
 $OnboardingBlockedDifferentWorkspace = @()
+$VMScaleSetNeedsUpdate = @()
 $OnboardingStatus = @{
     AlreadyOnboarded = $AlreadyOnboarded;
     Succeeded = $OnboardingSucceeded;
     Failed    = $OnboardingFailed;
     NotRunning = $OnboardingBlockedNotRunning;
     DifferentWorkspace = $OnboardingBlockedDifferentWorkspace;
+    VMScaleSetNeedsUpdate = $VMScaleSetNeedsUpdate;
 }
 
 # Log Analytics Extension constants
@@ -344,7 +346,7 @@ $VMS | ForEach-Object { Write-Output ($_.Name + " " + $_.PowerState) }
 Write-Output("`nThis operation will install the Log Analytics and Dependency Agent extensions on above $($VMS.Count) VM's or VM Scale Sets.")
 Write-Output("VM's in a non-running state will be skipped.")
 Write-Output("Extension will not be re-installed if already installed. Use /ReInstall if desired, for example to update workspace ")
-if ($Approve -eq $true -or $PSCmdlet.ShouldContinue("Continue?", "")) {
+if ($Approve -eq $true -or !$PSCmdlet.ShouldProcess("All") -or $PSCmdlet.ShouldContinue("Continue?", "")) {
     Write-Output ""
 }
 else {
@@ -441,7 +443,7 @@ Foreach ($vm in $VMs) {
             else {
                 $message = "$vmName : has UpgradePolicy of Manual. Please trigger upgrade of VM Scale Set or call with -TriggerVmssManualVMUpdate"
                 Write-Warning($message)
-                $OnboardingStatus.Blocked += $message
+                $OnboardingStatus.VMScaleSetNeedsUpdate += $message
             }
         }
     }
@@ -452,7 +454,7 @@ Foreach ($vm in $VMs) {
         if ("VM Running" -ne $vm.PowerState) {
             $message = "$vmName : has a PowerState " + $vm.PowerState + " Skipping"
             Write-Output($message)
-            $OnboardingStatus.Blocked += $message
+            $OnboardingStatus.NotRunning += $message
             continue
         }
 
@@ -491,6 +493,8 @@ Write-Output("`nConnected to different workspace: (" + $OnboardingStatus.Differe
 $OnboardingStatus.DifferentWorkspace | ForEach-Object { Write-Output ($_) }
 Write-Output("`nNot running - start VM to configure: (" + $OnboardingStatus.NotRunning.Count + ")")
 $OnboardingStatus.NotRunning  | ForEach-Object { Write-Output ($_) }
+Write-Output("`nVM Scale Set needs update: (" + $OnboardingStatus.VMScaleSetNeedsUpdate.Count + ")")
+$OnboardingStatus.VMScaleSetNeedsUpdate  | ForEach-Object { Write-Output ($_) }
 Write-Output("`nFailed: (" + $OnboardingStatus.Failed.Count + ")")
 $OnboardingStatus.Failed | ForEach-Object { Write-Output ($_) }
 # VM SCaleSet that needs upgrade
