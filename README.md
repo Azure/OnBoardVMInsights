@@ -221,18 +221,18 @@ Connected to different workspace: (0)
 Not running - start VM to configure: (0)
 
 Failed: (0)
-
+```
 ## Onboarding a PaaS v1 Cloud Service to VM Insights
 
 1.	Get workspace id and workspace key which will be used in the following steps 
 2.	Edit the ServiceDefinition.csdef file of your cloud service and add the following two settings:
-
+```powershell
       <Setting name="WorkspaceId" />
       <Setting name="WorkspaceKey" />
-
+```
 3.	Add install-mma-and-da.cmd and install-mma-and-da.ps1 to your project. The files, as provided, assume that they will be placed at the root of the Cloud Service project. If you wish to relocate them you must update the provided install-mma-and-da.cmd file and the snippet shown below in step 6.
 4.	Add a startup task to you ServiceDefinition.csdef to execute install-mma-and-da.cmd with the correct arguments:
-
+```powershell
       <Task commandLine="install-mma-and-da.cmd" executionContext="elevated" taskType="simple">
         <Environment>
           <Variable name="IsEmulated">
@@ -246,6 +246,6 @@ Failed: (0)
           </Variable>
         </Environment>
       </Task>
-
+```
 5.	Update the cscfg file(s) supplying values for these settings
 6.	Build and deploy your service
