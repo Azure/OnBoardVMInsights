@@ -19,13 +19,19 @@ We can organize setup steps as follows:
 * West Europe
 
 ## Supported VM Operating Systems
-
-* Windows Server 2016, 2012 R2, 2012, 2008 R2 SP1
-* RHEL 6, 7
-* Ubuntu 14.04, 16.04
-* Cent OS Linux 6, 7
-* SLES 11, 12
-* Oracle Linux 6
+| OS Version | Performance | Maps |
+| ---------- | ----------- | ---- |
+| Windows Server 2016 | X | X |
+| Windows Server 2012R2 | X | X |
+| Windows 2012, 2008 R2 SP1 | X | X |
+| RHEL 6, 7 | X | X |
+| Ubuntu 14.04, 16.04  | X | X |
+| Cent OS Linux 6, 7 | X | X |
+| SLES 11 | X | X |
+| SLES 12 | X |  |
+| Oracle Linux 6 | X | X |
+| Oracle Linux 7 | X |  |
+| Debian 8, 9.4 | X |  |
 
 ## Log Analytics Workspace setup
 If you have already configured a single VM for VM Insights through UI experience, then these steps will already have been taken care of for you and you can move on to enabling for more VM's.
