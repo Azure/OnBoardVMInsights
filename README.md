@@ -4,7 +4,7 @@ For any questions, to give feedback, or to have your workspace white-listed for 
 
 This readme gives steps on how to On-Board to VM Insights using scripts and ARM templates.
 
-For Information on how to on-board through UI, see the email you should have received on joining the private preview.
+To access VM Insights in Azure Monitor and the VM blade, go to aka.ms/vminsights.  You can on-board for a single VM from the VM blade under the "Insights" item in the table of contents.  The instructions below are for on-boarding at scale.
 
 We can organize setup steps as follows:
 - [Log Analytics Workspace setup](#log-analytics-workspace-setup)
@@ -97,6 +97,12 @@ On each VM or VM Scale Set the following is needed
 
 For the private preview we are providing a script [Install-VMInsights.ps1](Install-VMInsights.ps1) to accomplish this.
 
+To quickly download the powershell to your local filesystem, run following:
+```powershell
+$client = new-object System.Net.WebClient
+$client.DownloadFile(“https://raw.githubusercontent.com/dougbrad/OnBoardVMInsights/master/Install-VMInsights.ps1”,“Install-VMInsights.ps1”) 
+``` 
+
 This script will iterate through VM's and VM Scale sets in a Subcription, or further scoped by ResourceGroup or Name.
 For each VM or VM ScaleSet it will check the currently installed VM extensions and install if needed.
 
@@ -107,7 +113,7 @@ This script requires Azure PowerShell, you can find instructions to install for 
 You can run Get-Help to get details and an example of usage:
 
 ```powershell
-Get-Help .\EnableVMsForVMInsights.ps1 -Detailed
+Get-Help .\Install-VMInsights.ps1 -Detailed
 
 SYNOPSIS
     Configure VM's and VM Scale Sets for VM Insights:
@@ -122,14 +128,14 @@ SYNOPSIS
     Script will show you list of VM's/VM Scale Sets that will apply to and let you confirm to continue.
     Use -Approve switch to run without prompting, if all required parameters are provided.
 
-    If the extensions is already installed will not install again.
+    If the extensions are already installed will not install again.
     Use -ReInstall switch if you need to for example update the workspace.
 
     Use -WhatIf if you would like to see what would happen in terms of installs, what workspace configured to, and status of the
     extension.
 
 SYNTAX
-    D:\GitHub\OnBoardVMInsights\EnableVMsForVMInsights.ps1 [-WorkspaceId] <String> [-WorkspaceKey] <String> [-SubscriptionId]
+    D:\GitHub\OnBoardVMInsights\Install-VMInsights.ps1 [-WorkspaceId] <String> [-WorkspaceKey] <String> [-SubscriptionId]
     <String> [[-ResourceGroup] <String>] [[-Name] <String>] [-ReInstall] [-TriggerVmssManualVMUpdate] [-Approve] [-WhatIf]
     [-Confirm] [<CommonParameters>]
 
