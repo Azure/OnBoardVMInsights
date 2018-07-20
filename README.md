@@ -1,6 +1,6 @@
 # On-Boarding for VM Insights - Private Preview
 For any questions, to give feedback, or to have your workspace white-listed for the VM Insights Private Preview:
-* email: < Add >
+* email: vminsights@microsoft.com
 
 This readme gives steps on how to On-Board to VM Insights using scripts and ARM templates.
 
