@@ -13,7 +13,7 @@
   Script will show you list of VM's/VM Scale Sets that will apply to and let you confirm to continue.
   Use -Approve switch to run without prompting, if all required parameters are provided.
 
-  If the extensions is already installed will not install again.
+  If the extensions are already installed will not install again.
   Use -ReInstall switch if you need to for example update the workspace.
 
   Use -WhatIf if you would like to see what would happen in terms of installs, what workspace configured to, and status of the extension.
@@ -51,6 +51,10 @@
 
 .EXAMPLE
   .\Install-VMInsights.ps1 -WorkspaceId <WorkspaceId> -WorkspaceKey <WorkspaceKey> -SubscriptionId <SubscriptionId> -ResourceGroup <ResourceGroup>
+  Install for all VM's in a Resource Group in a subscription
+
+  .\Install-VMInsights.ps1 -WorkspaceId <WorkspaceId> -WorkspaceKey <WorkspaceKey> -SubscriptionId <SubscriptionId> -ResourceGroup <ResourceGroup> -ReInstall
+  Specify to ReInstall extensions even if already installed, for example to update workspace
 
 .LINK
     This script is posted to and further documented at the following location:

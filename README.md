@@ -57,36 +57,64 @@ New-AzureRmResourceGroupDeployment -Name DeploySolutions -TemplateFile InstallSo
 
 You can also deploy directly from Azure Portal using <a href="https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2Fdougbrad%2FOnBoardVMInsights%2Fmaster%2FInstallSolutionsForVMInsights.json" target="_blank">this link</a>
 #### Configure the workspace to collect performance counters
-Compute Performance provides summarized and per-resource views of key metrics for on-prem VMs, Azure VMs, VM Scale Sets, and cloud services.  These steps are required to configure counters:
+Compute Performance provides summarized and per-resource views of key metrics for on-prem VMs, Azure VMs, VM Scale Sets, and cloud services.  
 
-**TODO:** Update with script to enable performance counter collection, for now steps to Manually Configure to collect the counters
+It is recommended you run [Enable-VMInsightsPerfCounters.ps1](Enable-VMInsightsPerfCounters.ps1) to configure your Log Analytics Workspace to collect the required counters.
+To quickly download the powershell to your local filesystem, run following:
+```powershell
+$client = new-object System.Net.WebClient
+$client.DownloadFile(“https://raw.githubusercontent.com/dougbrad/OnBoardVMInsights/master/Enable-VMInsightsPerfCounters.ps1”,“Enable-VMInsightsPerfCounters.ps1”) 
+``` 
+Enable-VMInsightsPerfCounters.ps1 takes two parameters
+```powershell
+    -WorkspaceName <String>
+        Name of Log Analytics Workspace to configure
 
-Find your Log Analytics workspace resource in the Azure portal:
+    -WorkspaceResourceGroupName <String>
+        Resource Group the Log Analytics Workspace is in
+```
+Example:
+```powershell
+.\Enable-VMInsightsPerfCounters.ps1 -WorkspaceName <Name of Workspace> -WorkspaceResourceGroupName <Workspace Resource Group>
+```
+Below is a list of Performance Counters that are configured to be collected:
+Note: the collection interval for any newly added configuration is set to 60 seconds
+**Windows**
+| Object Name | Instance Name | Counter Name |
+| ---------- | ----------- | ---- |
+| LogicalDisk | * | % Free Space |
+| LogicalDisk | * | Avg. Disk sec/Read |
+| LogicalDisk | * | Avg. Disk sec/Transfer |
+| LogicalDisk | * | Avg. Disk sec/Write |
+| LogicalDisk | * | Disk Bytes/sec |
+| LogicalDisk | * | Disk Read Bytes/sec |
+| LogicalDisk | * | Disk Reads/sec |
+| LogicalDisk | * | Disk Transfers/sec |
+| LogicalDisk | * | Disk Write Bytes/sec |
+| LogicalDisk | * | Disk Writes/sec |
+| LogicalDisk | * | Free Megabytes |
+| Memory | * | Available Mbytes |
+| Network Adapter | * | Bytes Received/sec |
+| Network Adapter | * | Bytes Sent/sec |
+| Processor | _Total  | % Processor Time |
+**Linux**
+| Object Name | Instance Name | Counter Name |
+| ---------- | ----------- | ---- |
+| Logical Disk | * | % Used Space |
+| Logical Disk | * | Disk Bytes/sec |
+| Logical Disk | * | Disk Read Bytes/sec |
+| Logical Disk | * | Disk Reads/sec |
+| Logical Disk | * | Disk Transfers/sec |
+| Logical Disk | * | Disk Write Bytes/sec |
+| Logical Disk | * | Disk Writes/sec |
+| Logical Disk | * | Free Megabytes |
+| Memory | * | Available Mbytes Memory |
+| Network | * | Total Bytes Received |
+| Network | * | Total Bytes Transmitted |
+| Processor | * | % Processor Time |
 
-![Find your Log Analytics workspace resource in the Azure portal](images/FindLogAnalyticsWorkspace.png)
-
-Click “Advanced settings” in the “Settings” menu:
-
-![Click “Advanced settings” in the “Settings” menu](images/ClickAdvancedSettings.png)
-
-Click “Data”/”Windows Performance Counters” to configure Windows host collection for VM Insights
-
-![alt text](images/ClickDataWindowsPerformanceCounters.png)
-
-Add the following three counters, setting the Sample Interval to 60 seconds or less.
-* Processor(_Total)\% Processor Time
-* Memory(*)\Available Mbytes
-* LogicalDisk(*)\% Free Space
-
-Select “Data”/”Linux Performance Counters” to configure Linux node collection
-
-Select at least the following three counters. Set the Sample Interval to 60 seconds:
-* Processor(*)\% Processor Time
-* Memory(*)\Available MBytes Memory
-* Logical Disk(*)\% Used Space
-
-
-Click “Save” in the toolbar.
+For more info on Log Analytics Performance Counters, see:
+    https://docs.microsoft.com/en-us/azure/log-analytics/log-analytics-data-sources-performance-counters
 
 
 ## Per VM and VM Scale Set setup
