@@ -16,7 +16,7 @@
     Resource Group the Log Analytics Workspace is in
 
 .EXAMPLE
-  .\Enable-VMInsightsPerfCounters.ps1 -WorkspaceName <Name of Workspace>  -WorkspaceResourceGroupName <Workspace Resource Group>
+  .\Enable-VMInsightsPerfCounters.ps1 -WorkspaceName <Name of Workspace> -WorkspaceResourceGroupName <Workspace Resource Group>
 
 .LINK
     This script is posted to and further documented at the following location:
@@ -314,9 +314,6 @@ $countersToAddJson = @"
                     "counterName": "% Used Space"
                 },
                 {
-                    "counterName": "Disk Bytes/sec"
-                },
-                {
                     "counterName": "Disk Read Bytes/sec"
                 },
                 {
@@ -333,6 +330,9 @@ $countersToAddJson = @"
                 },
                 {
                     "counterName": "Free Megabytes"
+                },
+                {
+                    "counterName": "Logical Disk Bytes/sec"
                 }
             ]
         }
@@ -457,7 +457,10 @@ foreach ($newCounter in $countersToAdd ) {
     # Linux
     #
     elseif ($newCounter.kind -eq "LinuxPerformanceObject") {
-        $existingCounterDataSource = Get-CounterInConfiguredCounters -NewCounter $newCounter -ExistingCounters $existingLinuxPerfCounters
+        if ($existingLinuxPerfCounters)
+        {
+            $existingCounterDataSource = Get-CounterInConfiguredCounters -NewCounter $newCounter -ExistingCounters $existingLinuxPerfCounters
+        }
 
         if ($existingCounterDataSource) {
             Write-Verbose("Counter: " + $NewCounter.name + " with same objectName, instanceName found. Need to check if need to update with additinal counters.")
