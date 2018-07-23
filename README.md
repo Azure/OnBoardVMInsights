@@ -81,6 +81,7 @@ Below is a list of Performance Counters that are configured to be collected:
 Note: the collection interval for any newly added configuration is set to 60 seconds
 
 **Windows**
+
 | Object Name | Instance Name | Counter Name |
 | ----------- | ------------- | ------------ |
 | LogicalDisk | * | % Free Space |
@@ -98,7 +99,9 @@ Note: the collection interval for any newly added configuration is set to 60 sec
 | Network Adapter | * | Bytes Received/sec |
 | Network Adapter | * | Bytes Sent/sec |
 | Processor | _Total  | % Processor Time |
+
 **Linux**
+
 | Object Name | Instance Name | Counter Name |
 | ----------- | ------------- | ------------ |
 | Logical Disk | * | % Used Space |
