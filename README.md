@@ -4,7 +4,7 @@ For any questions, to give feedback, or to have your workspace white-listed for 
 
 This readme gives steps on how to On-Board to VM Insights using scripts and ARM templates.
 
-For Information on how to on-board through UI, see the email you should have received on joining the private preview.
+To access VM Insights in Azure Monitor and the VM blade, go to https://aka.ms/vminsights.  You can on-board for a single VM from the VM blade under the "Insights" item in the table of contents.  The instructions below are for on-boarding at scale.
 
 We can organize setup steps as follows:
 - [Log Analytics Workspace setup](#log-analytics-workspace-setup)
@@ -57,36 +57,68 @@ New-AzureRmResourceGroupDeployment -Name DeploySolutions -TemplateFile InstallSo
 
 You can also deploy directly from Azure Portal using <a href="https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2Fdougbrad%2FOnBoardVMInsights%2Fmaster%2FInstallSolutionsForVMInsights.json" target="_blank">this link</a>
 #### Configure the workspace to collect performance counters
-Compute Performance provides summarized and per-resource views of key metrics for on-prem VMs, Azure VMs, VM Scale Sets, and cloud services.  These steps are required to configure counters:
+Compute Performance provides summarized and per-resource views of key metrics for on-prem VMs, Azure VMs, VM Scale Sets, and cloud services.  
 
-**TODO:** Update with script to enable performance counter collection, for now steps to Manually Configure to collect the counters
+It is recommended you run [Enable-VMInsightsPerfCounters.ps1](Enable-VMInsightsPerfCounters.ps1) to configure your Log Analytics Workspace to collect the required counters.
+To quickly download the powershell to your local filesystem, run following:
+```powershell
+$client = new-object System.Net.WebClient
+$client.DownloadFile(“https://raw.githubusercontent.com/dougbrad/OnBoardVMInsights/master/Enable-VMInsightsPerfCounters.ps1”,“Enable-VMInsightsPerfCounters.ps1”) 
+``` 
+Enable-VMInsightsPerfCounters.ps1 takes two parameters
+```powershell
+    -WorkspaceName <String>
+        Name of Log Analytics Workspace to configure
 
-Find your Log Analytics workspace resource in the Azure portal:
+    -WorkspaceResourceGroupName <String>
+        Resource Group the Log Analytics Workspace is in
+```
+Example:
+```powershell
+.\Enable-VMInsightsPerfCounters.ps1 -WorkspaceName <Name of Workspace> -WorkspaceResourceGroupName <Workspace Resource Group>
+```
+Below is a list of Performance Counters that are configured to be collected:
+Note: the collection interval for any newly added configuration is set to 60 seconds
 
-![Find your Log Analytics workspace resource in the Azure portal](images/FindLogAnalyticsWorkspace.png)
+**Windows**
 
-Click “Advanced settings” in the “Settings” menu:
+| Object Name | Instance Name | Counter Name |
+| ----------- | ------------- | ------------ |
+| LogicalDisk | * | % Free Space |
+| LogicalDisk | * | Avg. Disk sec/Read |
+| LogicalDisk | * | Avg. Disk sec/Transfer |
+| LogicalDisk | * | Avg. Disk sec/Write |
+| LogicalDisk | * | Disk Bytes/sec |
+| LogicalDisk | * | Disk Read Bytes/sec |
+| LogicalDisk | * | Disk Reads/sec |
+| LogicalDisk | * | Disk Transfers/sec |
+| LogicalDisk | * | Disk Write Bytes/sec |
+| LogicalDisk | * | Disk Writes/sec |
+| LogicalDisk | * | Free Megabytes |
+| Memory | * | Available Mbytes |
+| Network Adapter | * | Bytes Received/sec |
+| Network Adapter | * | Bytes Sent/sec |
+| Processor | _Total  | % Processor Time |
 
-![Click “Advanced settings” in the “Settings” menu](images/ClickAdvancedSettings.png)
+**Linux**
 
-Click “Data”/”Windows Performance Counters” to configure Windows host collection for VM Insights
+| Object Name | Instance Name | Counter Name |
+| ----------- | ------------- | ------------ |
+| Logical Disk | * | % Used Space |
+| Logical Disk | * | Disk Read Bytes/sec |
+| Logical Disk | * | Disk Reads/sec |
+| Logical Disk | * | Disk Transfers/sec |
+| Logical Disk | * | Disk Write Bytes/sec |
+| Logical Disk | * | Disk Writes/sec |
+| Logical Disk | * | Free Megabytes |
+| Logical Disk | * | Logical Disk Bytes/sec |
+| Memory | * | Available Mbytes Memory |
+| Network | * | Total Bytes Received |
+| Network | * | Total Bytes Transmitted |
+| Processor | * | % Processor Time |
 
-![alt text](images/ClickDataWindowsPerformanceCounters.png)
-
-Add the following three counters, setting the Sample Interval to 60 seconds or less.
-* Processor(_Total)\% Processor Time
-* Memory(*)\Available Mbytes
-* LogicalDisk(*)\% Free Space
-
-Select “Data”/”Linux Performance Counters” to configure Linux node collection
-
-Select at least the following three counters. Set the Sample Interval to 60 seconds:
-* Processor(*)\% Processor Time
-* Memory(*)\Available MBytes Memory
-* Logical Disk(*)\% Used Space
-
-
-Click “Save” in the toolbar.
+For more info on Log Analytics Performance Counters, see:
+    https://docs.microsoft.com/en-us/azure/log-analytics/log-analytics-data-sources-performance-counters
 
 
 ## Per VM and VM Scale Set setup
@@ -96,6 +128,12 @@ On each VM or VM Scale Set the following is needed
 - Dependency Agent VM Extension
 
 For the private preview we are providing a script [Install-VMInsights.ps1](Install-VMInsights.ps1) to accomplish this.
+
+To quickly download the powershell to your local filesystem, run following:
+```powershell
+$client = new-object System.Net.WebClient
+$client.DownloadFile(“https://raw.githubusercontent.com/dougbrad/OnBoardVMInsights/master/Install-VMInsights.ps1”,“Install-VMInsights.ps1”) 
+``` 
 
 This script will iterate through VM's and VM Scale sets in a Subcription, or further scoped by ResourceGroup or Name.
 For each VM or VM ScaleSet it will check the currently installed VM extensions and install if needed.
@@ -107,7 +145,7 @@ This script requires Azure PowerShell, you can find instructions to install for 
 You can run Get-Help to get details and an example of usage:
 
 ```powershell
-Get-Help .\EnableVMsForVMInsights.ps1 -Detailed
+Get-Help .\Install-VMInsights.ps1 -Detailed
 
 SYNOPSIS
     Configure VM's and VM Scale Sets for VM Insights:
@@ -122,14 +160,14 @@ SYNOPSIS
     Script will show you list of VM's/VM Scale Sets that will apply to and let you confirm to continue.
     Use -Approve switch to run without prompting, if all required parameters are provided.
 
-    If the extensions is already installed will not install again.
+    If the extensions are already installed will not install again.
     Use -ReInstall switch if you need to for example update the workspace.
 
     Use -WhatIf if you would like to see what would happen in terms of installs, what workspace configured to, and status of the
     extension.
 
 SYNTAX
-    D:\GitHub\OnBoardVMInsights\EnableVMsForVMInsights.ps1 [-WorkspaceId] <String> [-WorkspaceKey] <String> [-SubscriptionId]
+    D:\GitHub\OnBoardVMInsights\Install-VMInsights.ps1 [-WorkspaceId] <String> [-WorkspaceKey] <String> [-SubscriptionId]
     <String> [[-ResourceGroup] <String>] [[-Name] <String>] [-ReInstall] [-TriggerVmssManualVMUpdate] [-Approve] [-WhatIf]
     [-Confirm] [<CommonParameters>]
 
