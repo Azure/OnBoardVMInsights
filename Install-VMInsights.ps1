@@ -136,16 +136,14 @@ function Install-VMExtension {
                 Write-Output($message)
             }
             else {
-                if ($ReInstall -ne $true)
-                {
+                if ($ReInstall -ne $true) {
                     $message = "$VMName : Extension $ExtensionType already configured for a different workspace. Run with /ReInstall to move to new workspace. Provisioning State: " + $extension.ProvisioningState + " " + $extension.Settings
                     Write-Warning($message)
                     $OnboardingStatus.DifferentWorkspace += $message
                 }
             }
         }
-        else
-        {
+        else {
             $message = "$VMName : $ExtensionType extension with name " + $extension.Name + " already installed. Provisioning State: " + $extension.ProvisioningState + " " + $extension.Settings
             Write-Output($message)
         }
@@ -304,11 +302,11 @@ $OnboardingBlockedNotRunning = @()
 $OnboardingBlockedDifferentWorkspace = @()
 $VMScaleSetNeedsUpdate = @()
 $OnboardingStatus = @{
-    AlreadyOnboarded = $AlreadyOnboarded;
-    Succeeded = $OnboardingSucceeded;
-    Failed    = $OnboardingFailed;
-    NotRunning = $OnboardingBlockedNotRunning;
-    DifferentWorkspace = $OnboardingBlockedDifferentWorkspace;
+    AlreadyOnboarded      = $AlreadyOnboarded;
+    Succeeded             = $OnboardingSucceeded;
+    Failed                = $OnboardingFailed;
+    NotRunning            = $OnboardingBlockedNotRunning;
+    DifferentWorkspace    = $OnboardingBlockedDifferentWorkspace;
     VMScaleSetNeedsUpdate = $VMScaleSetNeedsUpdate;
 }
 
@@ -411,21 +409,21 @@ Foreach ($vm in $VMs) {
         Install-VMssExtension `
             -VMScaleSetName $vmName `
             -VMScaleSetResourceGroupName $vmResourceGroupName `
-            -ExtensionType $daExt `
-            -ExtensionName $daExtensionName `
-            -ExtensionPublisher $DAExtensionPublisher `
-            -ExtensionVersion $daExtVersion `
-            -ReInstall $ReInstall
-
-        Install-VMssExtension `
-            -VMScaleSetName $vmName `
-            -VMScaleSetResourceGroupName $vmResourceGroupName `
             -ExtensionType $mmaExt `
             -ExtensionName $mmaExtensionName `
             -ExtensionPublisher $MMAExtensionPublisher `
             -ExtensionVersion $mmaExtVersion `
             -PublicSettings $PublicSettings `
             -ProtectedSettings $ProtectedSettings `
+            -ReInstall $ReInstall
+
+        Install-VMssExtension `
+            -VMScaleSetName $vmName `
+            -VMScaleSetResourceGroupName $vmResourceGroupName `
+            -ExtensionType $daExt `
+            -ExtensionName $daExtensionName `
+            -ExtensionPublisher $DAExtensionPublisher `
+            -ExtensionVersion $daExtVersion `
             -ReInstall $ReInstall
 
         $scalesetObject = Get-AzureRMVMSS -VMScaleSetName $vmName -ResourceGroupName $vmResourceGroupName
@@ -466,10 +464,12 @@ Foreach ($vm in $VMs) {
             -VMName $vmName `
             -VMLocation $vmLocation `
             -VMResourceGroupName $vmResourceGroupName `
-            -ExtensionType $daExt `
-            -ExtensionName $daExtensionName `
-            -ExtensionPublisher $DAExtensionPublisher `
-            -ExtensionVersion $daExtVersion `
+            -ExtensionType $mmaExt `
+            -ExtensionName $mmaExtensionName `
+            -ExtensionPublisher $MMAExtensionPublisher `
+            -ExtensionVersion $mmaExtVersion `
+            -PublicSettings $PublicSettings `
+            -ProtectedSettings $ProtectedSettings `
             -ReInstall $ReInstall `
             -OnboardingStatus $OnboardingStatus
 
@@ -477,12 +477,10 @@ Foreach ($vm in $VMs) {
             -VMName $vmName `
             -VMLocation $vmLocation `
             -VMResourceGroupName $vmResourceGroupName `
-            -ExtensionType $mmaExt `
-            -ExtensionName $mmaExtensionName `
-            -ExtensionPublisher $MMAExtensionPublisher `
-            -ExtensionVersion $mmaExtVersion `
-            -PublicSettings $PublicSettings `
-            -ProtectedSettings $ProtectedSettings `
+            -ExtensionType $daExt `
+            -ExtensionName $daExtensionName `
+            -ExtensionPublisher $DAExtensionPublisher `
+            -ExtensionVersion $daExtVersion `
             -ReInstall $ReInstall `
             -OnboardingStatus $OnboardingStatus
     }
