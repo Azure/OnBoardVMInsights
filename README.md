@@ -105,13 +105,13 @@ Note: the collection interval for any newly added configuration is set to 60 sec
 | Object Name | Instance Name | Counter Name |
 | ----------- | ------------- | ------------ |
 | Logical Disk | * | % Used Space |
-| Logical Disk | * | Disk Bytes/sec |
 | Logical Disk | * | Disk Read Bytes/sec |
 | Logical Disk | * | Disk Reads/sec |
 | Logical Disk | * | Disk Transfers/sec |
 | Logical Disk | * | Disk Write Bytes/sec |
 | Logical Disk | * | Disk Writes/sec |
 | Logical Disk | * | Free Megabytes |
+| Logical Disk | * | Logical Disk Bytes/sec |
 | Memory | * | Available Mbytes Memory |
 | Network | * | Total Bytes Received |
 | Network | * | Total Bytes Transmitted |
