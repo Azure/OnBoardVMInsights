@@ -4,7 +4,7 @@ For any questions, to give feedback, or to have your workspace white-listed for 
 
 This readme gives steps on how to On-Board to VM Insights using scripts and ARM templates.
 
-To access VM Insights in Azure Monitor and the VM blade, go to aka.ms/vminsights.  You can on-board for a single VM from the VM blade under the "Insights" item in the table of contents.  The instructions below are for on-boarding at scale.
+To access VM Insights in Azure Monitor and the VM blade, go to https://aka.ms/vminsights.  You can on-board for a single VM from the VM blade under the "Insights" item in the table of contents.  The instructions below are for on-boarding at scale.
 
 We can organize setup steps as follows:
 - [Log Analytics Workspace setup](#log-analytics-workspace-setup)
@@ -79,9 +79,10 @@ Example:
 ```
 Below is a list of Performance Counters that are configured to be collected:
 Note: the collection interval for any newly added configuration is set to 60 seconds
+
 **Windows**
 | Object Name | Instance Name | Counter Name |
-| ---------- | ----------- | ---- |
+| ----------- | ------------- | ------------ |
 | LogicalDisk | * | % Free Space |
 | LogicalDisk | * | Avg. Disk sec/Read |
 | LogicalDisk | * | Avg. Disk sec/Transfer |
@@ -99,7 +100,7 @@ Note: the collection interval for any newly added configuration is set to 60 sec
 | Processor | _Total  | % Processor Time |
 **Linux**
 | Object Name | Instance Name | Counter Name |
-| ---------- | ----------- | ---- |
+| ----------- | ------------- | ------------ |
 | Logical Disk | * | % Used Space |
 | Logical Disk | * | Disk Bytes/sec |
 | Logical Disk | * | Disk Read Bytes/sec |
