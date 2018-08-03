@@ -15,23 +15,23 @@ We can organize setup steps as follows:
 **Important!** Only Log Analytics Workspaces in following regions are supported:
 * West Central US
 * East US
-* Southeast Asia
-* West Europe
+* Southeast Asia (Health not supported yet)
+* West Europe (Health not supported yet)
 
 ## Supported VM Operating Systems
-| OS Version | Performance | Maps |
-| ---------- | ----------- | ---- |
-| Windows Server 2016 | X | X |
+| OS Version | Performance | Maps | Health |
+| ---------- | ----------- | ---- | -----  |
+| Windows Server 2016 | X | X | X 
 | Windows Server 2012R2 | X | X |
 | Windows 2012, 2008 R2 SP1 | X | X |
-| RHEL 6, 7 | X | X |
-| Ubuntu 14.04, 16.04  | X | X |
-| Cent OS Linux 6, 7 | X | X |
-| SLES 11 | X | X |
-| SLES 12 | X |  |
-| Oracle Linux 6 | X | X |
-| Oracle Linux 7 | X |  |
-| Debian 8, 9.4 | X |  |
+| RHEL 6, 7 | X | X | X
+| Ubuntu 14.04, 16.04  | X | X | X
+| Cent OS Linux 6, 7 | X | X | X
+| SLES 11 | X | X | X
+| SLES 12 | X |  | X
+| Oracle Linux 6 | X | X | X
+| Oracle Linux 7 | X |  | X
+| Debian 8, 9.4 | X |  | X
 
 ## Log Analytics Workspace setup
 If you have already configured a single VM for VM Insights through UI experience, then these steps will already have been taken care of for you and you can move on to enabling for more VM's.
@@ -40,6 +40,7 @@ Summary of steps:
 - Create a Log Analytics workspace in a [supported region](#supported-log-analytics-workspace-regions)
 - Install the ServiceMap and InfrastructureInsights Solutions
 - Configure the workspace to collect performance counters
+- Configure the subscription to onboard to Health
 
 #### Create a Log Analytics workspace in a supported region
 See Log Analytics Documentation: [Create a Log Analytics workspace in the Azure portal](https://docs.microsoft.com/en-us/azure/log-analytics/log-analytics-quick-create-workspace)
@@ -120,8 +121,16 @@ Note: the collection interval for any newly added configuration is set to 60 sec
 For more info on Log Analytics Performance Counters, see:
     https://docs.microsoft.com/en-us/azure/log-analytics/log-analytics-data-sources-performance-counters
 
+#### Configure the subscription to onboard to Health
+Register the below 2 Resource Providers with the test subscription where you have your solution installed
+- Microsoft.WorkloadMonitor
+- Microsoft.AlertsManagement
+
+To register, go to Azure Home > Subscriptions > Resource providers and then click register
 
 ## Per VM and VM Scale Set setup
+
+For VMs to onboard for Health monitoring, go to the VM blade, navigate to the new "Health(Preview)" table of content item and click on the blue ribbon "Click here to enable workload monitoring on VM". 
 
 On each VM or VM Scale Set the following is needed
 - Log Analytics VM Extension pointing to a workspace in a [supported region](#supported-log-analytics-workspace-regions)
