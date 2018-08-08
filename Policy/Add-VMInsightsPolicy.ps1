@@ -25,6 +25,17 @@ param(
     [Parameter(mandatory = $false)][switch]$UseLocalPolicies
 )
 
+# First check that latest version of Azure PowerShell is installed
+$LatestAzureCmdletsVersion = "6.3.0"
+try {
+    Import-Module -MinimumVersion $LatestAzureCmdletsVersion AzureRM.Resources -ErrorAction Stop
+}
+catch {
+    Write-Error $_.Exception
+    Write-Error "Please install version $LatestAzureCmdletsVersion or greater of Azure PowerShell"
+    Exit
+}
+
 $policiesToAddJson = @"
 [
     {
@@ -105,8 +116,7 @@ foreach ($policy in $policiesToAdd ) {
         $parameter."Parameter" = $policy.parameter
     }
 
-    if ($UseLocalPolicies)
-    {
+    if ($UseLocalPolicies) {
         $policyFile = $policy.policy
     }
     else {
