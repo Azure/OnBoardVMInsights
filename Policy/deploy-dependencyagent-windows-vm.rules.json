@@ -1,0 +1,104 @@
+{
+    "if": {
+        "allOf": [
+            {
+                "field": "type",
+                "equals": "Microsoft.Compute/virtualMachines"
+            },
+            {
+                "field": "Microsoft.Compute/imagePublisher",
+                "equals": "MicrosoftWindowsServer"
+            },
+            {
+                "field": "Microsoft.Compute/imageOffer",
+                "equals": "WindowsServer"
+            },
+            {
+                "field": "Microsoft.Compute/imageSKU",
+                "in": [
+                    "2008-R2-SP1",
+                    "2008-R2-SP1-smalldisk",
+                    "2012-Datacenter",
+                    "2012-Datacenter-smalldisk",
+                    "2012-R2-Datacenter",
+                    "2012-R2-Datacenter-smalldisk",
+                    "2016-Datacenter",
+                    "2016-Datacenter-Server-Core",
+                    "2016-Datacenter-Server-Core-smalldisk",
+                    "2016-Datacenter-smalldisk",
+                    "2016-Datacenter-with-Containers",
+                    "2016-Datacenter-with-RDSH"
+                ]
+            }
+        ]
+    },
+    "then": {
+        "effect": "deployIfNotExists",
+        "details": {
+            "type": "Microsoft.Compute/virtualMachines/extensions",
+            "existenceCondition": {
+                "allOf": [
+                    {
+                        "field": "Microsoft.Compute/virtualMachines/extensions/type",
+                        "equals": "DependencyAgentWindows"
+                    },
+                    {
+                        "field": "Microsoft.Compute/virtualMachines/extensions/publisher",
+                        "equals": "Microsoft.Azure.Monitoring.DependencyAgent"
+                    }
+                ]
+            },
+            "deployment": {
+                "properties": {
+                    "mode": "incremental",
+                    "template": {
+                        "$schema": "http://schema.management.azure.com/schemas/2015-01-01/deploymentTemplate.json#",
+                        "contentVersion": "1.0.0.0",
+                        "parameters": {
+                            "vmName": {
+                                "type": "string"
+                            },
+                            "location": {
+                                "type": "string"
+                            }
+                        },
+                        "variables": {
+                            "vmExtensionName": "DependencyAgent",
+                            "vmExtensionPublisher": "Microsoft.Azure.Monitoring.DependencyAgent",
+                            "vmExtensionType": "DependencyAgentWindows",
+                            "vmExtensionTypeHandlerVersion": "9.5"
+                        },
+                        "resources": [
+                            {
+                                "type": "Microsoft.Compute/virtualMachines/extensions",
+                                "name": "[concat(parameters('vmName'), '/', variables('vmExtensionName'))]",
+                                "apiVersion": "2018-06-01",
+                                "location": "[parameters('location')]",
+                                "properties": {
+                                    "publisher": "[variables('vmExtensionPublisher')]",
+                                    "type": "[variables('vmExtensionType')]",
+                                    "typeHandlerVersion": "[variables('vmExtensionTypeHandlerVersion')]",
+                                    "autoUpgradeMinorVersion": true
+                                }
+                            }
+                        ],
+                        "outputs": {
+                            "policy": {
+                                "type": "string",
+                                "value": "[concat('Enabled extension for VM', ': ', parameters('vmName'))]"
+                            }
+                        }
+                    },
+                    "parameters": {
+                        "vmName": {
+                            "value": "[field('name')]"
+                        },
+                        "location": {
+                            "value": "[field('location')]"
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
