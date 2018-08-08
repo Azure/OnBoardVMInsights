@@ -14,7 +14,7 @@ To allow a preview of using policy, we have provided a script [Add-VMInsightsPol
 To quickly download the powershell to your local filesystem, run following:
 ```powershell
 $client = new-object System.Net.WebClient
-$client.DownloadFile(“https://raw.githubusercontent.com/dougbrad/OnBoardVMInsights/Policy/Policy/Add-VMInsightsPolicy.ps1”,“Enable-VMInsightsPerfCounters.ps1”) 
+$client.DownloadFile(“https://raw.githubusercontent.com/dougbrad/OnBoardVMInsights/Policy/Policy/Add-VMInsightsPolicy.ps1”,“Add-VMInsightsPolicy.ps1”) 
 ``` 
 
 You can run it as follows:
