@@ -3,7 +3,7 @@
   Adds the Policies and Initiatives to configure VM's for VM Insights Preview
 
 .Description
-  This script adds the Policies and Initiatives for VM Insights preview to your current subscription.
+  This script adds the Policies and Initiatives for VM Insights preview to your current subscription or the subscription specified for -SubscriptionId
 
   Note:
   This script can be re-run if changes are made to the Policies.
@@ -12,7 +12,13 @@
 .PARAMETER UseLocalPolicies
     <Optional> Load the policies from local folder instead of https://raw.githubusercontent.com/dougbrad/OnBoardVMInsights/Policy/Policy/
 
-.EXAMPLE 
+.PARAMETER SubscriptionId
+    SubscriptionId to add the Policies/Initiatives to
+
+.PARAMETER Approve
+    <Optional> Gives the approval to add the Policies/Initiatives without any prompt
+
+.EXAMPLE
   .\Add-VMInsightsPolicy.ps1
 
 .LINK
@@ -22,18 +28,17 @@
 
 [CmdletBinding()]
 param(
-    [Parameter(mandatory = $false)][switch]$UseLocalPolicies
+    [Parameter(mandatory = $false)][switch]$UseLocalPolicies,
+    [Parameter(mandatory = $false)][string]$SubscriptionId,
+    [Parameter(mandatory = $false)][switch]$Approve
 )
 
-# First check that latest version of Azure PowerShell is installed
-$LatestAzureCmdletsVersion = "6.3.0"
-try {
-    Import-Module -MinimumVersion $LatestAzureCmdletsVersion AzureRM.Resources -ErrorAction Stop
-}
-catch {
-    Write-Error $_.Exception
-    Write-Error "Please install version $LatestAzureCmdletsVersion or greater of Azure PowerShell"
-    Exit
+# TODO: Remove the branch
+#
+# Take policies from here unless run with -UseLocalPolicies
+$gitHubSource = "https://raw.githubusercontent.com/dougbrad/OnBoardVMInsights/Policy/Policy/"
+if ($UseLocalPolicies) {
+    $gitHubSource = ""
 }
 
 $policiesToAddJson = @"
@@ -102,43 +107,64 @@ $policiesToAdd = $policiesToAddJson | ConvertFrom-Json
 $vmInsightsInitiative = $vmInsightsInitiativeJson  | ConvertFrom-Json
 
 #
-# First make sure authenticed
+# First make sure authenticed, select to the WorkspaceSubscriptionId if supplied
 #
 $account = Get-AzureRmContext
 if ($null -eq $account.Account) {
     Write-Output("Account Context not found, please login")
-    Login-AzureRmAccount
+    if ($SubscriptionId) {
+        Connect-AzureRmAccount -SubscriptionId $SubscriptionId
+    }
+    else {
+        Connect-AzureRmAccount
+    }
+}
+elseif ($SubscriptionId) {
+    if ($account.Subscription.SubscriptionId -eq $SubscriptionId) {
+        Write-Output("Subscription: $SubscriptionId is already selected.")
+    }
+    else {
+        Write-Output("Changing to subscription: $SubscriptionId")
+        Set-AzureRmContext -SubscriptionId $SubscriptionId
+    }
 }
 
+Write-Output("Policies and Initiatives for VM Insights will be added to subscription: `n" `
+        + $account.Subscription.Name + " ( " + $account.Subscription.SubscriptionId + " )")
+if ($Approve -eq $true -or !$PSCmdlet.ShouldProcess("All") -or $PSCmdlet.ShouldContinue("Continue?", "")) {
+    Write-Output ""
+}
+else {
+    Write-Output "You selected No - exiting"
+    return
+}
+
+#
+# Add the Policies
+#
 foreach ($policy in $policiesToAdd ) {
     $parameter = @{}
     if ($policy.parameter) {
-        $parameter."Parameter" = $policy.parameter
+        $parameter."Parameter" = $gitHubSource + $policy.parameter
+        Write-Verbose("Policy Parameter: " + $parameter."Parameter")
     }
 
-    if ($UseLocalPolicies) {
-        $policyFile = $policy.policy
-    }
-    else {
-        # TODO: Remove the branch
-        $policyFile = "https://raw.githubusercontent.com/dougbrad/OnBoardVMInsights/Policy/Policy/" + $policy.policy
-    }
-
-    Write-Verbose("Adding Policy: $policyFile")
+    Write-Verbose("Adding Policy: " + $gitHubSource + $policy.policy)
 
     New-AzureRmPolicyDefinition `
         -Name $policy.name `
         -DisplayName $policy.displayName `
         -Description $policy.description `
-        -Policy $policyFile `
+        -Policy ($gitHubSource + $policy.policy) `
         @parameter
 }
 
-# Craft the Json for the initiative definition
-# Would like any feedback on how to implement this better
+#
+# Add the Initiative (will take any feedback on how to improve this logic)
+#
 $vmInsightsDefinition = "["
 foreach ($policy in $policiesToAdd) {
-    $policyDefinitionId = (Get-AzureRmPolicyDefinition -Name $policy.name | select -ExpandProperty PolicyDefinitionId)
+    $policyDefinitionId = (Get-AzureRmPolicyDefinition -Name $policy.name | Select-Object -ExpandProperty PolicyDefinitionId)
     $vmInsightsDefinition += '{ "policyDefinitionId": "' + $policyDefinitionId + '"'
     if ($policy.parameter) {
         $vmInsightsDefinition += ',' + $logAnalyticsParameterJson
