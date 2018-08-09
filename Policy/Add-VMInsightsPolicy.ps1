@@ -13,7 +13,7 @@
     <Optional> Load the policies from local folder instead of https://raw.githubusercontent.com/dougbrad/OnBoardVMInsights/Policy/Policy/
 
 .PARAMETER SubscriptionId
-    SubscriptionId to add the Policies/Initiatives to
+    <Optional> SubscriptionId to add the Policies/Initiatives to
 
 .PARAMETER Approve
     <Optional> Gives the approval to add the Policies/Initiatives without any prompt
