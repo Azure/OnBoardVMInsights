@@ -90,7 +90,7 @@
                             "vmExtensionName": "DependencyAgent",
                             "vmExtensionPublisher": "Microsoft.Azure.Monitoring.DependencyAgent",
                             "vmExtensionType": "DependencyAgentWindows",
-                            "vmExtensionTypeHandlerVersion": "9.5"
+                            "vmExtensionTypeHandlerVersion": "9.6"
                         },
                         "resources": [
                             {

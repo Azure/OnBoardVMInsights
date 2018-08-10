@@ -21,15 +21,27 @@
                                 "anyOf": [
                                     {
                                         "field": "Microsoft.Compute/imageSKU",
-                                        "like": "14.04*-LTS"
+                                        "in": [
+                                            "14.04.0-LTS",
+                                            "14.04.1-LTS",
+                                            "14.04.2-LTS",
+                                            "14.04.3-LTS",
+                                            "14.04.4-LTS",
+                                            "14.04.5-LTS"
+                                        ]
                                     },
                                     {
                                         "field": "Microsoft.Compute/imageSKU",
-                                        "like": "16.04*-LTS"
+                                        "in": [
+                                            "16.04-LTS",
+                                            "16.04.0-LTS"
+                                        ]
                                     },
                                     {
                                         "field": "Microsoft.Compute/imageSKU",
-                                        "like": "18.04*-LTS"
+                                        "in": [
+                                            "18.04-LTS"
+                                        ]
                                     }
                                 ]
                             }
@@ -125,7 +137,7 @@
                             "vmExtensionName": "DependencyAgent",
                             "vmExtensionPublisher": "Microsoft.Azure.Monitoring.DependencyAgent",
                             "vmExtensionType": "DependencyAgentLinux",
-                            "vmExtensionTypeHandlerVersion": "9.5"
+                            "vmExtensionTypeHandlerVersion": "9.6"
                         },
                         "resources": [
                             {
