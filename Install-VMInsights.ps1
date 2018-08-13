@@ -1,4 +1,4 @@
-﻿<#
+<#
 .SYNOPSIS
   Configure VM's and VM Scale Sets for VM Insights:
   - Installs Log Analytics VM Extension configured to supplied Log Analytics Workspace
@@ -369,8 +369,9 @@ else {
     return
 }
 
-Write-Output "Register the Resource Provider Microsoft.WorkloadMonitor for Health feature"
+Write-Output "Register the Resource Provider Microsoft.WorkloadMonitor and Microsoft.AlertsManagement for Health feature"
 Register-AzureRmResourceProvider -ProviderNamespace Microsoft.WorkloadMonitor
+Register-AzureRmResourceProvider -ProviderNamespace Microsoft.AlertsManagement
 
 #
 # Loop through each VM/VM Scale set, as appropriate handle installing VM Extensions
@@ -475,7 +476,37 @@ Foreach ($vm in $VMs) {
             $OnboardingStatus.NotRunning += $message
             continue
         }
+		# Add Health Resource if in a supported region
+        if ($supportedHealthRegions -contains $WorkspaceRegion) {
+			# TODO: Move this if condition to the beginning of loop
 
+            # TBD: Do we want to check it is already there somehow, or no harm in repeatedly deploying?
+
+            Write-Output("Deploying Health Resource. Deployment name: DeployHealth-$vmName")
+            # TODO: Update to use TemplateUri when testing completed
+            # https://raw.githubusercontent.com/dougbrad/OnBoardVMInsights/master/InstallHealthResourceForVM_BaseOS.json
+            try{
+				New-AzureRmResourceGroupDeployment -Name DeployHealth-$vmName -ResourceGroupName $vm.ResourceGroupName `
+                -TemplateFile InstallHealthResourceForVM_BaseOS.json -location $WorkspaceRegion -vmName $vm.Name
+				
+            }
+			catch  {
+				$string_err = $_.Exception.Message
+				$message = "DeployHealth-$vmName : Deployment of Health Resource failed."
+				Write-Warning($message)
+				$message | Out-File diagnostics.txt -append
+				$string_err | Out-File diagnostics.txt -append
+				$OnboardingStatus.Failed += $message
+			}			
+        }
+		
+		else{
+			$message = "$vmname cannot be onboarded to Health monitoring, workspace associated to this is not in a supported region "
+			Write-Warning($message)
+		}
+		
+		
+		
         Install-VMExtension `
             -VMName $vmName `
             -VMLocation $vmLocation `
@@ -500,18 +531,6 @@ Foreach ($vm in $VMs) {
             -ReInstall $ReInstall `
             -OnboardingStatus $OnboardingStatus
 
-        # Add Health Resource if in a supported region
-        if ($supportedHealthRegions -contains $WorkspaceRegion) {
-
-            # TBD: Do we want to check it is already there somehow, or no harm in repeatedly deploying?
-
-            Write-Output("Deploying Health Resource. Deployment name: DeployHealth-$vmName")
-            # TODO: Update to use TemplateUri when testing completed
-            # https://raw.githubusercontent.com/dougbrad/OnBoardVMInsights/master/InstallHealthResourceForVM_BaseOS.json
-            New-AzureRmResourceGroupDeployment -Name DeployHealth-$vmName -ResourceGroupName $vm.ResourceGroupName `
-                -TemplateFile InstallHealthResourceForVM_BaseOS.json -location $WorkspaceRegion -vmName $vm.Name
-            # TODO: Detect errors and add to summary
-        }
     }
 }
 
