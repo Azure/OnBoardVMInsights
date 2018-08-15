@@ -75,7 +75,7 @@
                         "allOf": [
                             {
                                 "field": "Microsoft.Compute/imagePublisher",
-                                "equals": "SES"
+                                "equals": "SUSE"
                             },
                             {
                                 "field": "Microsoft.Compute/imageOffer",

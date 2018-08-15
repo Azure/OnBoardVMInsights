@@ -55,9 +55,15 @@ Enable VM Insights for VMs - Preview
 - Deploy Log Analytics Agent for Linux VMs - Preview
 - Deploy Dependency Agent for Windows VMs - Preview
 - Deploy Dependency Agent for Linux VMs - Preview
+- VMs not in OS scope of Log Analytics deployment policy - Preview
+- VMs not in OS scope of Dependency Agent deployment policy - Preview
 
 Initiative Parameter:
 - Log Analytice Workspace (ResourceId if doing assignment from PowerShell/CLI)
+
+For VM's that are found as not-compliant from the audit policies "VMs not in OS scope..."
+The criteria of the deployment policy only includes VM's that are deployed from well-known Azure VM images.
+Check documentation if the VM OS is supported or not, if it is and it is a well known VM that should be included, give us this feedback. If not then you'll need to duplicate the deployment policy, and update to make the image in scope.
 
 A stand-alone optional policy will also be added:
 - VM is configured for mismatched Log Analytics Workspace - Preview
@@ -68,8 +74,6 @@ You can create a Policy Assignment either through Policy UI or PowerShell/CLI - 
 
 ## Up-coming Additions
 Up-coming is following Policies
-- VM's not in OS scope of Log Analytics deployment policy
-- VM's not in OS scope of Dependency Agent deployment policy
 - VM's with Log Analytics extension in failed state
 - VM's with Dependency Agent extension in failed state
 
@@ -84,11 +88,12 @@ If your VM's that are located across different Azure regions are organized by Su
 Does this meet needs? Or is more control such as a parameter on the Initiative for the VM Locations required? (we want the minimum set of parameters to keep things simple for the most common case)
 
 ### VM Scale Sets
-We want to discuss needs of users of VM Scale Sets, is there a need for us to supply policies?
 VM Scale Sets default to have an UpgradePolicy of Manual - which means if there is a change like apply a VM extension, you have to 'Upgrade' each VM to get the change
 When creating new VMSS - since our policy runs after creation - means customer must do this step themselves.
 
-Looking for feedback from users of VM Scale Sets
+Looking for feedback from users of VM Scale Sets - how can we improve this?
+
+Should the policies for VM Scale sets be in same initiative or the VM policies, or is the owner of the Scale Set different, so should be a different initiative?
 
 ### Source for the Policies
 Policy supports Built-In policies and Custom Policies, and we need feedback on delivery of VM Insights policies.

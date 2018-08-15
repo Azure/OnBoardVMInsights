@@ -35,7 +35,7 @@
                         "allOf": [
                             {
                                 "field": "Microsoft.Compute/imagePublisher",
-                                "equals": "SES"
+                                "equals": "SUSE"
                             },
                             {
                                 "field": "Microsoft.Compute/imageOffer",
@@ -77,15 +77,15 @@
                                 "anyOf": [
                                     {
                                         "field": "Microsoft.Compute/imageSKU",
-                                        "like": "14.04*-LTS"
+                                        "like": "14.04*LTS"
                                     },
                                     {
                                         "field": "Microsoft.Compute/imageSKU",
-                                        "like": "16.04*-LTS"
+                                        "like": "16.04*LTS"
                                     },
                                     {
                                         "field": "Microsoft.Compute/imageSKU",
-                                        "like": "18.04*-LTS"
+                                        "like": "18.04*LTS"
                                     }
                                 ]
                             }

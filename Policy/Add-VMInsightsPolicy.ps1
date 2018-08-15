@@ -68,6 +68,18 @@ $vmInsightsInitiativePoliciesJson = @"
         "displayName": "Deploy Dependency Agent for Linux VMs - Preview",
         "description": "-",
         "policy": "deploy-dependencyagent-linux-vm.rules.json"
+    },
+    {
+        "name": "audit-loganalytics-vm-os-notinscope-preview",
+        "displayName": "VMs not in OS scope of Log Analytics Agent deployment policy - Preview",
+        "description": "The OS of the VM does not match a well known Azure Image SKU that is supported. Check documentation if OS is supported, and if so duplicate policy and update to bring in scope.",
+        "policy": "audit-loganalytics-vm-os-notinscope.json"
+    },
+    {
+        "name": "audit-dependencyagent-vm-os-notinscope-preview",
+        "displayName": "VMs not in OS scope of Dependency Agent deployment policy - Preview",
+        "description": "The OS of the VM does not match a well known Azure Image SKU that is supported. Check documentation if OS is supported, and if so duplicate policy and update to bring in scope.",
+        "policy": "audit-dependencyagent-vm-os-notinscope.json"
     }
 ]
 "@
