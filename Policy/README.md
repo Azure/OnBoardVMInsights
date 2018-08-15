@@ -67,6 +67,7 @@ Check documentation if the VM OS is supported or not, if it is and it is a well 
 
 A stand-alone optional policy will also be added:
 - VM is configured for mismatched Log Analytics Workspace - Preview
+
 This can be used to identify VM's that are already configured with Log Analytics VM extension, however that are configured for a different workspace than intended.
 This takes a parameter of the Workspace Id
 
