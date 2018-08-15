@@ -1,14 +1,17 @@
 # Configure VM's for VM Insights with Policy - Private Preview
 For any questions, to give feedback:
-* email: vminsights@microsoft.com
+* email: AzMonOnboardAtScale@microsoft.com
 
-This readme gives steps on how to On-Board VM's to VM Insights using Policy
+This readme gives steps on how to On-Board VM's to VM Insights using Policy.
+
+Workspace configuration should still be done using steps [here](..\readme.md)
 
 For more information on Policy, see [Azure Policy Introduction](https://docs.microsoft.com/en-us/azure/azure-policy/azure-policy-introduction)
 
 Note:
+- Support for deployIfNotExists policies which this uses is not yet enabled for all tenants, email us and we can have your tenant white-listed
 - Currently Policy only supports configuring new VM's, support for existing VM's (Remediation feature) is coming mid September
-- Also note - not sure if support for new VM's yet supported for non-Microsoft tenants, that is to be enabled soon, or we can have your tenant white-listed if you'd like to try this out now.
+
 
 We can organize steps as follows:
 - [Add the Policies amd Initiative to your Subscription](#add-the-policies-and-initiative-to-your-subscription)
@@ -48,37 +51,37 @@ Currently Add-VMInsightsPolicy.ps1 does not support adding to a management group
 After you run Add-VMInsightsPolicy.ps1 the following Initiave and Policies will be added 
 
 Enable VM Insights for VMs - Preview
-- Deploy Dependency Agent VM extension for Windows VMs - Preview
-- Deploy Dependency Agent VM extension for Linux VMs - Preview
-- Deploy Log Analytics VM extension for Windows VMs - Preview
-- Deploy Log Analytics VM extension for Linux VMs - Preview
+- Deploy Log Analytics Agent for Windows VMs - Preview
+- Deploy Log Analytics Agent for Linux VMs - Preview
+- Deploy Dependency Agent for Windows VMs - Preview
+- Deploy Dependency Agent for Linux VMs - Preview
 
 Initiative Parameter:
 - Log Analytice Workspace (ResourceId if doing assignment from PowerShell/CLI)
 
+A stand-alone optional policy will also be added:
+- VM is configured for mismatched Log Analytics Workspace - Preview
+This can be used to identify VM's that are already configured with Log Analytics VM extension, however that are configured for a different workspace than intended.
+This takes a parameter of the Workspace Id
+
 You can create a Policy Assignment either through Policy UI or PowerShell/CLI - see [Quick Start - Assign a Policy - Portal](https://docs.microsoft.com/en-us/azure/azure-policy/assign-policy-definition)
 
 ## Up-coming Additions
-Up-coming is following Initiative and Policies
-
-VM Insights - VM Applicability - Preview
-- VMs is configured for mismatched Log Analytics Workspace - Preview
-- VMs with un-supported Log Analytics Operating System - Preview
-- VMs with un-supported Dependency Agent Operating System - Preview
-
-Iniative Parameter:
-- Log Analytics WorkspaceId
+Up-coming is following Policies
+- VM's not in OS scope of Log Analytics deployment policy
+- VM's not in OS scope of Dependency Agent deployment policy
+- VM's with Log Analytics extension in failed state
+- VM's with Dependency Agent extension in failed state
 
 We'll also provide a script that takes output of "VMs is configured for mismatched Log Analytics Workspace" and allows to update VM to use a different workspace.
 
 ## Feedback Requested
 
 ### Data sovereignty
-We are assessing what is needed for Data sovereignty.
-One proposal is to have a parameter 
-- VMLocations (List of Locations/Regions the Policy will apply to – default to all locations )
+When you assign the Initiative you provide a Subscription, and optional Resource Groups along with the Log Analytics workspace.
+If your VM's that are located across different Azure regions are organized by Subscription and/or Resource Group, you can create multiple assignments to associate the VM's with workspaces in required regions for your organizations compliance.
 
-Let know feedback if we should include this, or you believe is a rare case customer can handle through their own customization, or any other suggestion
+Does this meet needs? Or is more control such as a parameter on the Initiative for the VM Locations required? (we want the minimum set of parameters to keep things simple for the most common case)
 
 ### VM Scale Sets
 We want to discuss needs of users of VM Scale Sets, is there a need for us to supply policies?

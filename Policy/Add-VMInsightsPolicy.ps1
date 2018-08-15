@@ -33,7 +33,7 @@ param(
     [Parameter(mandatory = $false)][switch]$Approve
 )
 
-# TODO: Remove the branch
+# TODO: Remove the branch once this is in master
 #
 # Take policies from here unless run with -UseLocalPolicies
 $gitHubSource = "https://raw.githubusercontent.com/dougbrad/OnBoardVMInsights/Policy/Policy/"
@@ -41,33 +41,45 @@ if ($UseLocalPolicies) {
     $gitHubSource = ""
 }
 
-$policiesToAddJson = @"
+$vmInsightsInitiativePoliciesJson = @"
 [
     {
-        "name": "deploy-dependencyagent-windows-vm-preview",
-        "displayName": "Deploy Dependency Agent VM extension for Windows VMs - Preview",
-        "description": "-",
-        "policy": "deploy-dependencyagent-windows-vm.rules.json"
-    },
-    {
-        "name": "deploy-dependencyagent-linux-vm-preview",
-        "displayName": "Deploy Dependency Agent VM extension for Linux VMs - Preview",
-        "description": "-",
-        "policy": "deploy-dependencyagent-linux-vm.rules.json"
-    },
-    {
         "name": "deploy-loganalytics-windows-vm-preview",
-        "displayName": "Deploy Log Analytics VM extension for Windows VMs - Preview",
+        "displayName": "Deploy Log Analytics Agent for Windows VMs - Preview",
         "description": "-",
         "policy": "deploy-loganalytics-windows-vm.rules.json",
         "parameter": "deploy-loganalytics-vm.parameters.json"
     },
     {
         "name": "deploy-loganalytics-linux-vm-preview",
-        "displayName": "Deploy Log Analytics VM extension for Linux VMs - Preview",
+        "displayName": "Deploy Log Analytics Agent for Linux VMs - Preview",
         "description": "-",
         "policy": "deploy-loganalytics-linux-vm.rules.json",
         "parameter": "deploy-loganalytics-vm.parameters.json"
+    },
+    {
+        "name": "deploy-dependencyagent-windows-vm-preview",
+        "displayName": "Deploy Dependency Agent for Windows VMs - Preview",
+        "description": "-",
+        "policy": "deploy-dependencyagent-windows-vm.rules.json"
+    },
+    {
+        "name": "deploy-dependencyagent-linux-vm-preview",
+        "displayName": "Deploy Dependency Agent for Linux VMs - Preview",
+        "description": "-",
+        "policy": "deploy-dependencyagent-linux-vm.rules.json"
+    }
+]
+"@
+
+$vmInsightsStandalonePoliciesJson = @"
+[
+    {
+        "name": "audit-loganalytics-mismatch-vm-preview",
+        "displayName": "VM is configured for mismatched Log Analytics Workspace - Preview",
+        "description": "-",
+        "policy": "audit-loganalytics-mismatch-vm.rules.json",
+        "parameter": "audit-loganalytics-mismatch-vm.parameters.json"
     }
 ]
 "@
@@ -76,9 +88,7 @@ $vmInsightsInitiativeJson = @"
 {
     "name": "vminsights-initiative-preview",
     "displayName": "Enable VM Insights for VMs - Preview",
-    "description": "-",
-    "policy": "vminsights.definitions.json",
-    "parameters": "vminsights.parameters.json"
+    "description": "-"
 }
 "@
 
@@ -103,8 +113,38 @@ $vmInsightsParametersJson = @"
 }
 "@
 
-$policiesToAdd = $policiesToAddJson | ConvertFrom-Json
+$vmInsightsInitiativePolicies = $vmInsightsInitiativePoliciesJson | ConvertFrom-Json
+$vmInsightsStandalonePolicies = $vmInsightsStandalonePoliciesJson | ConvertFrom-Json
 $vmInsightsInitiative = $vmInsightsInitiativeJson  | ConvertFrom-Json
+
+function Add-PolicyDefinition {
+    <#
+	.SYNOPSIS
+    Adds the policies
+	#>
+    [CmdletBinding()]
+    param
+    (
+        [Parameter(Mandatory = $true)][psobject]$Policies
+    )
+
+    foreach ($policy in $Policies) {
+        $parameter = @{}
+        if ($policy.parameter) {
+            $parameter."Parameter" = $gitHubSource + $policy.parameter
+            Write-Verbose("Policy Parameter: " + $parameter."Parameter")
+        }
+
+        Write-Verbose("Adding Policy: " + $gitHubSource + $policy.policy)
+
+        New-AzureRmPolicyDefinition `
+            -Name $policy.name `
+            -DisplayName $policy.displayName `
+            -Description $policy.description `
+            -Policy ($gitHubSource + $policy.policy) `
+            @parameter
+    }
+}
 
 #
 # First make sure authenticed, select to the WorkspaceSubscriptionId if supplied
@@ -125,7 +165,7 @@ elseif ($SubscriptionId) {
     }
     else {
         Write-Output("Changing to subscription: $SubscriptionId")
-        Set-AzureRmContext -SubscriptionId $SubscriptionId
+        $account = Set-AzureRmContext -SubscriptionId $SubscriptionId
     }
 }
 
@@ -142,28 +182,14 @@ else {
 #
 # Add the Policies
 #
-foreach ($policy in $policiesToAdd ) {
-    $parameter = @{}
-    if ($policy.parameter) {
-        $parameter."Parameter" = $gitHubSource + $policy.parameter
-        Write-Verbose("Policy Parameter: " + $parameter."Parameter")
-    }
-
-    Write-Verbose("Adding Policy: " + $gitHubSource + $policy.policy)
-
-    New-AzureRmPolicyDefinition `
-        -Name $policy.name `
-        -DisplayName $policy.displayName `
-        -Description $policy.description `
-        -Policy ($gitHubSource + $policy.policy) `
-        @parameter
-}
+Add-PolicyDefinition -Policies $vmInsightsInitiativePolicies
+Add-PolicyDefinition -Policies $vmInsightsStandalonePolicies
 
 #
 # Add the Initiative (will take any feedback on how to improve this logic)
 #
 $vmInsightsDefinition = "["
-foreach ($policy in $policiesToAdd) {
+foreach ($policy in $vmInsightsInitiativePolicies) {
     $policyDefinitionId = (Get-AzureRmPolicyDefinition -Name $policy.name | Select-Object -ExpandProperty PolicyDefinitionId)
     $vmInsightsDefinition += '{ "policyDefinitionId": "' + $policyDefinitionId + '"'
     if ($policy.parameter) {
