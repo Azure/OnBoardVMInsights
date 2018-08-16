@@ -215,7 +215,7 @@ PARAMETERS
     -------------------------- EXAMPLE 1 --------------------------
 
     .\Install-VMInsights.ps1 -WorkspaceId <WorkspaceId>-WorkspaceKey <WorkspaceKey> -SubscriptionId
-    <SubscriptionId> -ResourceGroup <ResourceGroup>        
+    <SubscriptionId> -WorkspaceRegion <WorkspaceRegion>        
 ```
 
 Example of running:
@@ -224,7 +224,7 @@ Example of running:
 $WorkspaceId = "<GUID>"
 $WorkspaceKey = "<Key>"
 $SubscriptionId = "<GUID>"
-.\Install-VMInsights.ps1 -WorkspaceId $WorkspaceId -WorkspaceKey $WorkspaceKey -SubscriptionId $SubscriptionId -ResourceGroup db-ws
+.\Install-VMInsights.ps1 -WorkspaceId $WorkspaceId -WorkspaceKey $WorkspaceKey -SubscriptionId $SubscriptionId -WorkspaceRegion eastus
 
 Getting list of VM's or VM ScaleSets matching criteria specified
 
