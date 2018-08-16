@@ -107,10 +107,6 @@
                                     "anyOf": [
                                         {
                                             "field": "Microsoft.Compute/imageSKU",
-                                            "equals": "11-SP4"
-                                        },
-                                        {
-                                            "field": "Microsoft.Compute/imageSKU",
                                             "like": "12*"
                                         }
                                     ]
