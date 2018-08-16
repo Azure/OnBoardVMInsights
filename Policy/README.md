@@ -40,12 +40,14 @@ The script also has these optional parameters:
     -SubscriptionId <String>
         <Optional> SubscriptionId to add the Policies/Initiatives to
 
+    -ManagementGroupId <String>
+        <Optional> Management Group Id to add the Policies/Initiatives to
+
     -Approve [<SwitchParameter>]
         <Optional> Gives the approval to add the Policies/Initiatives without any prompt
 ```
 
-Note: If you plan to apply policies to multiple subscriptions, the definitions must be stored in the management group that contains the subscriptions you will assign the policy to.
-Currently Add-VMInsightsPolicy.ps1 does not support adding to a management group, this will be added in the future. 
+Note: If you plan to assign the initiative/policy to multiple subscriptions, the definitions must be stored in the management group that contains the subscriptions you will assign the policy to, use the -ManagementGroupId parameter.
 
 ## Assign the Policy
 After you run Add-VMInsightsPolicy.ps1 the following Initiave and Policies will be added 

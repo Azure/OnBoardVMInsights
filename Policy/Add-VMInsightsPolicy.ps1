@@ -15,6 +15,9 @@
 .PARAMETER SubscriptionId
     <Optional> SubscriptionId to add the Policies/Initiatives to
 
+.PARAMETER ManagementGroupId
+    <Optional> Management Group Id to add the Policies/Initiatives to
+
 .PARAMETER Approve
     <Optional> Gives the approval to add the Policies/Initiatives without any prompt
 
@@ -30,6 +33,7 @@
 param(
     [Parameter(mandatory = $false)][switch]$UseLocalPolicies,
     [Parameter(mandatory = $false)][string]$SubscriptionId,
+    [Parameter(mandatory = $false)][string]$ManagementGroupId,
     [Parameter(mandatory = $false)][switch]$Approve
 )
 
@@ -132,13 +136,20 @@ $vmInsightsInitiative = $vmInsightsInitiativeJson  | ConvertFrom-Json
 function Add-PolicyDefinition {
     <#
 	.SYNOPSIS
-    Adds the policies
+    Adds the policies. By default adds to the current subscription.
+    If ManagementGroupName is specified adds to that.
 	#>
     [CmdletBinding()]
     param
     (
-        [Parameter(Mandatory = $true)][psobject]$Policies
+        [Parameter(Mandatory = $true)][psobject]$Policies,
+        [Parameter(mandatory = $false)][string]$ManagementGroupId
     )
+
+    $managementGroupIdParameter = @{}
+    if ($ManagementGroupId) {
+        $managementGroupIdParameter."ManagementGroupName" = $ManagementGroupId
+    }
 
     foreach ($policy in $Policies) {
         $parameter = @{}
@@ -154,7 +165,8 @@ function Add-PolicyDefinition {
             -DisplayName $policy.displayName `
             -Description $policy.description `
             -Policy ($gitHubSource + $policy.policy) `
-            @parameter
+            @parameter `
+            @managementGroupIdParameter
     }
 }
 
@@ -181,8 +193,14 @@ elseif ($SubscriptionId) {
     }
 }
 
-Write-Output("Policies and Initiatives for VM Insights will be added to subscription: `n" `
-        + $account.Subscription.Name + " ( " + $account.Subscription.SubscriptionId + " )")
+if ($ManagementGroupId) {
+    Write-Output("Policies and Initiatives for VM Insights will be added to Management Group Id: `n" `
+    + $ManagementGroupId)
+} else {
+    Write-Output("Policies and Initiatives for VM Insights will be added to subscription: `n" `
+    + $account.Subscription.Name + " ( " + $account.Subscription.SubscriptionId + " )")
+}
+
 if ($Approve -eq $true -or !$PSCmdlet.ShouldProcess("All") -or $PSCmdlet.ShouldContinue("Continue?", "")) {
     Write-Output ""
 }
@@ -194,15 +212,20 @@ else {
 #
 # Add the Policies
 #
-Add-PolicyDefinition -Policies $vmInsightsInitiativePolicies
-Add-PolicyDefinition -Policies $vmInsightsStandalonePolicies
+Add-PolicyDefinition -Policies $vmInsightsInitiativePolicies -ManagementGroupId $ManagementGroupId
+Add-PolicyDefinition -Policies $vmInsightsStandalonePolicies -ManagementGroupId $ManagementGroupId
 
 #
-# Add the Initiative (will take any feedback on how to improve this logic)
+# Add the Initiative
 #
+$managementGroupIdParameter = @{}
+if ($ManagementGroupId) {
+    $managementGroupIdParameter."ManagementGroupName" = $ManagementGroupId
+}
+
 $vmInsightsDefinition = "["
 foreach ($policy in $vmInsightsInitiativePolicies) {
-    $policyDefinitionId = (Get-AzureRmPolicyDefinition -Name $policy.name | Select-Object -ExpandProperty PolicyDefinitionId)
+    $policyDefinitionId = (Get-AzureRmPolicyDefinition -Name $policy.name @managementGroupIdParameter | Select-Object -ExpandProperty PolicyDefinitionId)
     $vmInsightsDefinition += '{ "policyDefinitionId": "' + $policyDefinitionId + '"'
     if ($policy.parameter) {
         $vmInsightsDefinition += ',' + $logAnalyticsParameterJson
@@ -219,4 +242,5 @@ New-AzureRmPolicySetDefinition `
     -DisplayName $vmInsightsInitiative.displayName `
     -Description $vmInsightsInitiative.description `
     -PolicyDefinition $vmInsightsDefinition `
-    -Parameter $vmInsightsParametersJson
+    -Parameter $vmInsightsParametersJson `
+    @managementGroupIdParameter
