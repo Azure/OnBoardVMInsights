@@ -1,12 +1,29 @@
-# Configure VM's for VM Insights with Policy - Private Preview
-For any questions, to give feedback:
-* email: AzMonOnboardAtScale@microsoft.com
+# Onboard VMs to VM Insights using Azure Policies - Private Preview
 
-This readme gives steps on how to On-Board VM's to VM Insights using Policy.
+This readme gives steps on how to On-Board VM's to VM Insights using Policy. 
 
-Workspace configuration should still be done using steps [here](..\readme.md)
+##Overview 
+
+Azure Policy makes it simple and manageable to govern your resources at scale. We are introducing an initiative (a bundle of policies) that will enable VM Insights on Virtual machines in the assigned scope. A scope in this contect could be management group, subscription or resource group. The initiative will run periodically and scan the VMs in the scope and provide a non-compliant summary.  
+
+The policies under this initiative will do the following for new Windows or Linux VM (greenfield) 
+    a) Deploy  
+        i) Log Analytics Agent 
+        ii) Dependency Agent  
+   
+    b) Audit 
+        Check for the OS in scope (listed here) 
+
+We are offering this as custom initiative and to activate it for your tenant the process requires: 
+A. Congifure Log Analytics workspace using steps [here](..\readme.md)
+B. Import the initiative defintion to your tenant (at management group or subscription level)
+C. Assign the policy to the desired scope
+D. Review the compliance results 
 
 For more information on Policy, see [Azure Policy Introduction](https://docs.microsoft.com/en-us/azure/azure-policy/azure-policy-introduction)
+
+##Private Preview 
+
 
 Note:
 - Support for deployIfNotExists policies which this uses is not yet enabled for all tenants, email us and we can have your tenant white-listed
@@ -104,3 +121,7 @@ Policy supports Built-In policies and Custom Policies, and we need feedback on d
 - With Custom policies, customer creates them themselves, such as by running Add-VMInsightsPolicy.ps1. Customer can sign up to see changes through GitHub notifications, and can decide to apply themselves.
 
 Let know any feedback around this.
+
+For any questions, to give feedback:
+* email: AzMonOnboardAtScale@microsoft.com
+
