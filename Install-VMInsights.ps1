@@ -150,7 +150,7 @@ function Install-VMExtension {
             }
             else {
                 if ($ReInstall -ne $true) {
-                    $message = "$VMName : Extension $ExtensionType already configured for a different workspace. Run with /ReInstall to move to new workspace. Provisioning State: " + $extension.ProvisioningState + " " + $extension.Settings
+                    $message = "$VMName : Extension $ExtensionType already configured for a different workspace. Run with -ReInstall to move to new workspace. Provisioning State: " + $extension.ProvisioningState + " " + $extension.Settings
                     Write-Warning($message)
                     $OnboardingStatus.DifferentWorkspace += $message
                 }
@@ -328,7 +328,7 @@ $MMAExtensionMap = @{ "Windows" = "MicrosoftMonitoringAgent"; "Linux" = "OmsAgen
 $MMAExtensionVersionMap = @{ "Windows" = "1.0"; "Linux" = "1.6" }
 $MMAExtensionPublisher = "Microsoft.EnterpriseCloud.Monitoring"
 $MMAExtensionName = "MMAExtension"
-$PublicSettings = @{"workspaceId" = $WorkspaceId}
+$PublicSettings = @{"workspaceId" = $WorkspaceId; "stopOnMultipleConnections" = "true"}
 $ProtectedSettings = @{"workspaceKey" = $WorkspaceKey}
 
 # Dependency Agent Extension constants
@@ -360,7 +360,7 @@ $VMS | ForEach-Object { Write-Output ($_.Name + " " + $_.PowerState) }
 # Validate customer wants to continue
 Write-Output("`nThis operation will install the Log Analytics and Dependency Agent extensions on above $($VMS.Count) VM's or VM Scale Sets.")
 Write-Output("VM's in a non-running state will be skipped.")
-Write-Output("Extension will not be re-installed if already installed. Use /ReInstall if desired, for example to update workspace ")
+Write-Output("Extension will not be re-installed if already installed. Use -ReInstall if desired, for example to update workspace ")
 if ($Approve -eq $true -or !$PSCmdlet.ShouldProcess("All") -or $PSCmdlet.ShouldContinue("Continue?", "")) {
     Write-Output ""
 }
