@@ -1,9 +1,9 @@
-﻿<#
+<#
 .SYNOPSIS
   Configure VM's and VM Scale Sets for VM Insights:
   - Installs Log Analytics VM Extension configured to supplied Log Analytics Workspace
   - Installs Dependency Agent VM Extension
-  - Installs Workload resource for Health feature (VM's only) <To Add>
+  - Installs resource for Health (Microsoft.WorkloadMonitor/workloadInsights) for VM's only
 
   Can be applied to:
   - Subscription
@@ -26,6 +26,11 @@
 
 .PARAMETER SubscriptionId
     SubscriptionId for the VMs/VM Scale Sets
+
+.PARAMETER WorkspaceRegion
+    Region the Log Analytics Workspace is in
+    Suuported values: "East US","eastus","Southeast Asia","southeastasia","West Central US","westcentralus","West Europe","westeurope"
+    For Health supported is: "East US","eastus","West Central US","westcentralus"
 
 .PARAMETER ResourceGroup
     <Optional> Resource Group to which the VMs or VM Scale Sets belong to
@@ -70,8 +75,16 @@ param(
     [Parameter(mandatory = $false)][string]$Name,
     [Parameter(mandatory = $false)][switch]$ReInstall,
     [Parameter(mandatory = $false)][switch]$TriggerVmssManualVMUpdate,
-    [Parameter(mandatory = $false)][switch]$Approve
+    [Parameter(mandatory = $false)][switch]$Approve,
+    [Parameter(mandatory = $true)] `
+        [ValidateSet( `
+            "East US", "eastus", "Southeast Asia", "southeastasia", "West Central US", "westcentralus", "West Europe", "westeurope")] `
+        [string]$WorkspaceRegion
 )
+
+# supported regions for Health
+$supportedHealthRegions = @("East US", "eastus", "West Central US", "westcentralus")
+
 #
 # FUNCTIONS
 #
@@ -356,6 +369,10 @@ else {
     return
 }
 
+Write-Output "Register the Resource Provider Microsoft.WorkloadMonitor and Microsoft.AlertsManagement for Health feature"
+Register-AzureRmResourceProvider -ProviderNamespace Microsoft.WorkloadMonitor
+Register-AzureRmResourceProvider -ProviderNamespace Microsoft.AlertsManagement
+
 #
 # Loop through each VM/VM Scale set, as appropriate handle installing VM Extensions
 #
@@ -459,7 +476,33 @@ Foreach ($vm in $VMs) {
             $OnboardingStatus.NotRunning += $message
             continue
         }
-
+		# Add Health Resource if in a supported region
+        if ($supportedHealthRegions -contains $WorkspaceRegion) {
+            Write-Output("$vmName : Deploying Health Resource. Deployment name: DeployHealth-$vmName")
+            try{
+				New-AzureRmResourceGroupDeployment -Name DeployHealth-$vmName -ResourceGroupName $vm.ResourceGroupName `
+                -TemplateUri https://raw.githubusercontent.com/dougbrad/OnBoardVMInsights/master/InstallHealthResourceForVM_BaseOS.json -location $WorkspaceRegion -vmName $vm.Name
+				$message = "$vmName : Succesfully deployed Health Resource"
+				Write-Output($message)
+				$OnboardingStatus.Succeeded += $message
+            }
+			catch  {
+				$string_err = $_.Exception.Message
+				$message = "$vmName : Deployment of Health Resource failed"
+				Write-Warning($message)
+				$message | Out-File diagnostics.txt -append
+				$string_err | Out-File diagnostics.txt -append
+				$OnboardingStatus.Failed += $message
+			}			
+        }
+		
+		else{
+			$message = "$vmname cannot be onboarded to Health monitoring, workspace associated to this is not in a supported region "
+			Write-Warning($message)
+		}
+		
+		
+		
         Install-VMExtension `
             -VMName $vmName `
             -VMLocation $vmLocation `
@@ -483,6 +526,7 @@ Foreach ($vm in $VMs) {
             -ExtensionVersion $daExtVersion `
             -ReInstall $ReInstall `
             -OnboardingStatus $OnboardingStatus
+
     }
 }
 
@@ -499,4 +543,3 @@ Write-Output("`nVM Scale Set needs update: (" + $OnboardingStatus.VMScaleSetNeed
 $OnboardingStatus.VMScaleSetNeedsUpdate  | ForEach-Object { Write-Output ($_) }
 Write-Output("`nFailed: (" + $OnboardingStatus.Failed.Count + ")")
 $OnboardingStatus.Failed | ForEach-Object { Write-Output ($_) }
-# VM SCaleSet that needs upgrade
