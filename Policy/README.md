@@ -2,23 +2,25 @@
 
 This readme gives steps on how to On-Board VM's to VM Insights using Policy. 
 
-##Overview 
+## Overview
 
-Azure Policy makes it simple and manageable to govern your resources at scale. We are introducing an initiative (a bundle of policies) that will enable VM Insights on Virtual machines in the assigned scope. A scope in this contect could be management group, subscription or resource group. The initiative will run periodically and scan the VMs in the scope and provide a non-compliant summary.  
+Azure Policy makes it simple and manageable to govern your resources at scale.
 
-The policies under this initiative will do the following for new Windows or Linux VM (greenfield) 
-    a) Deploy  
-        i) Log Analytics Agent 
-        ii) Dependency Agent  
+We are introducing an initiative (a bundle of policies) that will enable VM Insights on Virtual machines in the assigned scope. A scope in this contect could be management group, subscription or resource group. The initiative will run periodically and scan the VMs in the scope and provide a non-compliant summary.
+
+The policies under this initiative will do the following for new Windows or Linux VM (greenfield)
+- Deploy
+  - Log Analytics Agent
+  - Dependency Agent
    
-    b) Audit 
-        Check for the OS in scope (listed here) 
+- Audit
+  - Check for the OS in scope (listed here)
 
 We are offering this as custom initiative and to activate it for your tenant the process requires: 
-A. Congifure Log Analytics workspace using steps [here](..\readme.md)
-B. Import the initiative defintion to your tenant (at management group or subscription level)
-C. Assign the policy to the desired scope
-D. Review the compliance results 
+- Configure Log Analytics workspace using steps [here](https://github.com/dougbrad/OnBoardVMInsights/blob/master/README.md)
+- Import the initiative defintion to your tenant (at management group or subscription level)
+- Assign the policy to the desired scope
+- Review the compliance results
 
 For more information on Policy, see [Azure Policy Introduction](https://docs.microsoft.com/en-us/azure/azure-policy/azure-policy-introduction)
 
