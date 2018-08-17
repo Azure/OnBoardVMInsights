@@ -478,21 +478,17 @@ Foreach ($vm in $VMs) {
         }
 		# Add Health Resource if in a supported region
         if ($supportedHealthRegions -contains $WorkspaceRegion) {
-			# TODO: Move this if condition to the beginning of loop
-
-            # TBD: Do we want to check it is already there somehow, or no harm in repeatedly deploying?
-
-            Write-Output("Deploying Health Resource. Deployment name: DeployHealth-$vmName")
-            # TODO: Update to use TemplateUri when testing completed
-            # https://raw.githubusercontent.com/dougbrad/OnBoardVMInsights/master/InstallHealthResourceForVM_BaseOS.json
+            Write-Output("$vmName : Deploying Health Resource. Deployment name: DeployHealth-$vmName")
             try{
 				New-AzureRmResourceGroupDeployment -Name DeployHealth-$vmName -ResourceGroupName $vm.ResourceGroupName `
-                -TemplateFile InstallHealthResourceForVM_BaseOS.json -location $WorkspaceRegion -vmName $vm.Name
-				
+                -TemplateUri https://raw.githubusercontent.com/dougbrad/OnBoardVMInsights/master/InstallHealthResourceForVM_BaseOS.json -location $WorkspaceRegion -vmName $vm.Name
+				$message = "$vmName : Succesfully deployed Health Resource"
+				Write-Output($message)
+				$OnboardingStatus.Succeeded += $message
             }
 			catch  {
 				$string_err = $_.Exception.Message
-				$message = "DeployHealth-$vmName : Deployment of Health Resource failed."
+				$message = "$vmName : Deployment of Health Resource failed"
 				Write-Warning($message)
 				$message | Out-File diagnostics.txt -append
 				$string_err | Out-File diagnostics.txt -append
