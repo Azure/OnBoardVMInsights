@@ -6,7 +6,7 @@ This readme gives steps on how to On-Board VM's to VM Insights using Policy.
 
 Azure Policy makes it simple and manageable to govern your resources at scale.
 
-We are introducing an initiative (a bundle of policies) that will enable VM Insights on Virtual machines in the assigned scope. A scope in this contect could be management group, subscription or resource group. The initiative will run periodically and scan the VMs in the scope and provide a non-compliant summary.
+We are introducing an initiative (a bundle of policies) that will enable VM Insights on Virtual machines in the assigned scope. A scope in this contect could be management group, subscription or resource group.
 
 The policies under this initiative will do the following for new Windows or Linux VM (greenfield)
 - Deploy
@@ -24,10 +24,8 @@ We are offering this as custom initiative and to activate it for your tenant the
 
 For more information on Policy, see [Azure Policy Introduction](https://docs.microsoft.com/en-us/azure/azure-policy/azure-policy-introduction)
 
-##Private Preview 
+## Private Preview Notes
 
-
-Note:
 - Support for deployIfNotExists policies which this uses is not yet enabled for all tenants, email us and we can have your tenant white-listed
 - Currently Policy only supports configuring new VM's, support for existing VM's (Remediation feature) is coming mid September
 
