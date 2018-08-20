@@ -177,7 +177,7 @@ SYNOPSIS
 
 SYNTAX
     D:\GitHub\OnBoardVMInsights\Install-VMInsights.ps1 [-WorkspaceId] <String> [-WorkspaceKey] <String> [-SubscriptionId]
-    <String> [[-ResourceGroup] <String>] [[-Name] <String>] [-ReInstall] [-TriggerVmssManualVMUpdate] [-Approve] [-WhatIf]
+    <String> [-WorkspaceRegion] <String> [[-Name] <String>] [-ReInstall] [-TriggerVmssManualVMUpdate] [-Approve] [-WhatIf]
     [-Confirm] [<CommonParameters>]
 
 PARAMETERS
@@ -190,8 +190,8 @@ PARAMETERS
     -SubscriptionId <String>
         SubscriptionId for the VMs/VM Scale Sets
 
-    -ResourceGroup <String>
-        <Optional> Resource Group to which the VMs or VM Scale Sets belong to
+    -WorkspaceRegion <String>
+        Region of the Log Analytics Workspace
 
     -Name <String>
         <Optional> To install to a single VM/VM Scale Set
@@ -224,7 +224,7 @@ PARAMETERS
     -------------------------- EXAMPLE 1 --------------------------
 
     .\Install-VMInsights.ps1 -WorkspaceId <WorkspaceId>-WorkspaceKey <WorkspaceKey> -SubscriptionId
-    <SubscriptionId> -ResourceGroup <ResourceGroup>        
+    <SubscriptionId> -WorkspaceRegion <WorkspaceRegion>        
 ```
 
 Example of running:
@@ -233,7 +233,7 @@ Example of running:
 $WorkspaceId = "<GUID>"
 $WorkspaceKey = "<Key>"
 $SubscriptionId = "<GUID>"
-.\Install-VMInsights.ps1 -WorkspaceId $WorkspaceId -WorkspaceKey $WorkspaceKey -SubscriptionId $SubscriptionId -ResourceGroup db-ws
+.\Install-VMInsights.ps1 -WorkspaceId $WorkspaceId -WorkspaceKey $WorkspaceKey -SubscriptionId $SubscriptionId -WorkspaceRegion eastus
 
 Getting list of VM's or VM ScaleSets matching criteria specified
 
@@ -250,10 +250,14 @@ Confirm
 Continue?
 [Y] Yes  [N] No  [S] Suspend  [?] Help (default is "Y"): y
 
+db-ws-1 : Deploying Health Resource. Deployment name: DeployHealth-db-ws-1
+db-ws-1 : Succesfully deployed Health Resource
 db-ws-1 : Deploying DependencyAgentWindows with name DAExtension
 db-ws-1 : Successfully deployed DependencyAgentWindows
 db-ws-1 : Deploying MicrosoftMonitoringAgent with name MMAExtension
 db-ws-1 : Successfully deployed MicrosoftMonitoringAgent
+db-ws2012 : Deploying Health Resource. Deployment name: DeployHealth-db-ws2012
+db-ws2012 : Succesfully deployed Health Resource
 db-ws2012 : Deploying DependencyAgentWindows with name DAExtension
 db-ws2012 : Successfully deployed DependencyAgentWindows
 db-ws2012 : Deploying MicrosoftMonitoringAgent with name MMAExtension
@@ -263,9 +267,11 @@ Summary:
 
 Already Onboarded: (0)
 
-Succeeded: (4)
+Succeeded: (6)
+db-ws-1 : Succesfully deployed Health Resource
 db-ws-1 : Successfully deployed DependencyAgentWindows
 db-ws-1 : Successfully deployed MicrosoftMonitoringAgent
+db-ws2012 : Succesfully deployed Health Resource
 db-ws2012 : Successfully deployed DependencyAgentWindows
 db-ws2012 : Successfully deployed MicrosoftMonitoringAgent
 
