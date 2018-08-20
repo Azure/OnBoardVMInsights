@@ -25,10 +25,9 @@ We can organize setup steps as follows:
 | Windows Server 2012R2 | X | X |
 | Windows 2012, 2008 R2 SP1 | X | X |
 | RHEL 6, 7 | X | X | X
-| Ubuntu 14.04, 16.04  | X | X | X
+| Ubuntu 14.04, 16.04, 18.04  | X | X | X
 | Cent OS Linux 6, 7 | X | X | X
-| SLES 11 | X | X | X
-| SLES 12 | X |  | X
+| SLES 12 | X | X | X
 | Oracle Linux 6 | X | X | X
 | Oracle Linux 7 | X |  | X
 | Debian 8, 9.4 | X |  | X
