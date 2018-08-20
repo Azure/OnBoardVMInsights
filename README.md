@@ -177,7 +177,7 @@ SYNOPSIS
 
 SYNTAX
     D:\GitHub\OnBoardVMInsights\Install-VMInsights.ps1 [-WorkspaceId] <String> [-WorkspaceKey] <String> [-SubscriptionId]
-    <String> [[-ResourceGroup] <String>] [[-Name] <String>] [-ReInstall] [-TriggerVmssManualVMUpdate] [-Approve] [-WhatIf]
+    <String> [-WorkspaceRegion] <String> [[-Name] <String>] [-ReInstall] [-TriggerVmssManualVMUpdate] [-Approve] [-WhatIf]
     [-Confirm] [<CommonParameters>]
 
 PARAMETERS
@@ -190,8 +190,8 @@ PARAMETERS
     -SubscriptionId <String>
         SubscriptionId for the VMs/VM Scale Sets
 
-    -ResourceGroup <String>
-        <Optional> Resource Group to which the VMs or VM Scale Sets belong to
+    -WorkspaceRegion <String>
+        Region of the Log Analytics Workspace
 
     -Name <String>
         <Optional> To install to a single VM/VM Scale Set
