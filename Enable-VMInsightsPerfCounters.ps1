@@ -15,6 +15,9 @@
 .PARAMETER WorkspaceResourceGroupName
     Resource Group the Log Analytics Workspace is in
 
+.PARAMETER WorkspaceSubscriptionId
+    <Optional> SubscriptionId the Log Analytics Workspace is in
+
 .EXAMPLE
   .\Enable-VMInsightsPerfCounters.ps1 -WorkspaceName <Name of Workspace> -WorkspaceResourceGroupName <Workspace Resource Group>
 
@@ -26,7 +29,8 @@
 [CmdletBinding(SupportsShouldProcess = $true)]
 param(
     [Parameter(mandatory = $true)][string]$WorkspaceName,
-    [Parameter(mandatory = $true)][string]$WorkspaceResourceGroupName
+    [Parameter(mandatory = $true)][string]$WorkspaceResourceGroupName,
+    [Parameter(mandatory = $false)][string]$WorkspaceSubscriptionId
 )
 #
 # FUNCTIONS
@@ -408,12 +412,29 @@ $DefaultIntervalSeconds = 60
 #
 
 #
-# First make sure authenticed
+# First make sure authenticed, select to the WorkspaceSubscriptionId if supplied
 #
 $account = Get-AzureRmContext
 if ($null -eq $account.Account) {
     Write-Output("Account Context not found, please login")
-    Login-AzureRmAccount -subscriptionid $SubscriptionId
+    if ($WorkspaceSubscriptionId) {
+        Login-AzureRmAccount -subscriptionid $WorkspaceSubscriptionId
+    }
+    else {
+        Login-AzureRmAccount
+    }
+}
+if ($WorkspaceSubscriptionId) {
+    if ($account.Subscription.SubscriptionId -eq $WorkspaceSubscriptionId) {
+        Write-Verbose("Subscription: $WorkspaceSubscriptionId is already selected.")
+        $account
+    }
+    else {
+        Write-Output("Current Subscription:")
+        $account
+        Write-Output("Changing to subscription: $WorkspaceSubscriptionId")
+        Select-AzureRmSubscription -SubscriptionId $WorkspaceSubscriptionId
+    }
 }
 
 # Enable Linux Performance Collection (no way from PowerShell to check if already enabled)
@@ -431,6 +452,7 @@ foreach ($newCounter in $countersToAdd ) {
     # Windows
     #
     if ($newCounter.kind -eq "WindowsPerformanceCounter") {
+        $existingCounterDataSource = $null
         if ($existingWindowsPerfCounters) {
             $existingCounterDataSource = Get-CounterInConfiguredCounters -NewCounter $newCounter -ExistingCounters $existingWindowsPerfCounters
         }
@@ -457,8 +479,8 @@ foreach ($newCounter in $countersToAdd ) {
     # Linux
     #
     elseif ($newCounter.kind -eq "LinuxPerformanceObject") {
-        if ($existingLinuxPerfCounters)
-        {
+        $existingCounterDataSource = $null
+        if ($existingLinuxPerfCounters) {
             $existingCounterDataSource = Get-CounterInConfiguredCounters -NewCounter $newCounter -ExistingCounters $existingLinuxPerfCounters
         }
 
