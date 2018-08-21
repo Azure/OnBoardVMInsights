@@ -149,7 +149,6 @@ function Install-VMExtension {
                 Write-Output($message)
             }
             else {
-                if ($ReInstall -ne $true) {
                     $message = "$VMName : Extension $ExtensionType already configured for a different workspace. Run with -ReInstall to move to new workspace. Provisioning State: " + $extension.ProvisioningState + " " + $extension.Settings
                     Write-Warning($message)
                     $OnboardingStatus.DifferentWorkspace += $message
