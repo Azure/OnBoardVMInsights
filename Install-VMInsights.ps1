@@ -149,6 +149,7 @@ function Install-VMExtension {
                 Write-Output($message)
             }
             else {
+                if ($ReInstall -ne $true) {
                     $message = "$VMName : Extension $ExtensionType already configured for a different workspace. Run with -ReInstall to move to new workspace. Provisioning State: " + $extension.ProvisioningState + " " + $extension.Settings
                     Write-Warning($message)
                     $OnboardingStatus.DifferentWorkspace += $message
@@ -368,8 +369,7 @@ else {
     return
 }
 
-Write-Output "Register the Resource Provider Microsoft.WorkloadMonitor and Microsoft.AlertsManagement for Health feature"
-Register-AzureRmResourceProvider -ProviderNamespace Microsoft.WorkloadMonitor
+Write-Output "Register the Resource Provider Microsoft.AlertsManagement for Health feature"
 Register-AzureRmResourceProvider -ProviderNamespace Microsoft.AlertsManagement
 
 #
@@ -475,32 +475,17 @@ Foreach ($vm in $VMs) {
             $OnboardingStatus.NotRunning += $message
             continue
         }
-		# Add Health Resource if in a supported region
+		
         if ($supportedHealthRegions -contains $WorkspaceRegion) {
-            Write-Output("$vmName : Deploying Health Resource. Deployment name: DeployHealth-$vmName")
-            try{
-				New-AzureRmResourceGroupDeployment -Name DeployHealth-$vmName -ResourceGroupName $vm.ResourceGroupName `
-                -TemplateUri https://raw.githubusercontent.com/dougbrad/OnBoardVMInsights/master/InstallHealthResourceForVM_BaseOS.json -location $WorkspaceRegion -vmName $vm.Name
-				$message = "$vmName : Succesfully deployed Health Resource"
-				Write-Output($message)
-				$OnboardingStatus.Succeeded += $message
-            }
-			catch  {
-				$string_err = $_.Exception.Message
-				$message = "$vmName : Deployment of Health Resource failed"
-				Write-Warning($message)
-				$message | Out-File diagnostics.txt -append
-				$string_err | Out-File diagnostics.txt -append
-				$OnboardingStatus.Failed += $message
-			}			
-        }
-		
-		else{
-			$message = "$vmname cannot be onboarded to Health monitoring, workspace associated to this is not in a supported region "
-			Write-Warning($message)
+            $message = "$vmName : Succesfully onboarded to Health"
+			Write-Output($message)
+			$OnboardingStatus.Succeeded += $message
 		}
-		
-		
+		else
+		{
+			$message = "$vmname cannot be onboarded to Health monitoring, workspace associated to this is not in a supported region "
+			Write-Warning($message)	
+		}
 		
         Install-VMExtension `
             -VMName $vmName `
@@ -525,6 +510,8 @@ Foreach ($vm in $VMs) {
             -ExtensionVersion $daExtVersion `
             -ReInstall $ReInstall `
             -OnboardingStatus $OnboardingStatus
+			
+		Write-Output("`n")
 
     }
 }
