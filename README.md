@@ -249,12 +249,10 @@ Confirm
 Continue?
 [Y] Yes  [N] No  [S] Suspend  [?] Help (default is "Y"): y
 
-db-ws-1 : Succesfully onboarded to Health
 db-ws-1 : Deploying DependencyAgentWindows with name DAExtension
 db-ws-1 : Successfully deployed DependencyAgentWindows
 db-ws-1 : Deploying MicrosoftMonitoringAgent with name MMAExtension
 db-ws-1 : Successfully deployed MicrosoftMonitoringAgent
-db-ws2012 :Succesfully onboarded to Health
 db-ws2012 : Deploying DependencyAgentWindows with name DAExtension
 db-ws2012 : Successfully deployed DependencyAgentWindows
 db-ws2012 : Deploying MicrosoftMonitoringAgent with name MMAExtension
@@ -264,11 +262,9 @@ Summary:
 
 Already Onboarded: (0)
 
-Succeeded: (6)
-db-ws-1 : Succesfully onboarded to Health
+Succeeded: (4)
 db-ws-1 : Successfully deployed DependencyAgentWindows
 db-ws-1 : Successfully deployed MicrosoftMonitoringAgent
-db-ws2012 : Succesfully onboarded to Health
 db-ws2012 : Successfully deployed DependencyAgentWindows
 db-ws2012 : Successfully deployed MicrosoftMonitoringAgent
 

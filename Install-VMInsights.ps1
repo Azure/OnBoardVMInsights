@@ -476,12 +476,7 @@ Foreach ($vm in $VMs) {
             continue
         }
 		
-        if ($supportedHealthRegions -contains $WorkspaceRegion) {
-            $message = "$vmName : Succesfully onboarded to Health"
-			Write-Output($message)
-			$OnboardingStatus.Succeeded += $message
-		}
-		else
+        if (!($supportedHealthRegions -contains $WorkspaceRegion)) 
 		{
 			$message = "$vmname cannot be onboarded to Health monitoring, workspace associated to this is not in a supported region "
 			Write-Warning($message)	
