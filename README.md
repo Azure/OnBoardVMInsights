@@ -120,13 +120,6 @@ Note: the collection interval for any newly added configuration is set to 60 sec
 For more info on Log Analytics Performance Counters, see:
     https://docs.microsoft.com/en-us/azure/log-analytics/log-analytics-data-sources-performance-counters
 
-#### Configure the subscription to onboard to Health
-Register the below 2 Resource Providers with the test subscription where you have your solution installed
-- Microsoft.WorkloadMonitor
-- Microsoft.AlertsManagement
-
-To register, go to Azure Home > Subscriptions > Resource providers and then click register
-
 ## Per VM and VM Scale Set setup
 
 For VMs to onboard for Health monitoring, go to the VM blade, navigate to the new "Health(Preview)" table of content item and click on the blue ribbon "Click here to enable workload monitoring on VM". 
