@@ -69,6 +69,10 @@
                     {
                         "field": "Microsoft.Compute/virtualMachines/extensions/publisher",
                         "equals": "Microsoft.Azure.Monitoring.DependencyAgent"
+                    },
+                    {
+                        "field": "Microsoft.Compute/virtualMachines/extensions/provisioningState",
+                        "equals": "Succeeded"
                     }
                 ]
             },

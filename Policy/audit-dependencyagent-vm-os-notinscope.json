@@ -89,6 +89,36 @@
                             "allOf": [
                                 {
                                     "field": "Microsoft.Compute/imagePublisher",
+                                    "equals": "SUSE"
+                                },
+                                {
+                                    "field": "Microsoft.Compute/imageOffer",
+                                    "in": [
+                                        "SLES",
+                                        "SLES-SAP",
+                                        "SLES-SAP-BYOS",
+                                        "SLES-Priority",
+                                        "SLES-BYOS",
+                                        "SLES-SAPCAL",
+                                        "sles-byos"
+                                    ]
+                                },
+                                {
+                                    "anyOf": [
+                                        {
+                                            "field": "Microsoft.Compute/imageSKU",
+                                            "in": [
+                                                "12-SP2"
+                                            ]
+                                        }
+                                    ]
+                                }
+                            ]
+                        },
+                        {
+                            "allOf": [
+                                {
+                                    "field": "Microsoft.Compute/imagePublisher",
                                     "equals": "Canonical"
                                 },
                                 {
