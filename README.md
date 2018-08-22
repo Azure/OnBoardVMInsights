@@ -122,8 +122,6 @@ For more info on Log Analytics Performance Counters, see:
 
 ## Per VM and VM Scale Set setup
 
-For VMs to onboard for Health monitoring, go to the VM blade, navigate to the new "Health(Preview)" table of content item and click on the blue ribbon "Click here to enable workload monitoring on VM". 
-
 On each VM or VM Scale Set the following is needed
 - Log Analytics VM Extension pointing to a workspace in a [supported region](#supported-log-analytics-workspace-regions)
 - Dependency Agent VM Extension
