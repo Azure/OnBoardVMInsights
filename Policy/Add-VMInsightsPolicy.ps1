@@ -129,6 +129,12 @@ $vmInsightsParametersJson = @"
 }
 "@
 
+$category = @"
+{
+    "category": "Monitoring"
+}
+"@
+
 $vmInsightsInitiativePolicies = $vmInsightsInitiativePoliciesJson | ConvertFrom-Json
 $vmInsightsStandalonePolicies = $vmInsightsStandalonePoliciesJson | ConvertFrom-Json
 $vmInsightsInitiative = $vmInsightsInitiativeJson  | ConvertFrom-Json
@@ -165,6 +171,7 @@ function Add-PolicyDefinition {
             -DisplayName $policy.displayName `
             -Description $policy.description `
             -Policy ($gitHubSource + $policy.policy) `
+            -Metadata $category `
             @parameter `
             @managementGroupIdParameter
     }
@@ -243,4 +250,5 @@ New-AzureRmPolicySetDefinition `
     -Description $vmInsightsInitiative.description `
     -PolicyDefinition $vmInsightsDefinition `
     -Parameter $vmInsightsParametersJson `
+    -Metadata $category `
     @managementGroupIdParameter
