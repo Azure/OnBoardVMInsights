@@ -173,7 +173,8 @@ function Add-PolicyDefinition {
             -Policy ($gitHubSource + $policy.policy) `
             -Metadata $category `
             @parameter `
-            @managementGroupIdParameter
+            @managementGroupIdParameter `
+            -ApiVersion 2018-05-01
     }
 }
 
@@ -251,4 +252,5 @@ New-AzureRmPolicySetDefinition `
     -PolicyDefinition $vmInsightsDefinition `
     -Parameter $vmInsightsParametersJson `
     -Metadata $category `
-    @managementGroupIdParameter
+    @managementGroupIdParameter `
+    -ApiVersion 2018-05-01
