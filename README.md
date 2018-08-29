@@ -25,10 +25,9 @@ We can organize setup steps as follows:
 | Windows Server 2012R2 | X | X |
 | Windows 2012, 2008 R2 SP1 | X | X |
 | RHEL 6, 7 | X | X | X
-| Ubuntu 14.04, 16.04  | X | X | X
+| Ubuntu 14.04, 16.04, 18.04  | X | X | X
 | Cent OS Linux 6, 7 | X | X | X
-| SLES 11 | X | X | X
-| SLES 12 | X |  | X
+| SLES 12 | X | X | X
 | Oracle Linux 6 | X | X | X
 | Oracle Linux 7 | X |  | X
 | Debian 8, 9.4 | X |  | X
@@ -121,16 +120,7 @@ Note: the collection interval for any newly added configuration is set to 60 sec
 For more info on Log Analytics Performance Counters, see:
     https://docs.microsoft.com/en-us/azure/log-analytics/log-analytics-data-sources-performance-counters
 
-#### Configure the subscription to onboard to Health
-Register the below 2 Resource Providers with the test subscription where you have your solution installed
-- Microsoft.WorkloadMonitor
-- Microsoft.AlertsManagement
-
-To register, go to Azure Home > Subscriptions > Resource providers and then click register
-
 ## Per VM and VM Scale Set setup
-
-For VMs to onboard for Health monitoring, go to the VM blade, navigate to the new "Health(Preview)" table of content item and click on the blue ribbon "Click here to enable workload monitoring on VM". 
 
 On each VM or VM Scale Set the following is needed
 - Log Analytics VM Extension pointing to a workspace in a [supported region](#supported-log-analytics-workspace-regions)
@@ -177,7 +167,7 @@ SYNOPSIS
 
 SYNTAX
     D:\GitHub\OnBoardVMInsights\Install-VMInsights.ps1 [-WorkspaceId] <String> [-WorkspaceKey] <String> [-SubscriptionId]
-    <String> [[-ResourceGroup] <String>] [[-Name] <String>] [-ReInstall] [-TriggerVmssManualVMUpdate] [-Approve] [-WhatIf]
+    <String> [-WorkspaceRegion] <String> [[-Name] <String>] [-ReInstall] [-TriggerVmssManualVMUpdate] [-Approve] [-WhatIf]
     [-Confirm] [<CommonParameters>]
 
 PARAMETERS
@@ -190,8 +180,8 @@ PARAMETERS
     -SubscriptionId <String>
         SubscriptionId for the VMs/VM Scale Sets
 
-    -ResourceGroup <String>
-        <Optional> Resource Group to which the VMs or VM Scale Sets belong to
+    -WorkspaceRegion <String>
+        Region of the Log Analytics Workspace
 
     -Name <String>
         <Optional> To install to a single VM/VM Scale Set
@@ -224,7 +214,7 @@ PARAMETERS
     -------------------------- EXAMPLE 1 --------------------------
 
     .\Install-VMInsights.ps1 -WorkspaceId <WorkspaceId>-WorkspaceKey <WorkspaceKey> -SubscriptionId
-    <SubscriptionId> -ResourceGroup <ResourceGroup>        
+    <SubscriptionId> -WorkspaceRegion <WorkspaceRegion>        
 ```
 
 Example of running:
@@ -233,7 +223,7 @@ Example of running:
 $WorkspaceId = "<GUID>"
 $WorkspaceKey = "<Key>"
 $SubscriptionId = "<GUID>"
-.\Install-VMInsights.ps1 -WorkspaceId $WorkspaceId -WorkspaceKey $WorkspaceKey -SubscriptionId $SubscriptionId -ResourceGroup db-ws
+.\Install-VMInsights.ps1 -WorkspaceId $WorkspaceId -WorkspaceKey $WorkspaceKey -SubscriptionId $SubscriptionId -WorkspaceRegion eastus
 
 Getting list of VM's or VM ScaleSets matching criteria specified
 

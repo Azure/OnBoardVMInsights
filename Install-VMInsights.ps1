@@ -1,9 +1,9 @@
-﻿<#
+<#
 .SYNOPSIS
   Configure VM's and VM Scale Sets for VM Insights:
   - Installs Log Analytics VM Extension configured to supplied Log Analytics Workspace
   - Installs Dependency Agent VM Extension
-  - Installs Workload resource for Health feature (VM's only) <To Add>
+  - Installs resource for Health (Microsoft.WorkloadMonitor/workloadInsights) for VM's only
 
   Can be applied to:
   - Subscription
@@ -26,6 +26,11 @@
 
 .PARAMETER SubscriptionId
     SubscriptionId for the VMs/VM Scale Sets
+
+.PARAMETER WorkspaceRegion
+    Region the Log Analytics Workspace is in
+    Suuported values: "East US","eastus","Southeast Asia","southeastasia","West Central US","westcentralus","West Europe","westeurope"
+    For Health supported is: "East US","eastus","West Central US","westcentralus"
 
 .PARAMETER ResourceGroup
     <Optional> Resource Group to which the VMs or VM Scale Sets belong to
@@ -70,8 +75,16 @@ param(
     [Parameter(mandatory = $false)][string]$Name,
     [Parameter(mandatory = $false)][switch]$ReInstall,
     [Parameter(mandatory = $false)][switch]$TriggerVmssManualVMUpdate,
-    [Parameter(mandatory = $false)][switch]$Approve
+    [Parameter(mandatory = $false)][switch]$Approve,
+    [Parameter(mandatory = $true)] `
+        [ValidateSet( `
+            "East US", "eastus", "Southeast Asia", "southeastasia", "West Central US", "westcentralus", "West Europe", "westeurope")] `
+        [string]$WorkspaceRegion
 )
+
+# supported regions for Health
+$supportedHealthRegions = @("East US", "eastus", "West Central US", "westcentralus")
+
 #
 # FUNCTIONS
 #
@@ -137,7 +150,7 @@ function Install-VMExtension {
             }
             else {
                 if ($ReInstall -ne $true) {
-                    $message = "$VMName : Extension $ExtensionType already configured for a different workspace. Run with /ReInstall to move to new workspace. Provisioning State: " + $extension.ProvisioningState + " " + $extension.Settings
+                    $message = "$VMName : Extension $ExtensionType already configured for a different workspace. Run with -ReInstall to move to new workspace. Provisioning State: " + $extension.ProvisioningState + " " + $extension.Settings
                     Write-Warning($message)
                     $OnboardingStatus.DifferentWorkspace += $message
                 }
@@ -315,7 +328,7 @@ $MMAExtensionMap = @{ "Windows" = "MicrosoftMonitoringAgent"; "Linux" = "OmsAgen
 $MMAExtensionVersionMap = @{ "Windows" = "1.0"; "Linux" = "1.6" }
 $MMAExtensionPublisher = "Microsoft.EnterpriseCloud.Monitoring"
 $MMAExtensionName = "MMAExtension"
-$PublicSettings = @{"workspaceId" = $WorkspaceId}
+$PublicSettings = @{"workspaceId" = $WorkspaceId; "stopOnMultipleConnections" = "true"}
 $ProtectedSettings = @{"workspaceKey" = $WorkspaceKey}
 
 # Dependency Agent Extension constants
@@ -347,7 +360,7 @@ $VMS | ForEach-Object { Write-Output ($_.Name + " " + $_.PowerState) }
 # Validate customer wants to continue
 Write-Output("`nThis operation will install the Log Analytics and Dependency Agent extensions on above $($VMS.Count) VM's or VM Scale Sets.")
 Write-Output("VM's in a non-running state will be skipped.")
-Write-Output("Extension will not be re-installed if already installed. Use /ReInstall if desired, for example to update workspace ")
+Write-Output("Extension will not be re-installed if already installed. Use -ReInstall if desired, for example to update workspace ")
 if ($Approve -eq $true -or !$PSCmdlet.ShouldProcess("All") -or $PSCmdlet.ShouldContinue("Continue?", "")) {
     Write-Output ""
 }
@@ -355,6 +368,9 @@ else {
     Write-Output "You selected No - exiting"
     return
 }
+
+Write-Output "Register the Resource Provider Microsoft.AlertsManagement for Health feature"
+Register-AzureRmResourceProvider -ProviderNamespace Microsoft.AlertsManagement
 
 #
 # Loop through each VM/VM Scale set, as appropriate handle installing VM Extensions
@@ -459,7 +475,13 @@ Foreach ($vm in $VMs) {
             $OnboardingStatus.NotRunning += $message
             continue
         }
-
+		
+        if (!($supportedHealthRegions -contains $WorkspaceRegion)) 
+		{
+			$message = "$vmname cannot be onboarded to Health monitoring, workspace associated to this is not in a supported region "
+			Write-Warning($message)	
+		}
+		
         Install-VMExtension `
             -VMName $vmName `
             -VMLocation $vmLocation `
@@ -483,6 +505,9 @@ Foreach ($vm in $VMs) {
             -ExtensionVersion $daExtVersion `
             -ReInstall $ReInstall `
             -OnboardingStatus $OnboardingStatus
+			
+		Write-Output("`n")
+
     }
 }
 
@@ -499,4 +524,3 @@ Write-Output("`nVM Scale Set needs update: (" + $OnboardingStatus.VMScaleSetNeed
 $OnboardingStatus.VMScaleSetNeedsUpdate  | ForEach-Object { Write-Output ($_) }
 Write-Output("`nFailed: (" + $OnboardingStatus.Failed.Count + ")")
 $OnboardingStatus.Failed | ForEach-Object { Write-Output ($_) }
-# VM SCaleSet that needs upgrade
