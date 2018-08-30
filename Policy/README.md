@@ -26,12 +26,18 @@ For more information on Policy, see [Azure Policy Introduction](https://docs.mic
 
 ## Private Preview Notes
 
-- Support for deployIfNotExists policies which this uses is not yet enabled for all tenants, email us and we can have your tenant white-listed
-- Currently Policy only supports configuring new VM's, support for existing VM's (Remediation feature) is coming mid September
+We depend on new and in development Policy features, to access you must use [this URL](https://ms.portal.azure.com/?microsoft_azure_policy_remediation=true#blade/Microsoft_Azure_Policy/PolicyMenuBlade/Remediation) to access the Policy UI in Azure Portal.
 
+The Remediation UI (for existing resources) is still in development, it is expected to be feature complete by middle of September. It can be used for basic operations including triggering Remediation.
 
+Let know us know any feedback and bugs observed regardless.
+
+Known issues:
+- You cannot trigger Remediation from Compliance view, use Remediation view.
+
+## Steps to use
 We can organize steps as follows:
-- [Add the Policies amd Initiative to your Subscription](#add-the-policies-and-initiative-to-your-subscription)
+- [Add the Policies and Initiative to your Subscription](#add-the-policies-and-initiative-to-your-subscription)
 - [Assign the Policy](#assign-the-policy)
 
 ## Add the Policies and Initiative to your Subscription
@@ -90,14 +96,15 @@ A stand-alone optional policy will also be added:
 This can be used to identify VM's that are already configured with Log Analytics VM extension, however that are configured for a different workspace than intended.
 This takes a parameter of the Workspace Id
 
-You can create a Policy Assignment either through Policy UI or PowerShell/CLI - see [Quick Start - Assign a Policy - Portal](https://docs.microsoft.com/en-us/azure/azure-policy/assign-policy-definition)
+You Private Preview, you can only create the Assignment through Policy UI using this [this URL](https://ms.portal.azure.com/?microsoft_azure_policy_remediation=true#blade/Microsoft_Azure_Policy/PolicyMenuBlade/Remediation). For documentation on this see [Quick Start - Assign a Policy - Portal](https://docs.microsoft.com/en-us/azure/azure-policy/assign-policy-definition)
 
-## Up-coming Additions
-Up-coming is following Policies
-- VM's with Log Analytics extension in failed state
-- VM's with Dependency Agent extension in failed state
+## Known Issues / Up-coming Additions
 
-We'll also provide a script that takes output of "VMs is configured for mismatched Log Analytics Workspace" and allows to update VM to use a different workspace.
+Known Issues:
+- Policy "VM is configured for mismatched Log Analytics Workspace - Preview" gives Compliance results that include VM's that don't have Log Analytics extension installed.
+
+Up-coming Additions:
+- We'll provide a script that takes output of "VMs is configured for mismatched Log Analytics Workspace" and allows to update VM to use a different workspace.
 
 ## Feedback Requested
 
