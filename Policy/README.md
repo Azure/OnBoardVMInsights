@@ -98,10 +98,7 @@ This takes a parameter of the Workspace Id
 
 You Private Preview, you can only create the Assignment through Policy UI using this [this URL](https://ms.portal.azure.com/?microsoft_azure_policy_remediation=true#blade/Microsoft_Azure_Policy/PolicyMenuBlade/Remediation). For documentation on this see [Quick Start - Assign a Policy - Portal](https://docs.microsoft.com/en-us/azure/azure-policy/assign-policy-definition)
 
-## Known Issues / Up-coming Additions
-
-Known Issues:
-- Policy "VM is configured for mismatched Log Analytics Workspace - Preview" gives Compliance results that include VM's that don't have Log Analytics extension installed.
+## Up-coming Additions
 
 Up-coming Additions:
 - We'll provide a script that takes output of "VMs is configured for mismatched Log Analytics Workspace" and allows to update VM to use a different workspace.
