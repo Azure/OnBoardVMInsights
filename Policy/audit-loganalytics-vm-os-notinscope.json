@@ -101,7 +101,10 @@
                                 },
                                 {
                                     "field": "Microsoft.Compute/imageOffer",
-                                    "equals": "RHEL"
+                                    "in": [
+                                        "RHEL",
+                                        "RHEL-SAP-HANA"
+                                    ]
                                 },
                                 {
                                     "anyOf": [
@@ -111,7 +114,7 @@
                                         },
                                         {
                                             "field": "Microsoft.Compute/imageSKU",
-                                            "like": "7.*"
+                                            "like": "7*"
                                         }
                                     ]
                                 }
@@ -192,6 +195,33 @@
                                         {
                                             "field": "Microsoft.Compute/imageSKU",
                                             "like": "7.*"
+                                        }
+                                    ]
+                                }
+                            ]
+                        },
+                        {
+                            "allOf": [
+                                {
+                                    "field": "Microsoft.Compute/imagePublisher",
+                                    "equals": "OpenLogic"
+                                },
+                                {
+                                    "field": "Microsoft.Compute/imageOffer",
+                                    "in": [
+                                        "CentOS",
+                                        "Centos-LVM"
+                                    ]
+                                },
+                                {
+                                    "anyOf": [
+                                        {
+                                            "field": "Microsoft.Compute/imageSKU",
+                                            "like": "6.*"
+                                        },
+                                        {
+                                            "field": "Microsoft.Compute/imageSKU",
+                                            "like": "7*"
                                         }
                                     ]
                                 }
