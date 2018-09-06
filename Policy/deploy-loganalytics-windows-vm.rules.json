@@ -6,13 +6,13 @@
                 "equals": "Microsoft.Compute/virtualMachines"
             },
             {
-                "field": "Microsoft.Compute/imagePublisher",
-                "equals": "MicrosoftWindowsServer"
-            },
-            {
                 "anyOf": [
                     {
                         "allOf": [
+                            {
+                                "field": "Microsoft.Compute/imagePublisher",
+                                "equals": "MicrosoftWindowsServer"
+                            },
                             {
                                 "field": "Microsoft.Compute/imageOffer",
                                 "equals": "WindowsServer"
@@ -39,6 +39,10 @@
                     {
                         "allOf": [
                             {
+                                "field": "Microsoft.Compute/imagePublisher",
+                                "equals": "MicrosoftWindowsServer"
+                            },
+                            {
                                 "field": "Microsoft.Compute/imageOffer",
                                 "equals": "WindowsServerSemiAnnual"
                             },
@@ -48,6 +52,34 @@
                                     "Datacenter-Core-1709-smalldisk",
                                     "Datacenter-Core-1709-with-Containers-smalldisk",
                                     "Datacenter-Core-1803-with-Containers-smalldisk"
+                                ]
+                            }
+                        ]
+                    },
+                    {
+                        "allOf": [
+                            {
+                                "field": "Microsoft.Compute/imagePublisher",
+                                "equals": "MicrosoftSQLServer"
+                            },
+                            {
+                                "anyOf": [
+                                    {
+                                        "field": "Microsoft.Compute/imageOffer",
+                                        "like": "*-WS2016"
+                                    },
+                                    {
+                                        "field": "Microsoft.Compute/imageOffer",
+                                        "like": "*-WS2016-BYOL"
+                                    },
+                                    {
+                                        "field": "Microsoft.Compute/imageOffer",
+                                        "like": "*-WS2012R2"
+                                    },
+                                    {
+                                        "field": "Microsoft.Compute/imageOffer",
+                                        "like": "*-WS2012R2-BYOL"
+                                    }
                                 ]
                             }
                         ]
