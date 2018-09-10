@@ -60,11 +60,11 @@ The script also has these optional parameters:
         <Optional> Load the policies from a local folder instead of
         https://raw.githubusercontent.com/dougbrad/OnBoardVMInsights/Policy/Policy/
 
-    -SubscriptionID <String>
-        <Optional> SubscriptionID to add the Policies/Initiatives to
+    -SubscriptionId <String>
+        <Optional> SubscriptionId to add the Policies/Initiatives to
 
-    -ManagementGroupID <String>
-        <Optional> Management Group ID to add the Policies/Initiatives to
+    -ManagementGroupId <String>
+        <Optional> Management Group Id to add the Policies/Initiatives to
 
     -Approve [<SwitchParameter>]
         <Optional> Gives the approval to add the Policies/Initiatives without any prompt
@@ -97,10 +97,7 @@ This takes a parameter for the WorkspaceID.
 
 During the Private Preview, you can only create the assignment through the Policy UI using this [this URL](https://ms.portal.azure.com/?microsoft_azure_policy_remediation=true#blade/Microsoft_Azure_Policy/PolicyMenuBlade/Remediation). For documentation on this, see [Quick Start - Assign a Policy - Portal](https://docs.microsoft.com/en-us/azure/azure-policy/assign-policy-definition)
 
-## Known Issues / Up-coming Additions
-
-Known Issues:
-- The Policy "VM is configured for mismatched Log Analytics Workspace - Preview" gives Compliance results that include VM's that don't have the Log Analytics VM Extension installed.
+## Up-coming Additions
 
 Up-Coming Additions:
 - We'll provide a script that takes the output of the "VMs is configured for mismatched Log Analytics Workspace" policy, and allows the ability to update the VM to use a different Workspace.

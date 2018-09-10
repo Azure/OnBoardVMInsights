@@ -3,26 +3,19 @@
         "allOf": [
             {
                 "field": "type",
-                "equals": "Microsoft.Compute/virtualMachines"
+                "equals": "Microsoft.Compute/virtualMachines/extensions"
+            },
+            {
+                "field": "Microsoft.Compute/virtualMachines/extensions/publisher",
+                "equals": "Microsoft.EnterpriseCloud.Monitoring"
+            },
+            {
+                "field": "Microsoft.Compute/virtualMachines/extensions/settings.workspaceId",
+                "notEquals": "[parameters('logAnalyticsWorkspaceId')]"
             }
         ]
     },
     "then": {
-        "effect": "auditIfNotExists",
-        "details": {
-            "type": "Microsoft.Compute/virtualMachines/extensions",
-            "existenceCondition": {
-                "allOf": [
-                    {
-                        "field": "Microsoft.Compute/virtualMachines/extensions/publisher",
-                        "equals": "Microsoft.EnterpriseCloud.Monitoring"
-                    },
-                    {
-                        "field": "Microsoft.Compute/virtualMachines/extensions/settings.workspaceId",
-                        "equals": "[parameters('logAnalyticsWorkspaceId')]"
-                    }
-                ]
-            }
-        }
+        "effect": "audit"
     }
 }

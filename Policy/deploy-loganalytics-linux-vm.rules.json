@@ -15,7 +15,10 @@
                             },
                             {
                                 "field": "Microsoft.Compute/imageOffer",
-                                "equals": "RHEL"
+                                "in": [
+                                    "RHEL",
+                                    "RHEL-SAP-HANA"
+                                ]
                             },
                             {
                                 "anyOf": [
@@ -25,7 +28,7 @@
                                     },
                                     {
                                         "field": "Microsoft.Compute/imageSKU",
-                                        "like": "7.*"
+                                        "like": "7*"
                                     }
                                 ]
                             }
@@ -110,6 +113,33 @@
                                 ]
                             }
                         ]
+                    },
+                    {
+                        "allOf": [
+                            {
+                                "field": "Microsoft.Compute/imagePublisher",
+                                "equals": "OpenLogic"
+                            },
+                            {
+                                "field": "Microsoft.Compute/imageOffer",
+                                "in": [
+                                    "CentOS",
+                                    "Centos-LVM"
+                                ]
+                            },
+                            {
+                                "anyOf": [
+                                    {
+                                        "field": "Microsoft.Compute/imageSKU",
+                                        "like": "6.*"
+                                    },
+                                    {
+                                        "field": "Microsoft.Compute/imageSKU",
+                                        "like": "7*"
+                                    }
+                                ]
+                            }
+                        ]
                     }
                 ]
             }
@@ -119,7 +149,9 @@
         "effect": "deployIfNotExists",
         "details": {
             "type": "Microsoft.Compute/virtualMachines/extensions",
-            "roleDefinitionIds": [ "/providers/microsoft.authorization/roleDefinitions/92aaf0da-9dab-42b6-94a3-d43ce8d16293" ],
+            "roleDefinitionIds": [
+                "/providers/microsoft.authorization/roleDefinitions/92aaf0da-9dab-42b6-94a3-d43ce8d16293"
+            ],
             "existenceCondition": {
                 "allOf": [
                     {

@@ -6,13 +6,13 @@
                 "equals": "Microsoft.Compute/virtualMachines"
             },
             {
-                "field": "Microsoft.Compute/imagePublisher",
-                "equals": "MicrosoftWindowsServer"
-            },
-            {
                 "anyOf": [
                     {
                         "allOf": [
+                            {
+                                "field": "Microsoft.Compute/imagePublisher",
+                                "equals": "MicrosoftWindowsServer"
+                            },
                             {
                                 "field": "Microsoft.Compute/imageOffer",
                                 "equals": "WindowsServer"
@@ -39,6 +39,10 @@
                     {
                         "allOf": [
                             {
+                                "field": "Microsoft.Compute/imagePublisher",
+                                "equals": "MicrosoftWindowsServer"
+                            },
+                            {
                                 "field": "Microsoft.Compute/imageOffer",
                                 "equals": "WindowsServerSemiAnnual"
                             },
@@ -51,6 +55,34 @@
                                 ]
                             }
                         ]
+                    },
+                    {
+                        "allOf": [
+                            {
+                                "field": "Microsoft.Compute/imagePublisher",
+                                "equals": "MicrosoftSQLServer"
+                            },
+                            {
+                                "anyOf": [
+                                    {
+                                        "field": "Microsoft.Compute/imageOffer",
+                                        "like": "*-WS2016"
+                                    },
+                                    {
+                                        "field": "Microsoft.Compute/imageOffer",
+                                        "like": "*-WS2016-BYOL"
+                                    },
+                                    {
+                                        "field": "Microsoft.Compute/imageOffer",
+                                        "like": "*-WS2012R2"
+                                    },
+                                    {
+                                        "field": "Microsoft.Compute/imageOffer",
+                                        "like": "*-WS2012R2-BYOL"
+                                    }
+                                ]
+                            }
+                        ]
                     }
                 ]
             }
@@ -60,7 +92,9 @@
         "effect": "deployIfNotExists",
         "details": {
             "type": "Microsoft.Compute/virtualMachines/extensions",
-            "roleDefinitionIds": [ "/providers/microsoft.authorization/roleDefinitions/92aaf0da-9dab-42b6-94a3-d43ce8d16293" ],
+            "roleDefinitionIds": [
+                "/providers/microsoft.authorization/roleDefinitions/92aaf0da-9dab-42b6-94a3-d43ce8d16293"
+            ],
             "existenceCondition": {
                 "allOf": [
                     {

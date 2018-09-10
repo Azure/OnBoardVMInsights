@@ -92,7 +92,7 @@ $vmInsightsStandalonePoliciesJson = @"
 [
     {
         "name": "audit-loganalytics-mismatch-vm-preview",
-        "displayName": "VM is configured for mismatched Log Analytics Workspace - Preview",
+        "displayName": "Log Analytics VM extension is configured for mismatched Workspace - Preview",
         "description": "-",
         "policy": "audit-loganalytics-mismatch-vm.rules.json",
         "parameter": "audit-loganalytics-mismatch-vm.parameters.json"
