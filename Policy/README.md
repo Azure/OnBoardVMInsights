@@ -26,14 +26,7 @@ For more information on Azure Policy, see [Azure Policy Introduction](https://do
 
 ## Private Preview Notes
 
-We depend on new and in development Policy features. To access these features, you must use [this URL](https://ms.portal.azure.com/?microsoft_azure_policy_remediation=true#blade/Microsoft_Azure_Policy/PolicyMenuBlade/Remediation) to access the Azure Policy UI in Azure Portal.
-
-The remediation UI (for existing resources) is still in development, and it is expected to be feature complete by the middle of September. It can be used for basic operations including triggering remediation.
-
-Let know us know any feedback and bugs observed regardless.
-
-Known issues:
-- You cannot trigger remediation from the Compliance view, you must use the remediation view.
+We depend on new and in development Policy features. To access these features, you must use [this URL](https://ms.portal.azure.com/?feature.vminsightstabview=true&feature.vminsights=true&feature.vminsightsplus=true&microsoft_azure_policy_remediation=true&microsoft_azure_policy_compliancev2=true&microsoft_azure_marketplace_ItemHideKey=OMSGalleryHideKey#blade/Microsoft_Azure_Policy/PolicyMenuBlade/Compliance) to access the Azure Policy UI in Azure Portal.
 
 ## Steps To Use
 We can organize the steps as follows:
@@ -47,7 +40,7 @@ To allow a preview of using the policies, we have provided a script [Add-VMInsig
 To quickly download the PowerShell script to your local system, run following:
 ```powershell
 $client = new-object System.Net.WebClient
-$client.DownloadFile(“https://raw.githubusercontent.com/dougbrad/OnBoardVMInsights/Policy/Policy/Add-VMInsightsPolicy.ps1”,“Add-VMInsightsPolicy.ps1”) 
+$client.DownloadFile(“https://raw.githubusercontent.com/dougbrad/OnBoardVMInsights/Policy/Add-VMInsightsPolicy.ps1”,“Add-VMInsightsPolicy.ps1”) 
 ``` 
 
 You can run it as follows:
@@ -58,7 +51,7 @@ The script also has these optional parameters:
 ```powershell
     -UseLocalPolicies [<SwitchParameter>]
         <Optional> Load the policies from a local folder instead of
-        https://raw.githubusercontent.com/dougbrad/OnBoardVMInsights/Policy/Policy/
+        https://raw.githubusercontent.com/dougbrad/OnBoardVMInsights/Policy/
 
     -SubscriptionId <String>
         <Optional> SubscriptionId to add the Policies/Initiatives to
@@ -89,18 +82,15 @@ Initiative Parameter:
 For VM's that are found as not-compliant from the audit policies "VMs not in OS scope..." the criteria of the deployment policy only includes VM's that are deployed from well-known Azure VM Images.
 Check the documentation if the VM OS is supported or not, if it is and it is a well-known Azure VM Image that should be included, give us this feedback. If not, then you will need to duplicate the deployment policy, and update/modify it to make the image in scope.
 
-A standalone optional policy will also be added:
+A standalone optional policy is also added:
 - VM is configured for mismatched Log Analytics Workspace - Preview
+
+This can be used as an input to the Install-VMInsights.ps1 script through the -PolicyAssignmentName in order to move a VM from the mistmatched workspace to the expected one.
 
 This can be used to identify VM's that are already configured with the [Log Analytics VM Extension](https://docs.microsoft.com/en-us/azure/virtual-machines/extensions/oms-windows), but that are configured for a different Workspace than intended (as indicated by the policy assignment).
 This takes a parameter for the WorkspaceID.
 
-During the Private Preview, you can only create the assignment through the Policy UI using this [this URL](https://ms.portal.azure.com/?microsoft_azure_policy_remediation=true#blade/Microsoft_Azure_Policy/PolicyMenuBlade/Remediation). For documentation on this, see [Quick Start - Assign a Policy - Portal](https://docs.microsoft.com/en-us/azure/azure-policy/assign-policy-definition)
-
-## Up-coming Additions
-
-Up-Coming Additions:
-- We'll provide a script that takes the output of the "VMs is configured for mismatched Log Analytics Workspace" policy, and allows the ability to update the VM to use a different Workspace.
+During the Private Preview, you can only create the assignment through the Policy UI using this [this URL](https://ms.portal.azure.com/?feature.vminsightstabview=true&feature.vminsights=true&feature.vminsightsplus=true&microsoft_azure_policy_remediation=true&microsoft_azure_policy_compliancev2=true&microsoft_azure_marketplace_ItemHideKey=OMSGalleryHideKey#blade/Microsoft_Azure_Policy/PolicyMenuBlade/Compliance). For documentation on this, see [Quick Start - Assign a Policy - Portal](https://docs.microsoft.com/en-us/azure/azure-policy/assign-policy-definition)
 
 ## Feedback Requested
 
