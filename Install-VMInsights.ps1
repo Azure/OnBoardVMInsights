@@ -1,69 +1,114 @@
+<#PSScriptInfo
+
+.VERSION 1.0
+
+.GUID 76a487ef-47bf-4537-8942-600a66a547b1
+
+.AUTHOR dougbrad@microsoft.com
+
+.COMPANYNAME
+
+.COPYRIGHT
+
+.TAGS
+
+.LICENSEURI
+
+.PROJECTURI
+
+.ICONURI
+
+.EXTERNALMODULEDEPENDENCIES
+
+.REQUIREDSCRIPTS
+
+.EXTERNALSCRIPTDEPENDENCIES
+
+.RELEASENOTES
+
+.PRIVATEDATA
+
+#>
+
 <#
 .SYNOPSIS
-  Configure VM's and VM Scale Sets for VM Insights:
-  - Installs Log Analytics VM Extension configured to supplied Log Analytics Workspace
-  - Installs Dependency Agent VM Extension
-  - Installs resource for Health (Microsoft.WorkloadMonitor/workloadInsights) for VM's only
+This script installs VM extensions for Log Analytics and Dependency Agent as needed for VM Insights.
 
-  Can be applied to:
-  - Subscription
-  - Resource Group in a Subscription
-  - Specific VM/VM Scale Set
+.DESCRIPTION
+This script installs or re-configures following on VM's and VM Scale Sets:
+- Log Analytics VM Extension configured to supplied Log Analytics Workspace
+- Dependency Agent VM Extension
 
-  Script will show you list of VM's/VM Scale Sets that will apply to and let you confirm to continue.
-  Use -Approve switch to run without prompting, if all required parameters are provided.
+Can be applied to:
+- Subscription
+- Resource Group in a Subscription
+- Specific VM/VM Scale Set
+- Compliance results of a policy for a VM or VM Extension
 
-  If the extensions are already installed will not install again.
-  Use -ReInstall switch if you need to for example update the workspace.
+Script will show you list of VM's/VM Scale Sets that will apply to and let you confirm to continue.
+Use -Approve switch to run without prompting, if all required parameters are provided.
 
-  Use -WhatIf if you would like to see what would happen in terms of installs, what workspace configured to, and status of the extension.
+If the extensions are already installed will not install again.
+Use -ReInstall switch if you need to for example update the workspace.
+
+Use -WhatIf if you would like to see what would happen in terms of installs, what workspace configured to, and status of the extension.
 
 .PARAMETER WorkspaceId
-    Log Analytics WorkspaceID (GUID) for the data to be sent to
+Log Analytics WorkspaceID (GUID) for the data to be sent to
 
 .PARAMETER WorkspaceKey
-    Log Analytics Workspace primary or secondary key
+Log Analytics Workspace primary or secondary key
 
 .PARAMETER SubscriptionId
-    SubscriptionId for the VMs/VM Scale Sets
+SubscriptionId for the VMs/VM Scale Sets
+If using PolicyAssignmentName parameter, subscription that VM's are in
 
 .PARAMETER WorkspaceRegion
-    Region the Log Analytics Workspace is in
-    Suuported values: "East US","eastus","Southeast Asia","southeastasia","West Central US","westcentralus","West Europe","westeurope"
-    For Health supported is: "East US","eastus","West Central US","westcentralus"
+Region the Log Analytics Workspace is in
+Suported values: "East US","eastus","Southeast Asia","southeastasia","West Central US","westcentralus","West Europe","westeurope"
+For Health supported is: "East US","eastus","West Central US","westcentralus"
 
 .PARAMETER ResourceGroup
-    <Optional> Resource Group to which the VMs or VM Scale Sets belong to
+<Optional> Resource Group to which the VMs or VM Scale Sets belong to
 
 .PARAMETER Name
-    <Optional> To install to a single VM/VM Scale Set
+<Optional> To install to a single VM/VM Scale Set
+
+.PARAMETER PolicyAssignmentName
+<Optional> Take the input VM's to operate on as the Compliance results from this Assignment
+If specified will only take from this source.
 
 .PARAMETER ReInstall
-    <Optional> If VM/VM Scale Set is already configured for a different workspace, set this to change to the new workspace
+<Optional> If VM/VM Scale Set is already configured for a different workspace, set this to change to the new workspace
 
 .PARAMETER TriggerVmssManualVMUpdate
-    <Optional> Set this flag to trigger update of VM instances in a scale set whose upgrade policy is set to Manual
+<Optional> Set this flag to trigger update of VM instances in a scale set whose upgrade policy is set to Manual
 
 .PARAMETER Approve
-    <Optional> Gives the approval for the installation to start with no confirmation prompt for the listed VM's/VM Scale Sets
+<Optional> Gives the approval for the installation to start with no confirmation prompt for the listed VM's/VM Scale Sets
 
 .PARAMETER Whatif
-    <Optional> See what would happen in terms of installs.
-    If extension is already installed will show what workspace is currently configured, and status of the VM extension
+<Optional> See what would happen in terms of installs.
+If extension is already installed will show what workspace is currently configured, and status of the VM extension
 
 .PARAMETER Confirm
-    <Optional> Confirm every action
+<Optional> Confirm every action
 
 .EXAMPLE
-  .\Install-VMInsights.ps1 -WorkspaceId <WorkspaceId> -WorkspaceKey <WorkspaceKey> -SubscriptionId <SubscriptionId> -ResourceGroup <ResourceGroup>
-  Install for all VM's in a Resource Group in a subscription
+.\Install-VMInsights.ps1 -WorkspaceRegion eastus -WorkspaceId <WorkspaceId> -WorkspaceKey <WorkspaceKey> -SubscriptionId <SubscriptionId> -ResourceGroup <ResourceGroup>
+Install for all VM's in a Resource Group in a subscription
 
-  .\Install-VMInsights.ps1 -WorkspaceId <WorkspaceId> -WorkspaceKey <WorkspaceKey> -SubscriptionId <SubscriptionId> -ResourceGroup <ResourceGroup> -ReInstall
-  Specify to ReInstall extensions even if already installed, for example to update workspace
+.EXAMPLE
+.\Install-VMInsights.ps1 -WorkspaceRegion eastus -WorkspaceId <WorkspaceId> -WorkspaceKey <WorkspaceKey> -SubscriptionId <SubscriptionId> -ResourceGroup <ResourceGroup> -ReInstall
+Specify to ReInstall extensions even if already installed, for example to update to a different workspace
+
+.EXAMPLE
+.\Install-VMInsights.ps1 -WorkspaceRegion eastus -WorkspaceId <WorkspaceId> -WorkspaceKey <WorkspaceKey> -SubscriptionId <SubscriptionId> -PolicyAssignmentName a4f79f8ce891455198c08736 -ReInstall
+Specify to use a PolicyAssignmentName for source, and to ReInstall (move to a new workspace)
 
 .LINK
-    This script is posted to and further documented at the following location:
-    http://aka.ms/OnBoardVMInsights
+This script is posted to and further documented at the following location:
+http://aka.ms/OnBoardVMInsights
 #>
 
 [CmdletBinding(SupportsShouldProcess = $true)]
@@ -73,6 +118,7 @@ param(
     [Parameter(mandatory = $true)][string]$SubscriptionId,
     [Parameter(mandatory = $false)][string]$ResourceGroup,
     [Parameter(mandatory = $false)][string]$Name,
+    [Parameter(mandatory = $false)][string]$PolicyAssignmentName,
     [Parameter(mandatory = $false)][switch]$ReInstall,
     [Parameter(mandatory = $false)][switch]$TriggerVmssManualVMUpdate,
     [Parameter(mandatory = $false)][switch]$Approve,
@@ -337,21 +383,51 @@ $DAExtensionVersionMap = @{ "Windows" = "9.5"; "Linux" = "9.5" }
 $DAExtensionPublisher = "Microsoft.Azure.Monitoring.DependencyAgent"
 $DAExtensionName = "DAExtension"
 
-Write-Output("Getting list of VM's or VM ScaleSets matching criteria specified")
-if (!$ResourceGroup -and !$Name) {
-    # If ResourceGroup value is not passed - get all VMs under given SubscriptionId
-    $VMs = Get-AzureRmVM -Status
-    $ScaleSets = Get-AzureRmVmss
-    $VMs = @($VMs) + $ScaleSets
-}
-else {
-    # If ResourceGroup value is passed - select all VMs under given ResourceGroupName
-    $VMs = Get-AzureRmVM -ResourceGroupName $ResourceGroup -Status
-    if ($Name) {
-        $VMs = $VMs | Where-Object {$_.Name -like $Name}
+if ($PolicyAssignmentName) {
+    Write-Output("Getting list of VM's from PolicyAssignmentName: " + $PolicyAssignmentName)
+    $complianceResults = Get-AzureRmPolicyState -PolicyAssignmentName $PolicyAssignmentName
+
+    foreach ($result in $complianceResults) {
+        Write-Verbose($result.ResourceId)
+        Write-Verbose($result.ResourceType)
+        if ($result.SubscriptionId -ne $SubscriptionId) {
+            Write-Output("VM is not in same subscription, this scenario is not currently supported. Skipping this VM.")
+        }
+
+        $vmName = $result.ResourceId.split('/')[8]
+        $vmResourceGroup = $result.ResourceId.split('/')[4]
+
+        # Skip if ResourceGroup or Name provided, but does not match
+        if ($ResourceGroup -and $ResourceGroup -ne $vmResourceGroup) { continue }
+        if ($Name -and $Name -ne $vmName) { continue }
+
+        $vm = Get-AzureRmVM -Name $vmName -ResourceGroupName $vmResourceGroup
+        $vmStatus = Get-AzureRmVM -Status -Name $vmName -ResourceGroupName $vmResourceGroup
+
+        # fix to have same property as VM that is retrieved without Name
+        $vm | Add-Member -NotePropertyName PowerState -NotePropertyValue $vmStatus.Statuses[1].DisplayStatus
+
+        $VMs = @($VMs) + $vm
     }
-    $ScaleSets = Get-AzureRmVmss -ResourceGroupName $ResourceGroup
-    $VMs = @($VMs) + $ScaleSets
+}
+
+if (! $PolicyAssignmentName) {
+    Write-Output("Getting list of VM's or VM ScaleSets matching criteria specified")
+    if (!$ResourceGroup -and !$Name) {
+        # If ResourceGroup value is not passed - get all VMs under given SubscriptionId
+        $VMs = Get-AzureRmVM -Status
+        $ScaleSets = Get-AzureRmVmss
+        $VMs = @($VMs) + $ScaleSets
+    }
+    else {
+        # If ResourceGroup value is passed - select all VMs under given ResourceGroupName
+        $VMs = Get-AzureRmVM -ResourceGroupName $ResourceGroup -Status
+        if ($Name) {
+            $VMs = $VMs | Where-Object {$_.Name -like $Name}
+        }
+        $ScaleSets = Get-AzureRmVmss -ResourceGroupName $ResourceGroup
+        $VMs = @($VMs) + $ScaleSets
+    }
 }
 
 Write-Output("`nVM's or VM ScaleSets matching criteria:`n")
@@ -475,13 +551,12 @@ Foreach ($vm in $VMs) {
             $OnboardingStatus.NotRunning += $message
             continue
         }
-		
-        if (!($supportedHealthRegions -contains $WorkspaceRegion)) 
-		{
-			$message = "$vmname cannot be onboarded to Health monitoring, workspace associated to this is not in a supported region "
-			Write-Warning($message)	
-		}
-		
+
+        if (!($supportedHealthRegions -contains $WorkspaceRegion)) {
+            $message = "$vmname cannot be onboarded to Health monitoring, workspace associated to this is not in a supported region "
+            Write-Warning($message)
+        }
+
         Install-VMExtension `
             -VMName $vmName `
             -VMLocation $vmLocation `
@@ -505,8 +580,8 @@ Foreach ($vm in $VMs) {
             -ExtensionVersion $daExtVersion `
             -ReInstall $ReInstall `
             -OnboardingStatus $OnboardingStatus
-			
-		Write-Output("`n")
+
+        Write-Output("`n")
 
     }
 }

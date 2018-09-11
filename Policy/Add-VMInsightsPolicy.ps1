@@ -10,7 +10,7 @@
   However if changes are made to the parameters, you will need to delete the Policies/Initiative first.
 
 .PARAMETER UseLocalPolicies
-    <Optional> Load the policies from local folder instead of https://raw.githubusercontent.com/dougbrad/OnBoardVMInsights/Policy/Policy/
+    <Optional> Load the policies from a local folder instead of https://raw.githubusercontent.com/dougbrad/OnBoardVMInsights/Policy/Policy/
 
 .PARAMETER SubscriptionId
     <Optional> SubscriptionId to add the Policies/Initiatives to
@@ -122,7 +122,7 @@ $vmInsightsParametersJson = @"
         "type": "String",
         "metadata": {
             "displayName": "Log Analytics workspace",
-            "description": "Select Log Analytics workspace from dropdown list",
+            "description": "Select Log Analytics workspace from dropdown list. If this workspace is outside of the scope of the assignment you must manually grant 'Log Analytics Contributor' permissions (or similar) to the policy assignment's principal ID.",
             "strongType": "omsWorkspace"
         }
     }
