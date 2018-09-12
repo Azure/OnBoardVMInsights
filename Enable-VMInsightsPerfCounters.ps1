@@ -1,3 +1,35 @@
+<#PSScriptInfo
+
+.VERSION 1.0
+
+.GUID 06461afa-14a1-4e68-87dd-9e42203ac0be
+
+.AUTHOR dougbrad@microsoft.com
+
+.COMPANYNAME
+
+.COPYRIGHT
+
+.TAGS
+
+.LICENSEURI
+
+.PROJECTURI
+
+.ICONURI
+
+.EXTERNALMODULEDEPENDENCIES
+
+.REQUIREDSCRIPTS
+
+.EXTERNALSCRIPTDEPENDENCIES
+
+.RELEASENOTES
+
+.PRIVATEDATA
+
+#>
+
 <#
 .SYNOPSIS
   Enables collection of Performance Counters used by VM Insights to a Log Analytics Workspace
@@ -253,7 +285,7 @@ $countersToAddJson = @"
             "objectName": "Memory",
             "instanceName": "*",
             "intervalSeconds": 60,
-            "counterName": "Available Mbytes"
+            "counterName": "Available MBytes"
         }
     },
     {
