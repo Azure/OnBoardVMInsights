@@ -1,4 +1,4 @@
-<#PSScriptInfo
+﻿<#PSScriptInfo
 
 .VERSION 1.0
 
@@ -81,41 +81,41 @@ if ($UseLocalPolicies) {
 $vmInsightsInitiativePoliciesJson = @"
 [
     {
-        "name": "deploy-loganalytics-windows-vm-preview",
+        "name": "deploy-loganalytics-windows-vm",
         "displayName": "Deploy Log Analytics Agent for Windows VMs - Preview",
-        "description": "-",
+        "description": "Deploy Log Analytics Agent for Windows VMs if the VM Image (OS) is in the list defined and the agent is not installed.",
         "policy": "deploy-loganalytics-windows-vm.rules.json",
         "parameter": "deploy-loganalytics-vm.parameters.json"
     },
     {
-        "name": "deploy-loganalytics-linux-vm-preview",
+        "name": "deploy-loganalytics-linux-vm",
         "displayName": "Deploy Log Analytics Agent for Linux VMs - Preview",
-        "description": "-",
+        "description": "Deploy Log Analytics Agent for Linux VMs if the VM Image (OS) is in the list defined and the agent is not installed.",
         "policy": "deploy-loganalytics-linux-vm.rules.json",
         "parameter": "deploy-loganalytics-vm.parameters.json"
     },
     {
-        "name": "deploy-dependencyagent-windows-vm-preview",
+        "name": "deploy-dependencyagent-windows-vm",
         "displayName": "Deploy Dependency Agent for Windows VMs - Preview",
-        "description": "-",
+        "description": "Deploy Dependency Agent for Windows VMs if the VM Image (OS) is in the list defined and the agent is not installed.",
         "policy": "deploy-dependencyagent-windows-vm.rules.json"
     },
     {
-        "name": "deploy-dependencyagent-linux-vm-preview",
+        "name": "deploy-dependencyagent-linux-vm",
         "displayName": "Deploy Dependency Agent for Linux VMs - Preview",
-        "description": "-",
+        "description": "Deploy Dependency Agent for Linux VMs if the VM Image (OS) is in the list defined and the agent is not installed.",
         "policy": "deploy-dependencyagent-linux-vm.rules.json"
     },
     {
-        "name": "audit-loganalytics-vm-os-notinscope-preview",
-        "displayName": "VMs not in OS scope of Log Analytics Agent deployment policy - Preview",
-        "description": "The VM has no Log Analytics agent, and the OS of the VM does not match a well known Azure Image SKU that is supported. Check documentation if OS is supported, and if so duplicate policy and update to bring in scope.",
+        "name": "audit-loganalytics-vm-os-notinscope",
+        "displayName": "Audit Log Analytics Agent Deployment - VM Image (OS) unlisted - Preview",
+        "description": "Reports VMs as non-compliant if the VM Image (OS) is not in the list defined and the agent is not installed.",
         "policy": "audit-loganalytics-vm-os-notinscope.json"
     },
     {
-        "name": "audit-dependencyagent-vm-os-notinscope-preview",
-        "displayName": "VMs not in OS scope of Dependency Agent deployment policy - Preview",
-        "description": "The VM has no Dependency Agent, and the OS of the VM does not match a well known Azure Image SKU that is supported. Check documentation if OS is supported, and if so duplicate policy and update to bring in scope.",
+        "name": "audit-dependencyagent-vm-os-notinscope",
+        "displayName": "Audit Dependency Agent Deployment - VM Image (OS) unlisted - Preview",
+        "description": "Reports VMs as non-compliant if the VM Image (OS) is not in the list defined and the agent is not installed.",
         "policy": "audit-dependencyagent-vm-os-notinscope.json"
     }
 ]
@@ -124,9 +124,9 @@ $vmInsightsInitiativePoliciesJson = @"
 $vmInsightsStandalonePoliciesJson = @"
 [
     {
-        "name": "audit-loganalytics-mismatch-vm-preview",
-        "displayName": "Log Analytics VM extension is configured for mismatched Workspace - Preview",
-        "description": "-",
+        "name": "audit-loganalytics-mismatch-vm",
+        "displayName": "Audit Log Analytics Workspace for VM - Report Mismatch - Preview",
+        "description": "Reports VMs as non-compliant if they not logging to the LA workspace specified in the policy/initiative assignment.",
         "policy": "audit-loganalytics-mismatch-vm.rules.json",
         "parameter": "audit-loganalytics-mismatch-vm.parameters.json"
     }
@@ -135,9 +135,9 @@ $vmInsightsStandalonePoliciesJson = @"
 
 $vmInsightsInitiativeJson = @"
 {
-    "name": "vminsights-initiative-preview",
-    "displayName": "Enable VM Insights for VMs - Preview",
-    "description": "-"
+    "name": "vminsights-initiative",
+    "displayName": "Enable VM Insights - Preview",
+    "description": "Enable VM Insights for the Virtual Machines (VMs) in the specified scope (Management group, Subscription or resource group). Takes Log Analytics workspace as parameter."
 }
 "@
 
