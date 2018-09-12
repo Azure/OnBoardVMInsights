@@ -40,7 +40,7 @@ To allow a preview of using the policies, we have provided a script [Add-VMInsig
 To quickly download the PowerShell script to your local system, run following:
 ```powershell
 $client = new-object System.Net.WebClient
-$client.DownloadFile(“https://raw.githubusercontent.com/dougbrad/OnBoardVMInsights/Policy/Add-VMInsightsPolicy.ps1”,“Add-VMInsightsPolicy.ps1”) 
+$client.DownloadFile(“https://raw.githubusercontent.com/dougbrad/OnBoardVMInsights/master/Policy/Add-VMInsightsPolicy.ps1”,“Add-VMInsightsPolicy.ps1”)
 ``` 
 
 You can run it as follows:
@@ -51,7 +51,7 @@ The script also has these optional parameters:
 ```powershell
     -UseLocalPolicies [<SwitchParameter>]
         <Optional> Load the policies from a local folder instead of
-        https://raw.githubusercontent.com/dougbrad/OnBoardVMInsights/Policy/
+        https://github.com/dougbrad/OnBoardVMInsights/tree/master/Policy
 
     -SubscriptionId <String>
         <Optional> SubscriptionId to add the Policies/Initiatives to
@@ -68,22 +68,22 @@ Note: If you plan to assign the Initiative/Policy to multiple Subscriptions, the
 ## Assign the Policy
 After you run [Add-VMInsightsPolicy.ps1](Add-VMInsightsPolicy.ps1) script, the following Initiave and Policies will be added.
 
-Enable VM Insights for VMs - Preview
+Enable VM Insights - Preview
 - Deploy Log Analytics Agent for Windows VMs - Preview
 - Deploy Log Analytics Agent for Linux VMs - Preview
 - Deploy Dependency Agent for Windows VMs - Preview
 - Deploy Dependency Agent for Linux VMs - Preview
-- VMs not in OS scope of Log Analytics Agent deployment policy - Preview
-- VMs not in OS scope of Dependency Agent deployment policy - Preview
+- Audit Log Analytics Agent Deployment - VM Image (OS) unlisted - Preview
+- Audit Dependency Agent Deployment - VM Image (OS) unlisted - Preview
 
 Initiative Parameter:
 - Log Analytice Workspace (The ResourceID if applying an assignment using PowerShell/CLI)
 
-For VM's that are found as not-compliant from the audit policies "VMs not in OS scope..." the criteria of the deployment policy only includes VM's that are deployed from well-known Azure VM Images.
+For VM's that are found as not-compliant from the audit policies "Audit ... Agent Deployment - VM Image (OS) unlisted" the criteria of the deployment policy only includes VM's that are deployed from well-known Azure VM Images.
 Check the documentation if the VM OS is supported or not, if it is and it is a well-known Azure VM Image that should be included, give us this feedback. If not, then you will need to duplicate the deployment policy, and update/modify it to make the image in scope.
 
 A standalone optional policy is also added:
-- VM is configured for mismatched Log Analytics Workspace - Preview
+- Audit Log Analytics Workspace for VM - Report Mismatch - Preview
 
 This can be used as an input to the Install-VMInsights.ps1 script through the -PolicyAssignmentName in order to move a VM from the mistmatched workspace to the expected one.
 
