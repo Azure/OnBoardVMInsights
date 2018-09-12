@@ -95,7 +95,7 @@ Note: the collection interval for any newly added configuration is set to 60 sec
 | LogicalDisk | * | Disk Write Bytes/sec |
 | LogicalDisk | * | Disk Writes/sec |
 | LogicalDisk | * | Free Megabytes |
-| Memory | * | Available Mbytes |
+| Memory | * | Available MBytes |
 | Network Adapter | * | Bytes Received/sec |
 | Network Adapter | * | Bytes Sent/sec |
 | Processor | _Total  | % Processor Time |
@@ -112,7 +112,7 @@ Note: the collection interval for any newly added configuration is set to 60 sec
 | Logical Disk | * | Disk Writes/sec |
 | Logical Disk | * | Free Megabytes |
 | Logical Disk | * | Logical Disk Bytes/sec |
-| Memory | * | Available Mbytes Memory |
+| Memory | * | Available MBytes Memory |
 | Network | * | Total Bytes Received |
 | Network | * | Total Bytes Transmitted |
 | Processor | * | % Processor Time |
@@ -147,14 +147,25 @@ You can run Get-Help to get details and an example of usage:
 Get-Help .\Install-VMInsights.ps1 -Detailed
 
 SYNOPSIS
-    Configure VM's and VM Scale Sets for VM Insights:
-    - Installs Log Analytics VM Extension configured to supplied Log Analytics Workspace
-    - Installs Dependency Agent VM Extension
+    This script installs VM extensions for Log Analytics and Dependency Agent as needed for VM Insights.
+
+
+SYNTAX
+    D:\GitHub\OnBoardVMInsights\Install-VMInsights.ps1 [-WorkspaceId] <String> [-WorkspaceKey] <String> [-SubscriptionId] <String> [[-ResourceGroup]
+    <String>] [[-Name] <String>] [[-PolicyAssignmentName] <String>] [-ReInstall] [-TriggerVmssManualVMUpdate] [-Approve] [-WorkspaceRegion] <String>
+    [-WhatIf] [-Confirm] [<CommonParameters>]
+
+
+DESCRIPTION
+    This script installs or re-configures following on VM's and VM Scale Sets:
+    - Log Analytics VM Extension configured to supplied Log Analytics Workspace
+    - Dependency Agent VM Extension
 
     Can be applied to:
     - Subscription
     - Resource Group in a Subscription
     - Specific VM/VM Scale Set
+    - Compliance results of a policy for a VM or VM Extension
 
     Script will show you list of VM's/VM Scale Sets that will apply to and let you confirm to continue.
     Use -Approve switch to run without prompting, if all required parameters are provided.
@@ -162,13 +173,8 @@ SYNOPSIS
     If the extensions are already installed will not install again.
     Use -ReInstall switch if you need to for example update the workspace.
 
-    Use -WhatIf if you would like to see what would happen in terms of installs, what workspace configured to, and status of the
-    extension.
+    Use -WhatIf if you would like to see what would happen in terms of installs, what workspace configured to, and status of the extension.
 
-SYNTAX
-    D:\GitHub\OnBoardVMInsights\Install-VMInsights.ps1 [-WorkspaceId] <String> [-WorkspaceKey] <String> [-SubscriptionId]
-    <String> [-WorkspaceRegion] <String> [[-Name] <String>] [-ReInstall] [-TriggerVmssManualVMUpdate] [-Approve] [-WhatIf]
-    [-Confirm] [<CommonParameters>]
 
 PARAMETERS
     -WorkspaceId <String>
@@ -179,28 +185,35 @@ PARAMETERS
 
     -SubscriptionId <String>
         SubscriptionId for the VMs/VM Scale Sets
+        If using PolicyAssignmentName parameter, subscription that VM's are in
 
-    -WorkspaceRegion <String>
-        Region of the Log Analytics Workspace
+    -ResourceGroup <String>
+        <Optional> Resource Group to which the VMs or VM Scale Sets belong to
 
     -Name <String>
         <Optional> To install to a single VM/VM Scale Set
 
+    -PolicyAssignmentName <String>
+        <Optional> Take the input VM's to operate on as the Compliance results from this Assignment
+        If specified will only take from this source.
+
     -ReInstall [<SwitchParameter>]
-        <Optional> If VM/VM Scale Set is already configured for a different workspace, set this to change to the
-        new workspace
+        <Optional> If VM/VM Scale Set is already configured for a different workspace, set this to change to the new workspace
 
     -TriggerVmssManualVMUpdate [<SwitchParameter>]
-        <Optional> Set this flag to trigger update of VM instances in a scale set whose upgrade policy is set to
-        Manual
+        <Optional> Set this flag to trigger update of VM instances in a scale set whose upgrade policy is set to Manual
 
     -Approve [<SwitchParameter>]
         <Optional> Gives the approval for the installation to start with no confirmation prompt for the listed VM's/VM Scale Sets
 
+    -WorkspaceRegion <String>
+        Region the Log Analytics Workspace is in
+        Suported values: "East US","eastus","Southeast Asia","southeastasia","West Central US","westcentralus","West Europe","westeurope"
+        For Health supported is: "East US","eastus","West Central US","westcentralus"
+
     -WhatIf [<SwitchParameter>]
         <Optional> See what would happen in terms of installs.
-        If extension is already installed will show what workspace is currently configured, and status of the VM
-        extension
+        If extension is already installed will show what workspace is currently configured, and status of the VM extension
 
     -Confirm [<SwitchParameter>]
         <Optional> Confirm every action
@@ -212,9 +225,22 @@ PARAMETERS
         about_CommonParameters (https:/go.microsoft.com/fwlink/?LinkID=113216).
 
     -------------------------- EXAMPLE 1 --------------------------
+    .\Install-VMInsights.ps1 -WorkspaceRegion eastus -WorkspaceId <WorkspaceId>-WorkspaceKey <WorkspaceKey> -SubscriptionId <SubscriptionId>
+    -ResourceGroup <ResourceGroup>
 
-    .\Install-VMInsights.ps1 -WorkspaceId <WorkspaceId>-WorkspaceKey <WorkspaceKey> -SubscriptionId
-    <SubscriptionId> -WorkspaceRegion <WorkspaceRegion>        
+    Install for all VM's in a Resource Group in a subscription
+
+    -------------------------- EXAMPLE 2 --------------------------
+    .\Install-VMInsights.ps1 -WorkspaceRegion eastus -WorkspaceId <WorkspaceId>-WorkspaceKey <WorkspaceKey> -SubscriptionId <SubscriptionId>
+    -ResourceGroup <ResourceGroup> -ReInstall
+
+    Specify to ReInstall extensions even if already installed, for example to update to a different workspace
+
+    -------------------------- EXAMPLE 3 --------------------------
+    .\Install-VMInsights.ps1 -WorkspaceRegion eastus -WorkspaceId <WorkspaceId>-WorkspaceKey <WorkspaceKey> -SubscriptionId <SubscriptionId>
+    -PolicyAssignmentName a4f79f8ce891455198c08736 -ReInstall
+
+    Specify to use a PolicyAssignmentName for source, and to ReInstall (move to a new workspace)
 ```
 
 Example of running:
@@ -234,7 +260,7 @@ db-ws2012 VM running
 
 This operation will install the Log Analytics and Dependency Agent extensions on above 2 VM's or VM Scale Sets.
 VM's in a non-running state will be skipped.
-Extension will not be re-installed if already installed. Use /ReInstall if desired, for example to update workspace
+Extension will not be re-installed if already installed. Use -ReInstall if desired, for example to update workspace
 
 Confirm
 Continue?
