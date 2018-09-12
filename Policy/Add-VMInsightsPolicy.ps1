@@ -43,7 +43,7 @@
   However if changes are made to the parameters, you will need to delete the Policies/Initiative first.
 
 .PARAMETER UseLocalPolicies
-    <Optional> Load the policies from a local folder instead of https://raw.githubusercontent.com/dougbrad/OnBoardVMInsights/Policy/
+    <Optional> Load the policies from a local folder instead of https://github.com/dougbrad/OnBoardVMInsights/tree/master/Policy
 
 .PARAMETER SubscriptionId
     <Optional> SubscriptionId to add the Policies/Initiatives to
@@ -73,7 +73,7 @@ param(
 # TODO: Remove the branch once this is in master
 #
 # Take policies from here unless run with -UseLocalPolicies
-$gitHubSource = "https://raw.githubusercontent.com/dougbrad/OnBoardVMInsights/Policy/"
+$gitHubSource = "https://raw.githubusercontent.com/dougbrad/OnBoardVMInsights/master/Policy/"
 if ($UseLocalPolicies) {
     $gitHubSource = ""
 }
