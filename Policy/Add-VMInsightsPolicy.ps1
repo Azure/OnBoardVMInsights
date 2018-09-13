@@ -1,6 +1,6 @@
 ﻿<#PSScriptInfo
 
-.VERSION 1.01
+.VERSION 1.02
 
 .GUID 7f0faed7-7563-483a-856e-55554761f4b2
 
@@ -136,8 +136,8 @@ $vmInsightsStandalonePoliciesJson = @"
 $vmInsightsInitiativeJson = @"
 {
     "name": "vminsights-initiative",
-    "displayName": "Enable VM Insights - Preview",
-    "description": "Enable VM Insights for the Virtual Machines (VMs) in the specified scope (Management group, Subscription or resource group). Takes Log Analytics workspace as parameter."
+    "displayName": "Enable Azure Monitor for VMs - Preview",
+    "description": "Enable Azure Monitor for the Virtual Machines (VMs) in the specified scope (Management group, Subscription or resource group). Takes Log Analytics workspace as parameter."
 }
 "@
 
