@@ -68,7 +68,7 @@ Note: If you plan to assign the Initiative/Policy to multiple Subscriptions, the
 ## Assign the Policy
 After you run [Add-VMInsightsPolicy.ps1](Add-VMInsightsPolicy.ps1) script, the following Initiave and Policies will be added.
 
-Enable VM Insights - Preview
+Enable Azure Monitor for VMs - Preview
 - Deploy Log Analytics Agent for Windows VMs - Preview
 - Deploy Log Analytics Agent for Linux VMs - Preview
 - Deploy Dependency Agent for Windows VMs - Preview
