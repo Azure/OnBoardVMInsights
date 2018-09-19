@@ -1,4 +1,4 @@
-# Onboard VMs to VM Insights using Azure Policies - Private Preview
+# Enable Azure Monitor for VMs using Azure Policy (Preview)
 
 This readme gives steps on how to onboard VM's to VM Insights using Azure Policy. 
 
