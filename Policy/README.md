@@ -1,4 +1,4 @@
-# Enable Azure Monitor for VMs using Azure Policies (Preview)
+# Enable Azure Monitor for VMs using Azure Policy (Preview)
 
 This readme gives steps on how to onboard VM's to VM Insights using Azure Policy. 
 
