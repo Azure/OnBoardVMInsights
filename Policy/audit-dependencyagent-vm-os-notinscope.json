@@ -9,83 +9,79 @@
                 "not": {
                     "anyOf": [
                         {
-                            "allOf": [
+                            "anyOf": [
                                 {
-                                    "anyOf": [
+                                    "allOf": [
                                         {
-                                            "allOf": [
+                                            "field": "Microsoft.Compute/imagePublisher",
+                                            "equals": "MicrosoftWindowsServer"
+                                        },
+                                        {
+                                            "field": "Microsoft.Compute/imageOffer",
+                                            "equals": "WindowsServer"
+                                        },
+                                        {
+                                            "field": "Microsoft.Compute/imageSKU",
+                                            "in": [
+                                                "2008-R2-SP1",
+                                                "2008-R2-SP1-smalldisk",
+                                                "2012-Datacenter",
+                                                "2012-Datacenter-smalldisk",
+                                                "2012-R2-Datacenter",
+                                                "2012-R2-Datacenter-smalldisk",
+                                                "2016-Datacenter",
+                                                "2016-Datacenter-Server-Core",
+                                                "2016-Datacenter-Server-Core-smalldisk",
+                                                "2016-Datacenter-smalldisk",
+                                                "2016-Datacenter-with-Containers",
+                                                "2016-Datacenter-with-RDSH"
+                                            ]
+                                        }
+                                    ]
+                                },
+                                {
+                                    "allOf": [
+                                        {
+                                            "field": "Microsoft.Compute/imagePublisher",
+                                            "equals": "MicrosoftWindowsServer"
+                                        },
+                                        {
+                                            "field": "Microsoft.Compute/imageOffer",
+                                            "equals": "WindowsServerSemiAnnual"
+                                        },
+                                        {
+                                            "field": "Microsoft.Compute/imageSKU",
+                                            "in": [
+                                                "Datacenter-Core-1709-smalldisk",
+                                                "Datacenter-Core-1709-with-Containers-smalldisk",
+                                                "Datacenter-Core-1803-with-Containers-smalldisk"
+                                            ]
+                                        }
+                                    ]
+                                },
+                                {
+                                    "allOf": [
+                                        {
+                                            "field": "Microsoft.Compute/imagePublisher",
+                                            "equals": "MicrosoftSQLServer"
+                                        },
+                                        {
+                                            "anyOf": [
                                                 {
-                                                    "field": "Microsoft.Compute/imagePublisher",
-                                                    "equals": "MicrosoftWindowsServer"
+                                                    "field": "Microsoft.Compute/imageOffer",
+                                                    "like": "*-WS2016"
                                                 },
                                                 {
                                                     "field": "Microsoft.Compute/imageOffer",
-                                                    "equals": "WindowsServer"
-                                                },
-                                                {
-                                                    "field": "Microsoft.Compute/imageSKU",
-                                                    "in": [
-                                                        "2008-R2-SP1",
-                                                        "2008-R2-SP1-smalldisk",
-                                                        "2012-Datacenter",
-                                                        "2012-Datacenter-smalldisk",
-                                                        "2012-R2-Datacenter",
-                                                        "2012-R2-Datacenter-smalldisk",
-                                                        "2016-Datacenter",
-                                                        "2016-Datacenter-Server-Core",
-                                                        "2016-Datacenter-Server-Core-smalldisk",
-                                                        "2016-Datacenter-smalldisk",
-                                                        "2016-Datacenter-with-Containers",
-                                                        "2016-Datacenter-with-RDSH"
-                                                    ]
-                                                }
-                                            ]
-                                        },
-                                        {
-                                            "allOf": [
-                                                {
-                                                    "field": "Microsoft.Compute/imagePublisher",
-                                                    "equals": "MicrosoftWindowsServer"
+                                                    "like": "*-WS2016-BYOL"
                                                 },
                                                 {
                                                     "field": "Microsoft.Compute/imageOffer",
-                                                    "equals": "WindowsServerSemiAnnual"
+                                                    "like": "*-WS2012R2"
                                                 },
                                                 {
-                                                    "field": "Microsoft.Compute/imageSKU",
-                                                    "in": [
-                                                        "Datacenter-Core-1709-smalldisk",
-                                                        "Datacenter-Core-1709-with-Containers-smalldisk",
-                                                        "Datacenter-Core-1803-with-Containers-smalldisk"
-                                                    ]
-                                                }
-                                            ]
-                                        },
-                                        {
-                                            "allOf": [
-                                                {
-                                                    "field": "Microsoft.Compute/imagePublisher",
-                                                    "equals": "MicrosoftSQLServer"
-                                                },
-                                                {
-                                                    "anyOf": [
-                                                        {
-                                                            "field": "Microsoft.Compute/imageOffer",
-                                                            "like": "*-WS2016"
-                                                        },
-                                                        {
-                                                            "field": "Microsoft.Compute/imageOffer",
-                                                            "like": "*-WS2016-BYOL"
-                                                        },
-                                                        {
-                                                            "field": "Microsoft.Compute/imageOffer",
-                                                            "like": "*-WS2012R2"
-                                                        },
-                                                        {
-                                                            "field": "Microsoft.Compute/imageOffer",
-                                                            "like": "*-WS2012R2-BYOL"
-                                                        }
-                                                    ]
+                                                    "field": "Microsoft.Compute/imageOffer",
+                                                    "like": "*-WS2012R2-BYOL"
                                                 }
                                             ]
                                         }
