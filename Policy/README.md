@@ -39,10 +39,20 @@ For example:
 - Configure the 'Scope'
 - Configure the parameter 'Log Analytics workspace' using the UI to pick the workspace (this is the Resource Id fo the workspace, if assigning from command line / powershell)
 
+Note: If the workspace is outside of the scope of the assignment you must manually grant 'Log Analytics Contributor' permissions (or similar) to the policy assignment's Principal ID.
+If you don't do this you may see a deployment failure such as:
+```
+"The client '343de0fe-e724-46b8-b1fb-97090f7054ed' with object id '343de0fe-e724-46b8-b1fb-97090f7054ed' does not have authorization to perform action 'microsoft.operationalinsights/workspaces/read' over scope ... "
+```
+You can find the Principal Id from clicking on the Assignment to bring up the 'Edit Assignment' UI. It is listed at bottom under the 'Managed Identity' section.
+For example if the workspace is in a Resource Group 'mms-wcus', run following PowerShell:
+```powershell
+New-AzureRmRoleAssignment -ObjectId <GUID of Principal Id> -RoleDefinitionName "Log Analytics Contributor" -ResourceGroupName mms-wcus
+```
+
 If you would like to audit to find VM's using Log Analytics agent configured for a mismatched workspace, assign this policy:
 - [Preview]: Audit Log Analytics Workspace for VM - Report Mismatch
 This takes a parameter of the Workspace Id (GUID).
-
 
 This can be used to identify VM's that are already configured with the [Log Analytics VM Extension](https://docs.microsoft.com/en-us/azure/virtual-machines/extensions/oms-windows), but that are configured for a different Workspace than intended (as indicated by the policy assignment).
 This takes a parameter for the WorkspaceID.
