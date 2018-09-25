@@ -1,6 +1,6 @@
 <#PSScriptInfo
 
-.VERSION 1.0
+.VERSION 1.1
 
 .GUID 76a487ef-47bf-4537-8942-600a66a547b1
 
@@ -223,6 +223,21 @@ function Install-VMExtension {
         if ($PublicSettings -and $ProtectedSettings) {
             $parameters.Add("Settings", $PublicSettings)
             $parameters.Add("ProtectedSettings", $ProtectedSettings)
+        }
+
+        if ($ExtensionType -eq "OmsAgentForLinux") {
+            Write-Output("$VMName : ExtensionType: $ExtensionType does not support updating workspace. Uninstalling and Re-Installing")
+            $removeResult = Remove-AzureRmVMExtension -ResourceGroupName $VMResourceGroupName -VMName $VMName -Name $extensionName -Force
+
+            if ($removeResult -and $removeResult.IsSuccessStatusCode) {
+                $message = "$VMName : Successfully removed $ExtensionType"
+                Write-Output($message)
+            }
+            else {
+                $message = "$VMName : Failed to remove $ExtensionType (for $ExtensionType need to remove and re-install if changing workspace with -ReInstall)"
+                Write-Warning($message)
+                $OnboardingStatus.Failed += $message
+            }
         }
 
         Write-Output("$VMName : Deploying $ExtensionType with name $extensionName")
