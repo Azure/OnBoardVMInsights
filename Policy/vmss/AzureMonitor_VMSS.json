@@ -1,0 +1,90 @@
+{
+    "properties": {
+        "displayName": "[Preview]: Enable Azure Monitor for VM Scale Sets",
+        "policyType": "Custom",
+        "description": "Enable Azure Monitor for the VM Scale Sets in the specified scope (Management group, Subscription or resource group). Takes Log Analytics workspace as parameter.",
+        "metadata": {
+            "category": "Monitoring"
+        },
+        "parameters": {
+            "logAnalytics_1": {
+                "type": "String",
+                "metadata": {
+                    "displayName": "Log Analytics workspace",
+                    "description": "Select Log Analytics workspace from dropdown list. If this workspace is outside of the scope of the assignment you must manually grant 'Log Analytics Contributor' permissions (or similar) to the policy assignment's principal ID.",
+                    "strongType": "omsWorkspace"
+                }
+            },
+            "listOfImageIdToInclude_1": {
+                "type": "Array",
+                "defaultValue": [],
+                "metadata": {
+                    "displayName": "Optional: List of VM images that have supported OS to add to scope",
+                    "description": "Example values: '/subscriptions/<subscriptionId>/resourceGroups/YourResourceGroup/providers/Microsoft.Compute/images/ContosoStdImage' or /Subscriptions/<subscriptionId>/Providers/Microsoft.Compute/Locations/centralus/Publishers/MicrosoftWindowsServer/ArtifactTypes/VMImage/Offers/WindowsServer/Skus/2016-Datacenter/Versions/2016.127.20180510'"
+                }
+            }          
+        },
+        "policyDefinitions": [
+            {
+                "policyDefinitionReferenceId": "LogAnalyticsExtension_Windows_VMSS_Deploy",
+                "policyDefinitionId": "/subscriptions/60b79d74-f4e4-4867-b631-58a10650b71f/providers/Microsoft.Authorization/policyDefinitions/LogAnalyticsExtension_Windows_VMSS_Deploy",
+                "parameters": {
+                    "logAnalytics": {
+                        "value": "[parameters('logAnalytics_1')]"
+                    },
+                    "listOfImageIdToInclude": {
+                        "value": "[parameters('listOfImageIdToInclude_1')]"
+                    }
+                }
+            },
+            {
+                "policyDefinitionReferenceId": "LogAnalyticsExtension_Linux_VMSS_Deploy",
+                "policyDefinitionId": "/subscriptions/60b79d74-f4e4-4867-b631-58a10650b71f/providers/Microsoft.Authorization/policyDefinitions/LogAnalyticsExtension_Linux_VMSS_Deploy",
+                "parameters": {
+                    "logAnalytics": {
+                        "value": "[parameters('logAnalytics_1')]"
+                    },
+                    "listOfImageIdToInclude": {
+                        "value": "[parameters('listOfImageIdToInclude_1')]"
+                    }
+                }
+            },
+            {
+                "policyDefinitionReferenceId": "DependencyAgentExtension_Windows_VMSS_Deploy",
+                "policyDefinitionId": "/subscriptions/60b79d74-f4e4-4867-b631-58a10650b71f/providers/Microsoft.Authorization/policyDefinitions/DependencyAgentExtension_Windows_VMSS_Deploy",
+                "parameters": {
+                    "listOfImageIdToInclude": {
+                        "value": "[parameters('listOfImageIdToInclude_1')]"
+                    }
+                }
+            },
+            {
+                "policyDefinitionReferenceId": "DependencyAgentExtension_Linux_VMSS_Deploy",
+                "policyDefinitionId": "/subscriptions/60b79d74-f4e4-4867-b631-58a10650b71f/providers/Microsoft.Authorization/policyDefinitions/DependencyAgentExtension_Linux_VMSS_Deploy",
+                "parameters": {
+                    "listOfImageIdToInclude": {
+                        "value": "[parameters('listOfImageIdToInclude_1')]"
+                    }
+                }
+            },
+            {
+                "policyDefinitionReferenceId": "LogAnalytics_OSImage_VMSS_Audit",
+                "policyDefinitionId": "/subscriptions/60b79d74-f4e4-4867-b631-58a10650b71f/providers/Microsoft.Authorization/policyDefinitions/LogAnalytics_OSImage_VMSS_Audit",
+                "parameters": {
+                    "listOfImageIdToInclude": {
+                        "value": "[parameters('listOfImageIdToInclude_1')]"
+                    }
+                }
+            },
+            {
+                "policyDefinitionReferenceId": "DependencyAgent_OSImage_VMSS_Audit",
+                "policyDefinitionId": "/subscriptions/60b79d74-f4e4-4867-b631-58a10650b71f/providers/Microsoft.Authorization/policyDefinitions/DependencyAgent_OSImage_VMSS_Audit",
+                "parameters": {
+                    "listOfImageIdToInclude": {
+                        "value": "[parameters('listOfImageIdToInclude_1')]"
+                    }
+                }
+            }
+        ]
+    }
+}
