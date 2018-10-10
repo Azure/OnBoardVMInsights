@@ -8,12 +8,20 @@
             "category": "Monitoring"
         },
         "parameters": {
-            "listOfImageIdToInclude": {
+            "listOfImageIdToInclude_windows": {
                 "type": "Array",
                 "defaultValue": [],
                 "metadata": {
-                    "displayName": "Optional: List of VM images that have supported OS to add to scope",
-                    "description": "Example values: '/subscriptions/<subscriptionId>/resourceGroups/YourResourceGroup/providers/Microsoft.Compute/images/ContosoStdImage' or /Subscriptions/<subscriptionId>/Providers/Microsoft.Compute/Locations/centralus/Publishers/MicrosoftWindowsServer/ArtifactTypes/VMImage/Offers/WindowsServer/Skus/2016-Datacenter/Versions/2016.127.20180510'"
+                    "displayName": "Optional: List of VM images that have supported Windows OS to add to scope",
+                    "description": "Example value: '/subscriptions/<subscriptionId>/resourceGroups/YourResourceGroup/providers/Microsoft.Compute/images/ContosoStdImage'"
+                }
+            },
+            "listOfImageIdToInclude_linux": {
+                "type": "Array",
+                "defaultValue": [],
+                "metadata": {
+                    "displayName": "Optional: List of VM images that have supported Linux OS to add to scope",
+                    "description": "Example value: '/subscriptions/<subscriptionId>/resourceGroups/YourResourceGroup/providers/Microsoft.Compute/images/ContosoStdImage'"
                 }
             }
         },
@@ -29,7 +37,11 @@
                             "anyOf": [
                                 {
                                     "field": "Microsoft.Compute/imageId",
-                                    "in": "[parameters('listOfImageIdToInclude')]"
+                                    "in": "[parameters('listOfImageIdToInclude_windows')]"
+                                },
+                                {
+                                    "field": "Microsoft.Compute/imageId",
+                                    "in": "[parameters('listOfImageIdToInclude_linux')]"
                                 },
                                 {
                                     "anyOf": [
