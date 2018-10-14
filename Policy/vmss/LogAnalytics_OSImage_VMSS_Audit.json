@@ -1,6 +1,6 @@
 {
     "properties": {
-        "displayName": "[Preview]: Audit VMSS Log Analytics Agent Deployment - VM Image (OS) unlisted",
+        "displayName": "[Preview]: Audit Log Analytics Agent Deployment in VMSS - VM Image (OS) unlisted",
         "policyType": "Custom",
         "mode": "Indexed",
         "description": "Reports VMSS as non-compliant if the VM Image (OS) is not in the list defined and the agent is not installed.",
