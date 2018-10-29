@@ -1,6 +1,6 @@
 <#PSScriptInfo
 
-.VERSION 1.0
+.VERSION 1.1
 
 .GUID 5d26f91b-5975-45f5-baa7-384b4276a155
 
@@ -267,6 +267,19 @@ function Remove-VMssExtension {
 #
 
 #
+# Validate an operation is supplied
+#
+if (-not ($LogAnalyticsAgent -or $DependencyAgent -or $TriggerVmssManualVMUpdate)) {
+    Write-Output "`nPlease provide parameter for extension to remove. Either -LogAnalyticsAgent and/or -DependencyAgent"
+    return
+}
+
+if (-not ($ApplyToVM -or $ApplyToVMSS -or $PolicyAssignmentName)) {
+    Write-Output "`nPlease provide parameter for what to apply to. Either -ApplyToVM and/or -ApplyToVMSS or -PolicyAssignmentName"
+    return
+}
+
+#
 # First make sure authenticed and Select the subscription supplied
 #
 $account = Get-AzureRmContext
@@ -373,11 +386,6 @@ if (! $PolicyAssignmentName) {
 
 Write-Output("`nVM's or VM ScaleSets matching criteria:`n")
 $VMS | ForEach-Object { Write-Output ($_.Name + " " + $_.PowerState) }
-
-if (-not ($LogAnalyticsAgent -or $DependencyAgent -or $TriggerVmssManualVMUpdate)) {
-    Write-Output "`nPlease provide parameter for extension to remove. Either -LogAnalyticsAgent and/or -DependencyAgent"
-    return
-}
 
 # Validate customer wants to continue
 Write-Output("`nThis operation will remove the extensions as per arguments on above $($VMS.Count) VM's or VM Scale Sets.")
