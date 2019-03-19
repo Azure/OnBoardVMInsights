@@ -1,6 +1,6 @@
 <#PSScriptInfo
 
-.VERSION 1.1
+.VERSION 1.2
 
 .GUID 76a487ef-47bf-4537-8942-600a66a547b1
 
@@ -65,8 +65,8 @@ If using PolicyAssignmentName parameter, subscription that VM's are in
 
 .PARAMETER WorkspaceRegion
 Region the Log Analytics Workspace is in
-Suported values: "East US","eastus","Southeast Asia","southeastasia","West Central US","westcentralus","West Europe","westeurope"
-For Health supported is: "East US","eastus","West Central US","westcentralus"
+Suported values: "East US","eastus","Southeast Asia","southeastasia","West Central US","westcentralus","West Europe","westeurope", "Canada Central", "canadacentral", "UK South", "uksouth"
+For Health supported is: "East US","eastus","West Central US","westcentralus", "West Europe", "westeurope"
 
 .PARAMETER ResourceGroup
 <Optional> Resource Group to which the VMs or VM Scale Sets belong to
@@ -124,12 +124,12 @@ param(
     [Parameter(mandatory = $false)][switch]$Approve,
     [Parameter(mandatory = $true)] `
         [ValidateSet( `
-            "East US", "eastus", "Southeast Asia", "southeastasia", "West Central US", "westcentralus", "West Europe", "westeurope")] `
+            "East US", "eastus", "Southeast Asia", "southeastasia", "West Central US", "westcentralus", "West Europe", "westeurope", "Canada Central", "canadacentral", "UK South", "uksouth")] `
         [string]$WorkspaceRegion
 )
 
 # supported regions for Health
-$supportedHealthRegions = @("East US", "eastus", "West Central US", "westcentralus")
+$supportedHealthRegions = @("East US", "eastus", "West Central US", "westcentralus", "West Europe", "westeurope")
 
 #
 # FUNCTIONS
@@ -441,6 +441,9 @@ if (! $PolicyAssignmentName) {
             $VMs = $VMs | Where-Object {$_.Name -like $Name}
         }
         $ScaleSets = Get-AzureRmVmss -ResourceGroupName $ResourceGroup
+        if ($Name) {
+            $ScaleSets = $ScaleSets | Where-Object {$_.Name -like $Name}
+        }
         $VMs = @($VMs) + $ScaleSets
     }
 }
