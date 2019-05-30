@@ -1,6 +1,6 @@
 <#PSScriptInfo
 
-.VERSION 1.2
+.VERSION 1.3
 
 .GUID 76a487ef-47bf-4537-8942-600a66a547b1
 
@@ -65,7 +65,7 @@ If using PolicyAssignmentName parameter, subscription that VM's are in
 
 .PARAMETER WorkspaceRegion
 Region the Log Analytics Workspace is in
-Suported values: "East US","eastus","Southeast Asia","southeastasia","West Central US","westcentralus","West Europe","westeurope", "Canada Central", "canadacentral", "UK South", "uksouth"
+Suported values: "East US","eastus","Southeast Asia","southeastasia","West Central US","westcentralus","West Europe","westeurope", "Canada Central", "canadacentral", "UK South", "uksouth", "West US 2", "westus2"
 For Health supported is: "East US","eastus","West Central US","westcentralus", "West Europe", "westeurope"
 
 .PARAMETER ResourceGroup
@@ -124,7 +124,7 @@ param(
     [Parameter(mandatory = $false)][switch]$Approve,
     [Parameter(mandatory = $true)] `
         [ValidateSet( `
-            "East US", "eastus", "Southeast Asia", "southeastasia", "West Central US", "westcentralus", "West Europe", "westeurope", "Canada Central", "canadacentral", "UK South", "uksouth")] `
+            "East US", "eastus", "Southeast Asia", "southeastasia", "West Central US", "westcentralus", "West Europe", "westeurope", "Canada Central", "canadacentral", "UK South", "uksouth", "West US 2", "westus2")] `
         [string]$WorkspaceRegion
 )
 
