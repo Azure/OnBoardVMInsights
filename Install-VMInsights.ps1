@@ -65,7 +65,7 @@ If using PolicyAssignmentName parameter, subscription that VM's are in
 
 .PARAMETER WorkspaceRegion
 Region the Log Analytics Workspace is in
-Suported values: "East US","eastus","Southeast Asia","southeastasia","West Central US","westcentralus","West Europe","westeurope", "Canada Central", "canadacentral", "UK South", "uksouth", "West US 2", "westus2", "East Australia", "eastaustralia", "Southeast Australia", "southeastaustralia", "Japan East", "japaneast", "North Europe", "northeurope", "East US 2", "eastus2", "South Central US", "southcentralus", "North Central US", "northcentralus", "Central US", "centralus", "West US", "westus", "Central India", "centralindia", "East Asia", "eastasia","EastUS2EUAP" "eastus2euap"
+Suported values: "East US","eastus","Southeast Asia","southeastasia","West Central US","westcentralus","West Europe","westeurope", "Canada Central", "canadacentral", "UK South", "uksouth", "West US 2", "westus2", "East Australia", "eastaustralia", "Southeast Australia", "southeastaustralia", "Japan East", "japaneast", "North Europe", "northeurope", "East US 2", "eastus2", "South Central US", "southcentralus", "North Central US", "northcentralus", "Central US", "centralus", "West US", "westus", "Central India", "centralindia", "East Asia", "eastasia","East US 2 EUAP" "eastus2euap"
 For Health supported is: "East US","eastus","West Central US","westcentralus", "West Europe", "westeurope"
 
 .PARAMETER ResourceGroup
@@ -124,7 +124,7 @@ param(
     [Parameter(mandatory = $false)][switch]$Approve,
     [Parameter(mandatory = $true)] `
         [ValidateSet( `
-            "East US", "eastus", "Southeast Asia", "southeastasia", "West Central US", "westcentralus", "West Europe", "westeurope", "Canada Central", "canadacentral", "UK South", "uksouth", "West US 2", "westus2", "East Australia", "eastaustralia", "Southeast Australia", "southeastaustralia", "Japan East", "japaneast", "North Europe", "northeurope", "East US 2", "eastus2", "South Central US", "southcentralus", "North Central US", "northcentralus", "Central US", "centralus", "West US", "westus", "Central India", "centralindia", "East Asia", "eastasia","EastUS2EUAP" "eastus2euap")] `
+            "East US", "eastus", "Southeast Asia", "southeastasia", "West Central US", "westcentralus", "West Europe", "westeurope", "Canada Central", "canadacentral", "UK South", "uksouth", "West US 2", "westus2", "East Australia", "eastaustralia", "Southeast Australia", "southeastaustralia", "Japan East", "japaneast", "North Europe", "northeurope", "East US 2", "eastus2", "South Central US", "southcentralus", "North Central US", "northcentralus", "Central US", "centralus", "West US", "westus", "Central India", "centralindia", "East Asia", "eastasia","East US 2 EUAP" "eastus2euap")] `
         [string]$WorkspaceRegion
 )
 
