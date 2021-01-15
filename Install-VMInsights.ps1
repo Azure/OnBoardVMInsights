@@ -123,13 +123,53 @@ param(
     [Parameter(mandatory = $false)][switch]$TriggerVmssManualVMUpdate,
     [Parameter(mandatory = $false)][switch]$Approve,
     [Parameter(mandatory = $true)] `
-        [ValidateSet( `
-            "East US", "eastus", "Southeast Asia", "southeastasia", "West Central US", "westcentralus", "West Europe", "westeurope", "Canada Central", "canadacentral", "UK South", "uksouth", "West US 2", "westus2", "East Australia", "eastaustralia", "Southeast Australia", "southeastaustralia", "Japan East", "japaneast", "North Europe", "northeurope", "East US 2", "eastus2", "South Central US", "southcentralus", "North Central US", "northcentralus", "Central US", "centralus", "West US", "westus", "Central India", "centralindia", "East Asia", "eastasia","East US 2 EUAP", "eastus2euap", "USGov Virginia","usgovvirginia", "USGov Arizona","usgovarizona")] `
+        [ValidateSet(
+            "Australia East", "australiaeast",
+            "Australia Central", "australiacentral",
+            "Australia Southeast", "australiasoutheast",
+            "Brazil South", "brazilsouth",
+            "Brazil Southeast", "brazilsoutheast",
+            "Canada Central", "canadacentral", 
+            "Central India", "centralindia",
+            "Central US", "centralus",
+            "East Asia", "eastasia",
+            "East US", "eastus",
+            "East US 2", "eastus2",
+            "East US 2 EUAP", "eastus2euap",
+            "France Central", "francecentral",
+            "Japan East", "japaneast",
+            "Japan West", "japanwest",
+            "North Central US", "northcentralus",
+            "North Europe", "northeurope",
+            "Norway East", "norwayeast",
+            "South Africa North", "southafricanorth",
+            "Southeast Asia", "southeastasia",
+            "South Central US", "southcentralus",
+            "Switzerland North", "switzerlandnorth",
+            "Switzerland West", "switzerlandwest",
+            "UAE Central", "uaecentral",
+            "UAE North", "uaenorth",
+            "UK South", "uksouth",
+            "West Central US", "westcentralus",
+            "West Europe", "westeurope",
+            "West US", "westus",
+            "West US 2", "westus2",
+            "USGov Arizona", "usgovarizona",
+            "USGov Virginia", "usgovvirginia"
+        )]
         [string]$WorkspaceRegion
 )
 
 # supported regions for Health
-$supportedHealthRegions = @("East US", "eastus", "West Central US", "westcentralus", "West Europe", "westeurope")
+$supportedHealthRegions = @(
+    "Canada Central", "canadacentral",
+    "East US", "eastus",
+    "East US 2 EUAP", "eastus2euap",
+    "Southeast Asia", "southeastasia",
+    "UK South", "uksouth",
+    "West Central US", "westcentralus", 
+    "West Europe", "westeurope"
+)
 
 #
 # FUNCTIONS
