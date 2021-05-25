@@ -1,6 +1,6 @@
 <#PSScriptInfo
 
-.VERSION 1.8
+.VERSION 1.9
 
 .GUID 76a487ef-47bf-4537-8942-600a66a547b1
 
@@ -126,6 +126,7 @@ param(
         [ValidateSet(
             "Australia East", "australiaeast",
             "Australia Central", "australiacentral",
+            "Australia Central 2", "australiacentral2",
             "Australia Southeast", "australiasoutheast",
             "Brazil South", "brazilsouth",
             "Brazil Southeast", "brazilsoutheast",
@@ -137,11 +138,16 @@ param(
             "East US 2", "eastus2",
             "East US 2 EUAP", "eastus2euap",
             "France Central", "francecentral",
+            "France South", "francesouth",
+            "Germany West Central", "germanywestcentral",
+            "India South", "indiasouth",
             "Japan East", "japaneast",
             "Japan West", "japanwest",
+            "Korea Central", "koreacentral",
             "North Central US", "northcentralus",
             "North Europe", "northeurope",
             "Norway East", "norwayeast",
+            "Norway West", "norwaywest",
             "South Africa North", "southafricanorth",
             "Southeast Asia", "southeastasia",
             "South Central US", "southcentralus",
