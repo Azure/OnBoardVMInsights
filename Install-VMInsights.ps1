@@ -79,7 +79,8 @@ For Health supported is: "East US","eastus","West Central US","westcentralus", "
 If specified will only take from this source.
 
 .PARAMETER ReInstall
-<Optional> If VM/VM Scale Set is already configured for a different workspace, set this to change to the new workspace
+<Optional> If for a VM/VM Scale Set Log Analytics Agent is already configured for a different workspace, set this to change to the new workspace
+If got s VM/VM Scale Set VM is associated with a different DCRId.
 
 .PARAMETER TriggerVmssManualVMUpdate
 <Optional> Set this flag to trigger update of VM instances in a scale set whose upgrade policy is set to Manual
@@ -87,12 +88,11 @@ If specified will only take from this source.
 .PARAMETER Approve
 <Optional> Gives the approval for the installation to start with no confirmation prompt for the listed VM's/VM Scale Sets
 
-.PARAMETER Whatif
-<Optional> See what would happen in terms of installs.
-If extension is already installed will show what workspace is currently configured, and status of the VM extension
+.PARAMETER MonitoringAgent
+Supported values: MicrosoftMonotoringAgent, AzureMonitoringAgent
 
-.PARAMETER Confirm
-<Optional> Confirm every action
+.PARAMETER UserAssignedManagedIdentityResourceId
+Azure Resource Id of UserAssignedManagedIdentity needed for Azure Monitor Agent
 
 .EXAMPLE
 .\Install-VMInsights.ps1 -WorkspaceRegion eastus -WorkspaceId <WorkspaceId> -WorkspaceKey <WorkspaceKey> -SubscriptionId <SubscriptionId> -ResourceGroup <ResourceGroup>
@@ -113,8 +113,6 @@ http://aka.ms/OnBoardVMInsights
 
 [CmdletBinding(SupportsShouldProcess = $true)]
 param(
-    [Parameter(mandatory = $true)][string]$WorkspaceId,
-    [Parameter(mandatory = $true)][string]$WorkspaceKey,
     [Parameter(mandatory = $true)][string]$SubscriptionId,
     [Parameter(mandatory = $false)][string]$ResourceGroup,
     [Parameter(mandatory = $false)][string]$Name,
@@ -122,7 +120,10 @@ param(
     [Parameter(mandatory = $false)][switch]$ReInstall,
     [Parameter(mandatory = $false)][switch]$TriggerVmssManualVMUpdate,
     [Parameter(mandatory = $false)][switch]$Approve,
-    [Parameter(mandatory = $true)] `
+    [Parameter(mandatory = $true, ParameterSetName = 'LogAnalyticsAgent')][switch]$LogAnalyticsAgent,
+    [Parameter(mandatory = $true, ParameterSetName = 'LogAnalyticsAgent')][string]$WorkspaceId,
+    [Parameter(mandatory = $true, ParameterSetName = 'LogAnalyticsAgent')][string]$WorkspaceKey,
+    [Parameter(mandatory = $true, ParameterSetName = 'LogAnalyticsAgent')] `
         [ValidateSet(
             "Australia East", "australiaeast",
             "Australia Central", "australiacentral",
@@ -163,19 +164,13 @@ param(
             "USGov Arizona", "usgovarizona",
             "USGov Virginia", "usgovvirginia"
         )]
-        [string]$WorkspaceRegion
-)
-
-# supported regions for Health
-$supportedHealthRegions = @(
-    "Canada Central", "canadacentral",
-    "East US", "eastus",
-    "East US 2 EUAP", "eastus2euap",
-    "Southeast Asia", "southeastasia",
-    "UK South", "uksouth",
-    "West Central US", "westcentralus", 
-    "West Europe", "westeurope"
-)
+        [string]$WorkspaceRegion,
+    [Parameter(mandatory = $true, ParameterSetName = 'AzureMonitoringAgent')][switch]$AzureMonitoringAgent,
+    [Parameter(mandatory = $false, ParameterSetName = 'AzureMonitoringAgent')][switch]$ProcessAndDependencies,
+    [Parameter(mandatory = $true, ParameterSetName = 'AzureMonitoringAgent')][string]$DcrName,
+    [Parameter(mandatory = $true, ParameterSetName = 'AzureMonitoringAgent')][string]$DcrResourceGroup,
+    [Parameter(mandatory = $true, ParameterSetName = 'AzureMonitoringAgent')][string]$UserAssignedManagedIdentityResourceId
+    )
 
 #
 # FUNCTIONS
@@ -206,6 +201,121 @@ function Get-VMExtension {
     Write-Verbose("$VMName : Extension: $ExtensionType not found on VM")
 }
 
+function Remove-VMssExtension {
+    [CmdletBinding(SupportsShouldProcess = $true)]
+    param
+    (
+        [Parameter(mandatory = $true)][string]$VMResourceGroupName,
+        [Parameter(Mandatory = $true)][string]$VMName,
+        [Parameter(mandatory = $true)][string]$ExtensionType,
+        [Parameter(mandatory = $true)][string]$ExtensionName
+    )
+    
+    $extension = Get-VMssExtension -VMName $VMName -VMResourceGroup $VMResourceGroupName -ExtensionType $ExtensionType
+    if ($extension) {
+        $removeResult = Remove-AzVmssExtension -ResourceGroupName $VMResourceGroupName -VMName $VMName -Name $ExtensionName -Force
+        if ($removeResult -and $removeResult.IsSuccessStatusCode) {
+                $message = "$VMName : Successfully removed $ExtensionType"
+                Write-Output($message)
+            }
+            else {
+                $statusCode = $removeResult.StatusCode
+                $ErrorMessage = $removeResult.ReasonPhrase
+                $message = "$VMName : Failed to remove $ExtensionType. StatusCode = $statusCode. ErrorMessage = $ErrorMessage."
+                if ($mmaExtensionMap.Values -contains $ExtensionType) {
+                    $message+=" Need to remove and re-install extension if changing workspace with -ReInstall"
+                }
+                Write-Warning($message)
+                $OnboardingStatus.Failed += $message
+                return $statusCode
+        }
+    }
+    return $success
+}
+
+function Remove-VMExtension {
+    [CmdletBinding(SupportsShouldProcess = $true)]
+    param
+    (
+        [Parameter(mandatory = $true)][string]$VMResourceGroupName,
+        [Parameter(Mandatory = $true)][string]$VMName,
+        [Parameter(mandatory = $true)][string]$ExtensionType,
+        [Parameter(mandatory = $true)][string]$ExtensionName
+    )
+    
+    $extension = Get-VMExtension -VMName $VMName -VMResourceGroup $VMResourceGroupName -ExtensionType $ExtensionType
+    if ($extension) {
+        $removeResult = Remove-AzureRmVMExtension -ResourceGroupName $VMResourceGroupName -VMName $VMName -Name $ExtensionName -Force
+        if ($removeResult) {
+            if ($removeResult.IsSuccessStatusCode) {
+                    $message = "$VMName : Successfully removed $ExtensionType"
+                    Write-Output($message)
+            }
+            else {
+                $statusCode = $removeResult.StatusCode
+                $ErrorMessage = $removeResult.ReasonPhrase
+                $message = "$VMName : Failed to remove $ExtensionType. StatusCode = $statusCode. ErrorMessage = $ErrorMessage."
+                if ($mmaExtensionMap.Values -contains $ExtensionType) {
+                    $message+=" Need to remove and re-install extension if changing workspace with -ReInstall"
+                }
+                Write-Warning($message)
+                $OnboardingStatus.Failed += $message
+                return $statusCode
+            }
+        } else {
+            $message = "$VMName : Failed to remove $ExtensionType"
+            Write-Warning($message)
+        }
+    }
+    return $success
+}
+
+function Install-DCRAssociation {
+    <#
+	.SYNOPSIS
+	Install DCRA Extension, handling if already installed
+	#>
+    [CmdletBinding(SupportsShouldProcess = $true)]
+    param
+    (
+        [Parameter(Mandatory = $true)][string]$TargetResourceId,
+        [Parameter(Mandatory = $true)][string]$TargetName,
+        [Parameter(mandatory = $true)][string]$DcrName,
+        [Parameter(mandatory = $true)][string]$DcrResourceGroup
+    )
+
+    $dcr = Get-AzDataCollectionRule -ResourceGroupName $DcrResourceGroup -RuleName $DcrName
+    if ($dcr) {
+        $dcrAssociationList = Get-AzDataCollectionRuleAssociation -InputObject $dcr
+        if ($dcrAssociationList) {
+            if ($dcrAssociationList.ToString().Contains($TargetName)) {
+                $message = "$TargetName : Data Collection Rule Association already configured for this Data Collection Rule Id. Provisioning State"
+                $OnboardingStatus.AlreadyOnboarded += $message
+                Write-Output($message)
+                #Once a DCR has been associated with a VM/VMss there is no need for recreating that association again.
+                return
+            }
+        }
+        
+        #The Customer is responsible to uninstall the DCR Association themselves
+        if ($PSCmdlet.ShouldProcess($TargetName, "install Data Collection Rule Association")) {
+            $dcrassociationName = "VM-Insights-$DcrName-Association"
+            Write-Output("$TargetName : Deploying Data Collection Rule Association with name $dcrassociationName")
+            $dcrassociation = New-AzDataCollectionRuleAssociation -TargetResourceId $TargetResourceId -AssociationName $dcrassociationName -RuleId $dcr.Id
+            if ($dcrassociation.ProvisioningState -ne 'Failed') {
+                $message = "$TargetName : Successfully deployed Data Collection Rule Association"
+                Write-Output($message)
+                $OnboardingStatus.Succeeded += $message
+            } else {
+                $message = "$TargetName : Failed to deploy Data Collection Rule Association"
+                Write-Warning($message)
+                $OnboardingStatus.Failed += $message
+            }
+        }
+    }
+
+}
+
 function Install-VMExtension {
     <#
 	.SYNOPSIS
@@ -228,24 +338,56 @@ function Install-VMExtension {
     )
     # Use supplied name unless already deployed, use same name
     $extensionName = $ExtensionName
-
+    
     $extension = Get-VMExtension -VMName $VMName -VMResourceGroup $VMResourceGroupName -ExtensionType $ExtensionType
+  
     if ($extension) {
         $extensionName = $extension.Name
-
-        # of has Settings - it is LogAnalytics extension
-        if ($extension.Settings) {
-            if ($extension.Settings.ToString().Contains($PublicSettings.workspaceId)) {
-                $message = "$VMName : Extension $ExtensionType already configured for this workspace. Provisioning State: " + $extension.ProvisioningState + " " + $extension.Settings
-                $OnboardingStatus.AlreadyOnboarded += $message
-                Write-Output($message)
-            }
-            else {
-                if ($ReInstall -ne $true) {
-                    $message = "$VMName : Extension $ExtensionType already configured for a different workspace. Run with -ReInstall to move to new workspace. Provisioning State: " + $extension.ProvisioningState + " " + $extension.Settings
-                    Write-Warning($message)
-                    $OnboardingStatus.DifferentWorkspace += $message
+        if (($extension.Settings)) {
+            if ($mmaExtensionMap.Values -contains $ExtensionType) {
+                if ($extension.Settings -and $extension.Settings.ToString().Contains($PublicSettings.workspaceId)) {
+                    $message = "$VMName : Extension $ExtensionType already configured for this workspace. Provisioning State: " + $extension.ProvisioningState + " " + $extension.Settings
+                    $OnboardingStatus.AlreadyOnboarded += $message
+                    Write-Output($message)
+                    $ReInstall = $false
+                } else {
+                    if ($ReInstall -ne $true) {
+                        $message = "$VMName : Extension $ExtensionType present, run with -ReInstall to move to new workspace. Provisioning State: " + $extension.ProvisioningState + " " + $extension.Settings
+                        Write-Warning($message)
+                        $OnboardingStatus.DifferentSetting += $message
+                    }
                 }
+            } 
+
+            if ($amaExtensionMap.Values -contains $ExtensionType) {
+                  if ($extension.Settings -and $extension.Settings.ToString().Contains($PublicSettings.authentication.managedIdentity.'identifier-value')) {
+                    $message = "$VMName : Extension $ExtensionType already configured with this user assigned managed identity. Provisioning State: " + $extension.ProvisioningState + "`n" + $extension.Settings
+                    $OnboardingStatus.ss += $message
+                    Write-Output($message)
+                    $ReInstall = $false
+                  } else {
+                    if ($ReInstall -ne $true) {
+                        $message = "$VMName : Extension $ExtensionType present, run with -ReInstall to assign a new UAMI. Provisioning State: " + $extension.ProvisioningState + " " + $extension.Settings
+                        Write-Warning($message)
+                        $OnboardingStatus.DifferentSetting += $message
+                    }
+               }
+           }
+
+            if ($daExtensionMap.Values -contains $ExtensionType) {
+                if ($extension.Settings -and $extension.Settings.ToString().Contains($PublicSettings.enableAMA)) {
+                    $message = "$VMName : Extension $ExtensionType already configured with AMA enabled. Provisioning State: " + $extension.ProvisioningState + " " + $extension.Settings
+                    $OnboardingStatus.AlreadyOnboarded += $message
+                    Write-Output($message)
+                    $ReInstall = $false
+               } else {
+                    #bug - Depedency Agent is observed to be irrelavent settings
+                    if ($ReInstall -ne $true) {
+                        $message = "$VMName : Extension $ExtensionType present, run with -ReInstall to onboard DA with AMA settings. Provisioning State: " + $extension.ProvisioningState + " " + $extension.Settings
+                        Write-Warning($message)
+                        $OnboardingStatus.DifferentSetting += $message
+                    }
+               }
             }
         }
         else {
@@ -266,23 +408,24 @@ function Install-VMExtension {
             TypeHandlerVersion = $ExtensionVersion
         }
 
-        if ($PublicSettings -and $ProtectedSettings) {
+        if ($PublicSettings) {
             $parameters.Add("Settings", $PublicSettings)
+        }
+
+        if ($ProtectedSettings) {
             $parameters.Add("ProtectedSettings", $ProtectedSettings)
         }
 
         if ($ExtensionType -eq "OmsAgentForLinux") {
             Write-Output("$VMName : ExtensionType: $ExtensionType does not support updating workspace. Uninstalling and Re-Installing")
-            $removeResult = Remove-AzureRmVMExtension -ResourceGroupName $VMResourceGroupName -VMName $VMName -Name $extensionName -Force
+            $removeStatusCode = Remove-VMExtension -VMResourceGroupName $VMResourceGroupName `
+                                               -VMName $VMName `
+                                               -ExtensionType $ExtensionType `
+                                               -ExtensionName $ExtensionName
 
-            if ($removeResult -and $removeResult.IsSuccessStatusCode) {
-                $message = "$VMName : Successfully removed $ExtensionType"
-                Write-Output($message)
-            }
-            else {
-                $message = "$VMName : Failed to remove $ExtensionType (for $ExtensionType need to remove and re-install if changing workspace with -ReInstall)"
-                Write-Warning($message)
-                $OnboardingStatus.Failed += $message
+            if ($removeStatusCode -ne $success) {
+                Write-Output("$VMName : Skipping installation of $ExtensionType")
+                return
             }
         }
 
@@ -299,7 +442,7 @@ function Install-VMExtension {
             Write-Warning($message)
             $OnboardingStatus.Failed += $message
         }
-    }
+    }                                           
 }
 
 function Get-VMssExtension {
@@ -363,8 +506,11 @@ function Install-VMssExtension {
             AutoUpgradeMinorVersion = $true
         }
 
-        if ($PublicSettings -and $ProtectedSettings) {
+        if ($PublicSettings) {
             $parameters.Add("Setting", $PublicSettings)
+        }
+
+        if ($ProtectedSettings) {
             $parameters.Add("ProtectedSetting", $ProtectedSettings)
         }
 
@@ -413,36 +559,58 @@ else {
 
 $VMs = @()
 $ScaleSets = @()
-
+$success = 0
 # To report on overall status
 $AlreadyOnboarded = @()
 $OnboardingSucceeded = @()
 $OnboardingFailed = @()
 $OnboardingBlockedNotRunning = @()
-$OnboardingBlockedDifferentWorkspace = @()
+$OnboardingBlockedDifferentSetting = @()
+$OnboardingBlockedDifferenceUserAssignedManagedIdentity = @()
 $VMScaleSetNeedsUpdate = @()
 $OnboardingStatus = @{
     AlreadyOnboarded      = $AlreadyOnboarded;
     Succeeded             = $OnboardingSucceeded;
     Failed                = $OnboardingFailed;
     NotRunning            = $OnboardingBlockedNotRunning;
-    DifferentWorkspace    = $OnboardingBlockedDifferentWorkspace;
+    DifferentSetting   = $OnboardingBlockedDifferentSetting;
     VMScaleSetNeedsUpdate = $VMScaleSetNeedsUpdate;
 }
 
 # Log Analytics Extension constants
-$MMAExtensionMap = @{ "Windows" = "MicrosoftMonitoringAgent"; "Linux" = "OmsAgentForLinux" }
-$MMAExtensionVersionMap = @{ "Windows" = "1.0"; "Linux" = "1.6" }
-$MMAExtensionPublisher = "Microsoft.EnterpriseCloud.Monitoring"
-$MMAExtensionName = "MMAExtension"
-$PublicSettings = @{"workspaceId" = $WorkspaceId; "stopOnMultipleConnections" = "true"}
-$ProtectedSettings = @{"workspaceKey" = $WorkspaceKey}
+$mmaExtensionMap = @{ "Windows" = "MicrosoftMonitoringAgent"; "Linux" = "OmsAgentForLinux" }
+$mmaExtensionVersionMap = @{ "Windows" = "1.0"; "Linux" = "1.6" }
+$mmaExtensionPublisher = "Microsoft.EnterpriseCloud.Monitoring"
+$mmaExtensionName = "MMAExtension"
+$mmaPublicSettings = @{"workspaceId" = $WorkspaceId; "stopOnMultipleConnections" = "true"}
+$mmaProtectedSettings = @{"workspaceKey" = $WorkspaceKey}
+
+# Azure Monitoring Agent Extension constants
+$amaExtensionMap = @{ "Windows" = "AzureMonitorWindowsAgent"; "Linux" = "AzureMonitorLinuxAgent" }
+$amaExtensionVersionMap = @{ "Windows" = "1.16"; "Linux" = "1.16" }
+$amaExtensionPublisher = "Microsoft.Azure.Monitor"
+$amaExtensionName = "AzureMonitoringAgent"
+$amaPublicSettings = @{'authentication' = @{
+                        'managedIdentity' = @{
+                        'identifier-name' = 'mi_res_id'
+                        'identifier-value' = $userAssignedManagedIdentityResourceId
+                        }
+                      }
+                    }
+$amaProtectedSettings = @{}
 
 # Dependency Agent Extension constants
-$DAExtensionMap = @{ "Windows" = "DependencyAgentWindows"; "Linux" = "DependencyAgentLinux" }
-$DAExtensionVersionMap = @{ "Windows" = "9.5"; "Linux" = "9.5" }
-$DAExtensionPublisher = "Microsoft.Azure.Monitoring.DependencyAgent"
-$DAExtensionName = "DAExtension"
+$daExtensionMap = @{ "Windows" = "DependencyAgentWindows"; "Linux" = "DependencyAgentLinux" }
+$daExtensionVersionMap = @{ "Windows" = "9.5"; "Linux" = "9.5" }
+$daExtensionPublisher = "Microsoft.Azure.Monitoring.DependencyAgent"
+$daExtensionName = "DAExtension"
+$daPublicSettings = @{}
+
+# Data Collection Rule Association constants
+$dcraExtensionType = "Microsoft.Insights/dataCollectionRules"
+$dcraName = "/Microsoft.Insights/VMInsights-Dcr-Association"
+$dcraExtensionVersion = "2019-11-01-preview"
+
 
 if ($PolicyAssignmentName) {
     Write-Output("Getting list of VM's from PolicyAssignmentName: " + $PolicyAssignmentName)
@@ -498,9 +666,14 @@ Write-Output("`nVM's or VM ScaleSets matching criteria:`n")
 $VMS | ForEach-Object { Write-Output ($_.Name + " " + $_.PowerState) }
 
 # Validate customer wants to continue
-Write-Output("`nThis operation will install the Log Analytics and Dependency Agent extensions on above $($VMS.Count) VM's or VM Scale Sets.")
+$monitoringAgent = if ($LogAnalyticsAgent) {"LogAnalyticsAgent"} else {"AzureMonitoringAgent"}
+$infoMessage = "`For above $($VMS.Count) VM's or VM Scale Sets, this operation will install $monitoringAgent"
+if ($LogAnalyticsAgent -or ($AzureMonitoringAgent -and $ProcessAndDependencies)) {
+    $infoMessage+=" and Dependency Agent extension"
+}
+Write-Output($infoMessage)
 Write-Output("VM's in a non-running state will be skipped.")
-Write-Output("Extension will not be re-installed if already installed. Use -ReInstall if desired, for example to update workspace ")
+Write-Output("Extension will not be re-installed if already installed. Use -ReInstall if desired, for example to update workspace for LogAnalytics extension.")
 if ($Approve -eq $true -or !$PSCmdlet.ShouldProcess("All") -or $PSCmdlet.ShouldContinue("Continue?", "")) {
     Write-Output ""
 }
@@ -520,7 +693,7 @@ Foreach ($vm in $VMs) {
     $vmName = $vm.Name
     $vmLocation = $vm.Location
     $vmResourceGroupName = $vm.ResourceGroupName
-
+    $vmId = $vm.Id
     #
     # Find OS Type
     #
@@ -543,14 +716,30 @@ Foreach ($vm in $VMs) {
     #
     # Map to correct extension for OS type
     #
-    $mmaExt = $MMAExtensionMap.($osType.ToString())
-    if (! $mmaExt) {
+    if ($LogAnalyticsAgent) {
+        $maExt = $mmaExtensionMap.($osType.ToString())
+        $maExtVersion = $mmaExtensionVersionMap.($osType.ToString())
+        $maExtensionPublisher = $mmaExtensionPublisher
+        $maExtensionName = $mmaExtensionName
+        $maPublicSettings = $mmaPublicSettings
+        $maProtectedSettings = $mmaProtectedSettings
+    } elseif ($AzureMonitoringAgent) {
+        $maExt = $amaExtensionMap.($osType.ToString())
+        $maExtVersion = $amaExtensionVersionMap.($osType.ToString())
+        $maExtensionPublisher = $amaExtensionPublisher
+        $maExtensionName = $amaExtensionName
+        $maPublicSettings = $amaPublicSettings
+        $maProtectedSettings = $amaProtectedSettings
+    } else {
         Write-Warning("$vmName : has an unsupported OS: $osType")
         continue
     }
-    $mmaExtVersion = $MMAExtensionVersionMap.($osType.ToString())
-    $daExt = $DAExtensionMap.($osType.ToString())
-    $daExtVersion = $DAExtensionVersionMap.($osType.ToString())
+    
+    $daExt = $daExtensionMap.($osType.ToString())
+    if ($AzureMonitoringAgent -and $ProcessAndDependencies) {
+        $daPublicSettings = @{"enableAMA" = "true"}
+        $daExtVersion = $daExtensionVersionMap.($osType.ToString())
+    }
 
     Write-Verbose("Deployment settings: ")
     Write-Verbose("ResourceGroup: $vmResourceGroupName")
@@ -558,30 +747,46 @@ Foreach ($vm in $VMs) {
     Write-Verbose("Location: $vmLocation")
     Write-Verbose("OS Type: $ext")
     Write-Verbose("Dependency Agent: $daExt, HandlerVersion: $daExtVersion")
-    Write-Verbose("Monitoring Agent: $mmaExt, HandlerVersion: $mmaExtVersion")
+    Write-Verbose("Monitoring Agent: $mmaExt, HandlerVersion: $maExtVersion")
 
     if ($isScaleset) {
-
         Install-VMssExtension `
-            -VMScaleSetName $vmName `
-            -VMScaleSetResourceGroupName $vmResourceGroupName `
-            -ExtensionType $mmaExt `
-            -ExtensionName $mmaExtensionName `
-            -ExtensionPublisher $MMAExtensionPublisher `
-            -ExtensionVersion $mmaExtVersion `
-            -PublicSettings $PublicSettings `
-            -ProtectedSettings $ProtectedSettings `
-            -ReInstall $ReInstall
+            -VMName $vmName `
+            -VMLocation $vmLocation `
+            -VMResourceGroupName $vmResourceGroupName `
+            -ExtensionType $maExt `
+            -ExtensionName $maExtensionName `
+            -ExtensionPublisher $maExtensionPublisher `
+            -ExtensionVersion $maExtVersion `
+            -PublicSettings $maPublicSettings `
+            -ProtectedSettings $maProtectedSettings `
+            -ReInstall $ReInstall `
 
-        Install-VMssExtension `
-            -VMScaleSetName $vmName `
-            -VMScaleSetResourceGroupName $vmResourceGroupName `
-            -ExtensionType $daExt `
-            -ExtensionName $daExtensionName `
-            -ExtensionPublisher $DAExtensionPublisher `
-            -ExtensionVersion $daExtVersion `
-            -ReInstall $ReInstall
+        if ($LogAnalyticsAgent -or ($AzureMonitoringAgent -and $ProcessAndDependencies)) {
+            Install-VMssExtension `
+                -VMName $vmName `
+                -VMLocation $vmLocation `
+                -VMResourceGroupName $vmResourceGroupName `
+                -ExtensionType $daExt `
+                -ExtensionName $daExtensionName `
+                -ExtensionPublisher $daExtensionPublisher `
+                -ExtensionVersion $daextVersion `
+                -PublicSettings $daPublicSettings `
+                -ReInstall $ReInstall `
+        } else {
+            Remove-VMssExtension `
+                -VMResourceGroupName $vmResourceGroupName `
+                -VMName $vmName `
+                -ExtensionType $daExt `
+                -ExtensionName $daExtensionName
+        }
 
+        Install-DCRAssociation `
+                -TargetResourceId $vmId `
+                -TargetName $vmName `
+                -DcrName $DcrName `
+                -DcrResourceGroup $DcrResourceGroup `
+    
         $scalesetObject = Get-AzureRMVMSS -VMScaleSetName $vmName -ResourceGroupName $vmResourceGroupName
         if ($scalesetObject.UpgradePolicy.mode -eq 'Manual') {
             if ($TriggerVmssManualVMUpdate -eq $true) {
@@ -616,36 +821,44 @@ Foreach ($vm in $VMs) {
             continue
         }
 
-        if (!($supportedHealthRegions -contains $WorkspaceRegion)) {
-            $message = "$vmname cannot be onboarded to Health monitoring, workspace associated to this is not in a supported region "
-            Write-Warning($message)
+        Install-VMExtension `
+            -VMName $vmName `
+            -VMLocation $vmLocation `
+            -VMResourceGroupName $vmResourceGroupName `
+            -ExtensionType $maExt `
+            -ExtensionName $maExtensionName `
+            -ExtensionPublisher $maExtensionPublisher `
+            -ExtensionVersion $maExtVersion `
+            -PublicSettings $maPublicSettings `
+            -ProtectedSettings $maProtectedSettings `
+            -ReInstall $ReInstall `
+            -OnboardingStatus $OnboardingStatus
+        
+        if ($LogAnalyticsAgent -or ($AzureMonitoringAgent -and $ProcessAndDependencies)) {
+            Install-VMExtension `
+                -VMName $vmName `
+                -VMLocation $vmLocation `
+                -VMResourceGroupName $vmResourceGroupName `
+                -ExtensionType $daExt `
+                -ExtensionName $daExtensionName `
+                -ExtensionPublisher $daExtensionPublisher `
+                -ExtensionVersion $daextVersion `
+                -PublicSettings $daPublicSettings `
+                -ReInstall $ReInstall `
+                -OnboardingStatus $OnboardingStatus
+        } else {
+            Remove-VMExtension `
+                -VMResourceGroupName $vmResourceGroupName `
+                -VMName $vmName `
+                -ExtensionType $daExt `
+                -ExtensionName $daExtensionName
         }
 
-        Install-VMExtension `
-            -VMName $vmName `
-            -VMLocation $vmLocation `
-            -VMResourceGroupName $vmResourceGroupName `
-            -ExtensionType $mmaExt `
-            -ExtensionName $mmaExtensionName `
-            -ExtensionPublisher $MMAExtensionPublisher `
-            -ExtensionVersion $mmaExtVersion `
-            -PublicSettings $PublicSettings `
-            -ProtectedSettings $ProtectedSettings `
-            -ReInstall $ReInstall `
-            -OnboardingStatus $OnboardingStatus
-
-        Install-VMExtension `
-            -VMName $vmName `
-            -VMLocation $vmLocation `
-            -VMResourceGroupName $vmResourceGroupName `
-            -ExtensionType $daExt `
-            -ExtensionName $daExtensionName `
-            -ExtensionPublisher $DAExtensionPublisher `
-            -ExtensionVersion $daExtVersion `
-            -ReInstall $ReInstall `
-            -OnboardingStatus $OnboardingStatus
-
-        Write-Output("`n")
+        Install-DCRAssociation `
+                -TargetResourceId $vmId `
+                -TargetName $vmName `
+                -DcrName $DcrName `
+                -DcrResourceGroup $DcrResourceGroup
 
     }
 }
@@ -655,8 +868,8 @@ Write-Output("`nAlready Onboarded: (" + $OnboardingStatus.AlreadyOnboarded.Count
 $OnboardingStatus.AlreadyOnboarded  | ForEach-Object { Write-Output ($_) }
 Write-Output("`nSucceeded: (" + $OnboardingStatus.Succeeded.Count + ")")
 $OnboardingStatus.Succeeded | ForEach-Object { Write-Output ($_) }
-Write-Output("`nConnected to different workspace: (" + $OnboardingStatus.DifferentWorkspace.Count + ")")
-$OnboardingStatus.DifferentWorkspace | ForEach-Object { Write-Output ($_) }
+Write-Output("`nDifferent Setting: (" + $OnboardingStatus.DifferentSetting.Count + ")")
+$OnboardingStatus.DifferentSett | ForEach-Object { Write-Output ($_) }
 Write-Output("`nNot running - start VM to configure: (" + $OnboardingStatus.NotRunning.Count + ")")
 $OnboardingStatus.NotRunning  | ForEach-Object { Write-Output ($_) }
 Write-Output("`nVM Scale Set needs update: (" + $OnboardingStatus.VMScaleSetNeedsUpdate.Count + ")")
