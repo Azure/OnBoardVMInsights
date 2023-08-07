@@ -306,7 +306,6 @@ function Install-DCRAssociation {
         foreach ($dcrAssociation in $dcrAssociationList) {
             if ($dcrAssociation.DataCollectionRuleId -eq $DcrResourceId) {
                 $message = "$TargetName : Data Collection Rule Association already configured for this Data Collection Rule Id."
-                $OnboardingStatus.AlreadyOnboarded += $message
                 Write-Output($message)
                 return
             }
@@ -377,13 +376,11 @@ function Install-VMExtension {
             if ($mmaExtensionMap.Values -contains $ExtensionType) {
                 if ($extension.Settings -and $extension.Settings.ToString().Contains($PublicSettings.workspaceId)) {
                     $message = "$VMName : Extension $ExtensionType already configured for this workspace. Provisioning State: " + $extension.ProvisioningState + " " + $extension.Settings
-                    $OnboardingStatus.AlreadyOnboarded += $message
                     Write-Output($message)
                     return
                 } else {
                     if ($ReInstall -ne $true) {
                         $message = "$VMName : Extension $ExtensionType present, run with -ReInstall again to move to new workspace. Provisioning State: " + $extension.ProvisioningState + " " + $extension.Settings
-                        $OnboardingStatus.ReInstallRequired += $message
                         Write-Output ($message)
                         return
                     }
@@ -393,7 +390,6 @@ function Install-VMExtension {
             if ($amaExtensionMap.Values -contains $ExtensionType) {
                 if ($extension.Settings -and $extension.Settings.ToString().Contains($PublicSettings.authentication.managedIdentity.'identifier-value')) {
                     $message = "$VMName : Extension $ExtensionType already configured with this user assigned managed identity. Provisioning State: " + $extension.ProvisioningState + "`n" + $extension.Settings
-                    $OnboardingStatus.AlreadyOnboarded += $message
                     Write-Output($message)
                     return
                 }
@@ -402,7 +398,6 @@ function Install-VMExtension {
             if ($daExtensionMap.Values -contains $ExtensionType) {
                 if ($extension.Settings -and $extension.Settings.ToString().Contains($PublicSettings.enableAMA)) {
                     $message = "$VMName : Extension $ExtensionType already configured with AMA enabled. Provisioning State: " + $extension.ProvisioningState + " " + $extension.Settings
-                    $OnboardingStatus.AlreadyOnboarded += $message
                     Write-Output($message)
                     $ReInstall = $false
                 }
@@ -711,7 +706,6 @@ function Assign-VmManagedIdentity {
     }
     if ($statusResult -and ($statusResult.Identity.Type -eq "UserAssigned") -and (Util-Assign-ManagedIdentity -VMObject $statusResult -UserAssignedManagedIdentyId $userAssignedIdentityObject.Id)) {
         $message = $VMObject.Name + " : Already assigned with managed identity : " + $UserAssignedManagedIdentityName
-        $OnboardingStatus.AlreadyOnboarded += $message
         Write-Output($message)
     } else {
         try {
@@ -808,19 +802,14 @@ $VMs = @()
 $ScaleSets = @()
 $success = 0
 # To report on overall status
-$AlreadyOnboarded = @()
 $OnboardingSucceeded = @()
 $OnboardingFailed = @()
 $OnboardingBlockedNotRunning = @()
-$OnboardingBlockedReInstallRequired = @()
-$OnboardingBlockedDifferenceUserAssignedManagedIdentity = @()
 $VMScaleSetNeedsUpdate = @()
 $OnboardingStatus = @{
-    AlreadyOnboarded      = $AlreadyOnboarded;
     Succeeded             = $OnboardingSucceeded;
     Failed                = $OnboardingFailed;
     NotRunning            = $OnboardingBlockedNotRunning;
-    ReInstallRequired   = $OnboardingBlockedReInstallRequired;
     VMScaleSetNeedsUpdate = $VMScaleSetNeedsUpdate;
 }
 
@@ -1111,8 +1100,6 @@ Foreach ($vm in $VMs) {
 
 
 Write-Output("`nSummary:")
-Write-Output("`nAlready Onboarded: (" + $OnboardingStatus.AlreadyOnboarded.Count + ")")
-$OnboardingStatus.AlreadyOnboarded  | ForEach-Object { Write-Output ($_) }
 Write-Output("`nSucceeded: (" + $OnboardingStatus.Succeeded.Count + ")")
 $OnboardingStatus.Succeeded | ForEach-Object { Write-Output ($_) }
 Write-Output("`nNot running - start VM to configure: (" + $OnboardingStatus.NotRunning.Count + ")")
