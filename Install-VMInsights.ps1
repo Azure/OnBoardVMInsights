@@ -230,7 +230,7 @@ function Remove-VMssExtension {
         }
         if ($removeResult -and $removeResult.IsSuccessStatusCode) {
             $message = "$VMName : Successfully removed $ExtensionType"
-            Write-Debug($message)
+            Write-Verbose($message)
         }
         else {
             $statusCode = $removeResult.StatusCode
@@ -270,7 +270,7 @@ function Remove-VMExtension {
         if ($removeResult) {
             if ($removeResult.IsSuccessStatusCode) {
                 $message = "$VMName : Successfully removed $ExtensionType"
-                Write-Debug($message)
+                Write-Verbose($message)
             }
             else {
                 $statusCode = $removeResult.StatusCode
@@ -305,7 +305,7 @@ function Install-DCRAssociation {
         # A VM can be associated with multiple Data Collection Rule Associations
         foreach ($dcrAssociation in $dcrAssociationList) {
             if ($dcrAssociation.DataCollectionRuleId -eq $DcrResourceId) {
-                $message = "$TargetName : Data Collection Rule Association already configured for this Data Collection Rule Id. ProvisioningState = " + $dcrAssociation.ProvisioningState 
+                $message = "$TargetName : Data Collection Rule Association already configured for this Data Collection Rule Id."
                 $OnboardingStatus.AlreadyOnboarded += $message
                 Write-Output($message)
                 return
@@ -320,9 +320,14 @@ function Install-DCRAssociation {
     #The Customer is responsible to uninstall the DCR Association themselves
     if ($PSCmdlet.ShouldProcess($TargetName, "Install Data Collection Rule Association")) {
         $dcrassociationName = "VM-Insights-$TargetName-Association"
-        Write-Debug("$TargetName : Deploying Data Collection Rule Association with name $dcrassociationName")
+        Write-Verbose("$TargetName : Deploying Data Collection Rule Association with name $dcrassociationName")
         try {
             $dcrassociation = New-AzDataCollectionRuleAssociation -TargetResourceId $TargetResourceId -AssociationName $dcrassociationName -RuleId $DcrResourceId
+            if ($dcrassociation -is [ErrorResponseCommonV2Exception]) {
+                #DCR Association creation failed.
+                #Tmp fix task:-
+                throw
+            }
         } catch {
            $message = "$TargetName : Failed to create Data Collection Rule Association for $TargetResourceId"
            $OnboardingStatus.Failed += $message
@@ -413,7 +418,7 @@ function Install-VMExtension {
                                -ExtensionName $ExtensionName
         }
         
-        Write-Debug("$VMName : Deploying/Updating $ExtensionType with name $extensionName")
+        Write-Verbose("$VMName : Deploying/Updating $ExtensionType with name $extensionName")
         try {
             $result = Set-AzVMExtension @parameters
             if ($result -and $result.IsSuccessStatusCode) {
@@ -490,7 +495,7 @@ function Install-VMssExtension {
     }
 
     if ($extension) {
-        Write-Debug("$VMScaleSetName : $ExtensionType extension with name " + $extension.Name + " already installed. Provisioning State: " + $extension.ProvisioningState + " " + $extension.Settings)
+        Write-Verbose("$VMScaleSetName : $ExtensionType extension with name " + $extension.Name + " already installed. Provisioning State: " + $extension.ProvisioningState + " " + $extension.Settings)
         $extensionName = $extension.Name
     }
 
@@ -598,7 +603,7 @@ function Assign-VmssManagedIdentity {
     }
     if ($statusResult -and ($statusResult.Identity.Type -eq "UserAssigned") -and (Util-Assign-ManagedIdentity -isScaleset -VMssObject $statusResult -UserAssignedManagedIdentyId $userAssignedIdentityObject.Id)) {
         $message = $VMssObject.Name + ": Already assigned with user managed identity : $UserAssignedManagedIdentityName" 
-        Write-Debug($message)
+        Write-Verbose($message)
     } else {
         try {
             $updateResult = Update-AzVMss -ResourceGroupName $VMssObject.ResourceGroupName `
@@ -631,7 +636,7 @@ function Assign-VmssManagedIdentity {
     foreach ($role in $roleDefinitionList) {
         $roleAssignmentFound = Get-AzRoleAssignment -ObjectId $userAssignedIdentityObject.principalId -RoleDefinitionName $role -Scope $targetScope
         if (!$roleAssignmentFound) {
-            Write-Debug ("Scope $targetScope : assigning role $role")
+            Write-Verbose("Scope $targetScope : assigning role $role")
             try {
                 $result = New-AzRoleAssignment -ObjectId $userAssignedIdentityObject.principalId -RoleDefinitionName $role -Scope $targetScope
                 Write-Output ("Scope $targetScope : role assignment for $UserAssignedManagedIdentityName with $role succeeded")
@@ -641,7 +646,7 @@ function Assign-VmssManagedIdentity {
                 throw $message
             }
         } else {
-            Write-Debug ("Scope $targetScope : role $role already set")
+            Write-Verbose("Scope $targetScope : role $role already set")
         }
     }
 
@@ -717,7 +722,7 @@ function Assign-VmManagedIdentity {
     foreach ($role in $roleDefinitionList) {
         $roleAssignmentFound = Get-AzRoleAssignment -ObjectId $userAssignedIdentityObject.principalId -RoleDefinitionName $role -Scope $targetScope
         if (!$roleAssignmentFound) {
-            Write-Debug ("Scope $targetScope : assigning role $role")
+            Write-Verbose ("Scope $targetScope : assigning role $role")
             try {
                 $result = New-AzRoleAssignment -ObjectId $userAssignedIdentityObject.principalId -RoleDefinitionName $role -Scope $targetScope
                 Write-Output ("Scope $targetScope : role assignment for $UserAssignedManagedIdentityName with $role succeeded")
@@ -728,7 +733,7 @@ function Assign-VmManagedIdentity {
                 throw $_
             }
         } else {
-            Write-Debug ("Scope $targetScope : role $role found")
+            Write-Verbose ("Scope $targetScope : role $role found")
         }
     }
     
@@ -1073,10 +1078,9 @@ Foreach ($vm in $VMs) {
             -TargetResourceId $vmId `
             -TargetName $vmName `
             -DcrResourceId $DcrResourceId `
-
-        $message = "$TargetName : Successfully onboarded VMInsights"
-        Write-Output ($message)
         #reached this point - indicates all previous deployments succeeded
+        $message = "$vmName : Successfully onboarded VMInsights"
+        Write-Output ($message)
         $OnboardingStatus.Succeeded += $message
     }
     catch {
