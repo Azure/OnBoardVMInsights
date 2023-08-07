@@ -120,7 +120,6 @@ param(
     [Parameter(mandatory = $false)][switch]$ReInstall,
     [Parameter(mandatory = $false)][switch]$TriggerVmssManualVMUpdate,
     [Parameter(mandatory = $false)][switch]$Approve,
-    [Parameter(mandatory = $true, ParameterSetName = 'LogAnalyticsAgent')][switch]$LogAnalyticsAgent,
     [Parameter(mandatory = $true, ParameterSetName = 'LogAnalyticsAgent')][string]$WorkspaceId,
     [Parameter(mandatory = $true, ParameterSetName = 'LogAnalyticsAgent')][string]$WorkspaceKey,
     [Parameter(mandatory = $true, ParameterSetName = 'LogAnalyticsAgent')] `
@@ -165,11 +164,10 @@ param(
             "USGov Virginia", "usgovvirginia"
         )]
         [string]$WorkspaceRegion,
-    [Parameter(mandatory = $true, ParameterSetName = 'AzureMonitoringAgent')][switch]$AzureMonitoringAgent,
     [Parameter(mandatory = $false, ParameterSetName = 'AzureMonitoringAgent')][switch]$ProcessAndDependencies,
-    [Parameter(mandatory = $true, ParameterSetName = 'AzureMonitoringAgent')][string]$DcrName,
-    [Parameter(mandatory = $true, ParameterSetName = 'AzureMonitoringAgent')][string]$DcrResourceGroup,
-    [Parameter(mandatory = $true, ParameterSetName = 'AzureMonitoringAgent')][string]$UserAssignedManagedIdentityResourceId
+    [Parameter(mandatory = $true, ParameterSetName = 'AzureMonitoringAgent')][string]$DcrResourceId,
+    [Parameter(mandatory = $true, ParameterSetName = 'AzureMonitoringAgent')][string]$UserAssignedManagedIdentityResourceGroup,
+    [Parameter(mandatory = $true, ParameterSetName = 'AzureMonitoringAgent')][string]$UserAssignedManagedIdentityName
     )
 
 #
@@ -187,8 +185,11 @@ function Get-VMExtension {
         [Parameter(mandatory = $true)][string]$vmResourceGroupName,
         [Parameter(mandatory = $true)][string]$ExtensionType
     )
-
-    $vm = Get-AzureRmVM -Name $VMName -ResourceGroupName $vmResourceGroupName -DisplayHint Expand
+    try {
+        $vm = Get-AzureRmVM -Name $VMName -ResourceGroupName $vmResourceGroupName -DisplayHint Expand
+    } catch {
+        throw $_
+    }
     $extensions = $vm.Extensions
 
     foreach ($extension in $extensions) {
@@ -211,23 +212,32 @@ function Remove-VMssExtension {
         [Parameter(mandatory = $true)][string]$ExtensionName
     )
     
-    $extension = Get-VMssExtension -VMName $VMName -VMResourceGroup $VMResourceGroupName -ExtensionType $ExtensionType
+    try {
+        $extension = Get-VMssExtension -VMName $VMName -VMResourceGroup $VMResourceGroupName -ExtensionType $ExtensionType
+    }
+    catch {
+        Write-Output ("Exception : $VMName : Failed to lookup $ExtensionType")
+        throw $_
+    }
     if ($extension) {
-        $removeResult = Remove-AzVmssExtension -ResourceGroupName $VMResourceGroupName -VMName $VMName -Name $ExtensionName -Force
+        try {
+            $removeResult = Remove-AzVmssExtension -ResourceGroupName $VMResourceGroupName -VMName $VMName -Name $ExtensionName -Force
+        }
+        catch {
+            Write-Output ("Exception : $VMName : Failed to remove extension : $ExtensionType")
+            throw $_
+        }
         if ($removeResult -and $removeResult.IsSuccessStatusCode) {
-                $message = "$VMName : Successfully removed $ExtensionType"
-                Write-Output($message)
-            }
-            else {
-                $statusCode = $removeResult.StatusCode
-                $ErrorMessage = $removeResult.ReasonPhrase
-                $message = "$VMName : Failed to remove $ExtensionType. StatusCode = $statusCode. ErrorMessage = $ErrorMessage."
-                if ($mmaExtensionMap.Values -contains $ExtensionType) {
-                    $message+=" Need to remove and re-install extension if changing workspace with -ReInstall"
-                }
-                Write-Warning($message)
-                $OnboardingStatus.Failed += $message
-                return $statusCode
+            $message = "$VMName : Successfully removed $ExtensionType"
+            Write-Debug($message)
+        }
+        else {
+            $statusCode = $removeResult.StatusCode
+            $errorMessage = $removeResult.ReasonPhrase
+            $message = "$VMName : Failed to remove $ExtensionType. StatusCode = $statusCode. ErrorMessage = $errorMessage."
+            Write-Output($message)
+            $OnboardingStatus.Failed += $message
+            return $statusCode
         }
     }
     return $success
@@ -243,28 +253,38 @@ function Remove-VMExtension {
         [Parameter(mandatory = $true)][string]$ExtensionName
     )
     
-    $extension = Get-VMExtension -VMName $VMName -VMResourceGroup $VMResourceGroupName -ExtensionType $ExtensionType
+    try {
+        $extension = Get-VMExtension -VMName $VMName -VMResourceGroup $VMResourceGroupName -ExtensionType $ExtensionType
+    } catch {
+        throw $_
+    }
     if ($extension) {
-        $removeResult = Remove-AzureRmVMExtension -ResourceGroupName $VMResourceGroupName -VMName $VMName -Name $ExtensionName -Force
+        try {
+            $removeResult = Remove-AzureRmVMExtension -ResourceGroupName $VMResourceGroupName -VMName $VMName -Name $ExtensionName -Force
+        } catch {
+            $message = "Exception : $VMName : Failed to lookup extension : $ExtensionType"
+            Write-Output ($message)
+            $OnboardingStatus.Failed += $message
+            throw $_
+        }
         if ($removeResult) {
             if ($removeResult.IsSuccessStatusCode) {
-                    $message = "$VMName : Successfully removed $ExtensionType"
-                    Write-Output($message)
+                $message = "$VMName : Successfully removed $ExtensionType"
+                Write-Debug($message)
             }
             else {
                 $statusCode = $removeResult.StatusCode
                 $ErrorMessage = $removeResult.ReasonPhrase
                 $message = "$VMName : Failed to remove $ExtensionType. StatusCode = $statusCode. ErrorMessage = $ErrorMessage."
-                if ($mmaExtensionMap.Values -contains $ExtensionType) {
-                    $message+=" Need to remove and re-install extension if changing workspace with -ReInstall"
-                }
-                Write-Warning($message)
+                Write-Output($message)
                 $OnboardingStatus.Failed += $message
                 return $statusCode
             }
         } else {
             $message = "$VMName : Failed to remove $ExtensionType"
-            Write-Warning($message)
+            Write-Output($message)
+            $OnboardingStatus.Failed += $message
+            return $statusCode
         }
     }
     return $success
@@ -280,37 +300,38 @@ function Install-DCRAssociation {
     (
         [Parameter(Mandatory = $true)][string]$TargetResourceId,
         [Parameter(Mandatory = $true)][string]$TargetName,
-        [Parameter(mandatory = $true)][string]$DcrName,
-        [Parameter(mandatory = $true)][string]$DcrResourceGroup
+        [Parameter(mandatory = $true)][string]$DcrResourceId
     )
 
-    $dcr = Get-AzDataCollectionRule -ResourceGroupName $DcrResourceGroup -RuleName $DcrName
-    if ($dcr) {
-        $dcrAssociationList = Get-AzDataCollectionRuleAssociation -InputObject $dcr
-        if ($dcrAssociationList) {
-            if ($dcrAssociationList.ToString().Contains($TargetName)) {
-                $message = "$TargetName : Data Collection Rule Association already configured for this Data Collection Rule Id. Provisioning State"
+    try {
+        $dcrAssociationList = Get-AzDataCollectionRuleAssociation -TargetResourceId $TargetResourceId
+        # A VM can be associated with multiple Data Collection Rule Associations
+        foreach ($dcrAssociation in $dcrAssociationList) {
+            if ($dcrAssociation.DataCollectionRuleId -eq $DcrResourceId) {
+                $message = "$TargetName : Data Collection Rule Association already configured for this Data Collection Rule Id. ProvisioningState = " + $dcrAssociation.ProvisioningState 
                 $OnboardingStatus.AlreadyOnboarded += $message
                 Write-Output($message)
-                #Once a DCR has been associated with a VM/VMss there is no need for recreating that association again.
                 return
             }
         }
-        
-        #The Customer is responsible to uninstall the DCR Association themselves
-        if ($PSCmdlet.ShouldProcess($TargetName, "install Data Collection Rule Association")) {
-            $dcrassociationName = "VM-Insights-$DcrName-Association"
-            Write-Output("$TargetName : Deploying Data Collection Rule Association with name $dcrassociationName")
-            $dcrassociation = New-AzDataCollectionRuleAssociation -TargetResourceId $TargetResourceId -AssociationName $dcrassociationName -RuleId $dcr.Id
-            if ($dcrassociation.ProvisioningState -ne 'Failed') {
-                $message = "$TargetName : Successfully deployed Data Collection Rule Association"
-                Write-Output($message)
-                $OnboardingStatus.Succeeded += $message
-            } else {
-                $message = "$TargetName : Failed to deploy Data Collection Rule Association"
-                Write-Warning($message)
-                $OnboardingStatus.Failed += $message
-            }
+    } catch {
+        $message = "$TargetName : Failed to lookup the Data Collection Rule : $TargetResourceId"
+        $OnboardingStatus.Failed += $message
+        Write-Output ($message)
+        throw $_
+    }
+    
+    #The Customer is responsible to uninstall the DCR Association themselves
+    if ($PSCmdlet.ShouldProcess($TargetName, "Install Data Collection Rule Association")) {
+        $dcrassociationName = "VM-Insights-$TargetName-Association"
+        Write-Debug("$TargetName : Deploying Data Collection Rule Association with name $dcrassociationName")
+        try {
+            $dcrassociation = New-AzDataCollectionRuleAssociation -TargetResourceId $TargetResourceId -AssociationName $dcrassociationName -RuleId $DcrResourceId
+        } catch {
+           $message = "Exception : $TargetName : Failed to create Data Collection Rule Association for $TargetResourceId"
+           $OnboardingStatus.Failed += $message
+           Write-Output ($message)
+           throw $_
         }
     }
 
@@ -336,11 +357,20 @@ function Install-VMExtension {
         [Parameter(mandatory = $false)][boolean]$ReInstall,
         [Parameter(mandatory = $true)][hashtable]$OnboardingStatus
     )
+
     # Use supplied name unless already deployed, use same name
     $extensionName = $ExtensionName
     
-    $extension = Get-VMExtension -VMName $VMName -VMResourceGroup $VMResourceGroupName -ExtensionType $ExtensionType
-  
+    try {
+        $extension = Get-VMExtension -VMName $VMName -VMResourceGroup $VMResourceGroupName -ExtensionType $ExtensionType
+        $extensionName = $extension.Name
+    }
+    catch {
+        $message = "Exception : $VMName : Failed to lookup $ExtensionType"
+        $OnboardingStatus.Failed += $message
+        Write-Output($message)
+        throw $_
+    }
     if ($extension) {
         $extensionName = $extension.Name
         if (($extension.Settings)) {
@@ -349,46 +379,16 @@ function Install-VMExtension {
                     $message = "$VMName : Extension $ExtensionType already configured for this workspace. Provisioning State: " + $extension.ProvisioningState + " " + $extension.Settings
                     $OnboardingStatus.AlreadyOnboarded += $message
                     Write-Output($message)
-                    $ReInstall = $false
+                    return
                 } else {
                     if ($ReInstall -ne $true) {
-                        $message = "$VMName : Extension $ExtensionType present, run with -ReInstall to move to new workspace. Provisioning State: " + $extension.ProvisioningState + " " + $extension.Settings
-                        Write-Warning($message)
-                        $OnboardingStatus.DifferentSetting += $message
+                        $message = "$VMName : Extension $ExtensionType present, run with -ReInstall again to move to new workspace. Provisioning State: " + $extension.ProvisioningState + " " + $extension.Settings
+                        $OnboardingStatus.ReInstallRequired += $message
+                        Write-Output($message)
+                        return
                     }
                 }
             } 
-
-            if ($amaExtensionMap.Values -contains $ExtensionType) {
-                  if ($extension.Settings -and $extension.Settings.ToString().Contains($PublicSettings.authentication.managedIdentity.'identifier-value')) {
-                    $message = "$VMName : Extension $ExtensionType already configured with this user assigned managed identity. Provisioning State: " + $extension.ProvisioningState + "`n" + $extension.Settings
-                    $OnboardingStatus.ss += $message
-                    Write-Output($message)
-                    $ReInstall = $false
-                  } else {
-                    if ($ReInstall -ne $true) {
-                        $message = "$VMName : Extension $ExtensionType present, run with -ReInstall to assign a new UAMI. Provisioning State: " + $extension.ProvisioningState + " " + $extension.Settings
-                        Write-Warning($message)
-                        $OnboardingStatus.DifferentSetting += $message
-                    }
-               }
-           }
-
-            if ($daExtensionMap.Values -contains $ExtensionType) {
-                if ($extension.Settings -and $extension.Settings.ToString().Contains($PublicSettings.enableAMA)) {
-                    $message = "$VMName : Extension $ExtensionType already configured with AMA enabled. Provisioning State: " + $extension.ProvisioningState + " " + $extension.Settings
-                    $OnboardingStatus.AlreadyOnboarded += $message
-                    Write-Output($message)
-                    $ReInstall = $false
-               } else {
-                    #bug - Depedency Agent is observed to be irrelavent settings
-                    if ($ReInstall -ne $true) {
-                        $message = "$VMName : Extension $ExtensionType present, run with -ReInstall to onboard DA with AMA settings. Provisioning State: " + $extension.ProvisioningState + " " + $extension.Settings
-                        Write-Warning($message)
-                        $OnboardingStatus.DifferentSetting += $message
-                    }
-               }
-            }
         }
         else {
             $message = "$VMName : $ExtensionType extension with name " + $extension.Name + " already installed. Provisioning State: " + $extension.ProvisioningState + " " + $extension.Settings
@@ -396,7 +396,7 @@ function Install-VMExtension {
         }
     }
 
-    if ($PSCmdlet.ShouldProcess($VMName, "install extension $ExtensionType") -and ($ReInstall -eq $true -or !$extension)) {
+    if ($PSCmdlet.ShouldProcess($VMName, "install extension $ExtensionType") -and (!$extension)) {
 
         $parameters = @{
             ResourceGroupName  = $VMResourceGroupName
@@ -419,9 +419,9 @@ function Install-VMExtension {
         if ($ExtensionType -eq "OmsAgentForLinux") {
             Write-Output("$VMName : ExtensionType: $ExtensionType does not support updating workspace. Uninstalling and Re-Installing")
             $removeStatusCode = Remove-VMExtension -VMResourceGroupName $VMResourceGroupName `
-                                               -VMName $VMName `
-                                               -ExtensionType $ExtensionType `
-                                               -ExtensionName $ExtensionName
+                                            -VMName $VMName `
+                                            -ExtensionType $ExtensionType `
+                                            -ExtensionName $ExtensionName
 
             if ($removeStatusCode -ne $success) {
                 Write-Output("$VMName : Skipping installation of $ExtensionType")
@@ -429,9 +429,13 @@ function Install-VMExtension {
             }
         }
 
-        Write-Output("$VMName : Deploying $ExtensionType with name $extensionName")
-        $result = Set-AzureRmVMExtension @parameters
-
+        Write-Debug("$VMName : Deploying $ExtensionType with name $extensionName")
+        try {
+            $result = Set-AzVMExtension @parameters
+        } catch {
+            Write-Output ("Exception : $VMName : Failed to deploy $ExtensionType")
+            throw $_
+        }
         if ($result -and $result.IsSuccessStatusCode) {
             $message = "$VMName : Successfully deployed $ExtensionType"
             Write-Output($message)
@@ -439,10 +443,11 @@ function Install-VMExtension {
         }
         else {
             $message = "$VMName : Failed to deploy $ExtensionType"
-            Write-Warning($message)
+            Write-Output($message)
             $OnboardingStatus.Failed += $message
         }
-    }                                           
+    }
+                                               
 }
 
 function Get-VMssExtension {
@@ -484,6 +489,7 @@ function Install-VMssExtension {
         [Parameter(mandatory = $false)][hashtable]$ProtectedSettings,
         [Parameter(mandatory = $false)][boolean]$ReInstall = $false
     )
+    
     # Use supplied name unless already deployed, use same name
     $extensionName = $ExtensionName
 
@@ -491,7 +497,7 @@ function Install-VMssExtension {
 
     $extension = Get-VMssExtension -VMss $scalesetObject -ExtensionType $ExtensionType
     if ($extension) {
-        Write-Output("$VMScaleSetName : $ExtensionType extension with name " + $extension.Name + " already installed. Provisioning State: " + $extension.ProvisioningState + " " + $extension.Settings)
+        Write-Debug("$VMScaleSetName : $ExtensionType extension with name " + $extension.Name + " already installed. Provisioning State: " + $extension.ProvisioningState + " " + $extension.Settings)
         $extensionName = $extension.Name
     }
 
@@ -532,6 +538,222 @@ function Install-VMssExtension {
     }
 }
 
+function Util-Assign-ManagedIdentity {
+    [CmdletBinding(SupportsShouldProcess = $true)]
+    param
+    (
+        [Parameter(Mandatory = $true, ParameterSetName = "VirtualMachine")][Microsoft.Azure.Commands.Compute.Models.PSVirtualMachine]$VMObject,
+        [Parameter(Mandatory = $true, ParameterSetName = "VirtualMachineScaleSet")][Microsoft.Azure.Commands.Compute.Automation.Models.PSVirtualMachineScaleSet]$VMssObject,
+        [Parameter(Mandatory = $true, ParameterSetName = "VirtualMachineScaleSet")][switch]$isScaleset,
+        [Parameter(Mandatory = $true)][string]$UserAssignedManagedIdentyId 
+    )
+    if ($isScaleset) {
+        $userAssignedIdentitiesList = $VMssObject.Identity.UserAssignedIdentities
+    } else {
+        $userAssignedIdentitiesList = $VMObject.Identity.UserAssignedIdentities
+    }
+    
+    foreach ($userAssignDict in $userAssignedIdentitiesList) {
+        if ($userAssignDict.Keys -eq $UserAssignedManagedIdentyId) {
+            return $True
+        }
+    }
+
+    return $False
+}
+
+function Assign-VmssManagedIdentity {
+    [CmdletBinding(SupportsShouldProcess = $true)]
+    param
+    (
+        [Parameter(Mandatory = $true)][Microsoft.Azure.Commands.Compute.Automation.Models.PSVirtualMachineScaleSet]$VMssObject,
+        [Parameter(mandatory = $true)][string]$UserAssignedManagedIdentityResourceGroup,
+        [Parameter(mandatory = $true)][string]$UserAssignedManagedIdentityName
+    )
+
+    if ($VMssObject.Id -match "/subscriptions/([^/]+)/") {
+        $vmssSubscriptionId = $matches[1]
+    } else {
+        Write-Output($VMssObject.Name + ": Invalid Azure Resource Id")
+        throw $_
+    }
+    
+    try {
+        $userAssignedIdentityObject = Get-AzUserAssignedIdentity -ResourceGroupName $UserAssignedManagedIdentityResourceGroup -Name $UserAssignedManagedIdentityName
+    } catch {
+        $message = "Exception : Failed to lookup managed identity $UserAssignedManagedIdentityName"
+        Write-Output ($message)
+        $OnboardingStatus.Failed += $message
+        throw $_
+    }
+    
+    if ($userAssignedIdentityObject) {
+        try {
+            $statusResult = Get-AzVmss -ResourceGroupName $VMssObject.ResourceGroupName -Name $VMssObject.Name
+        } catch {
+            $message = "Exception : " + $VMssObject.Name + " : Failed to lookup VMss $UserAssignedManagedIdentityName"
+            Write-Output ($message)
+            $OnboardingStatus.Failed += $message
+            throw $_
+        }
+        if ($statusResult -and ($statusResult.Identity.Type -eq "UserAssigned") -and (Util-Assign-ManagedIdentity -isScaleset -VMssObject $statusResult -UserAssignedManagedIdentyId $userAssignedIdentityObject.Id)) {
+            $message = $VMssObject.Name + ": Already assigned with user managed identity = " + $UserAssignedManagedIdentityName
+            Write-Debug($message)
+        } else {
+            try {
+                $updateResult = Update-AzVMss -ResourceGroupName $VMssObject.ResourceGroupName `
+                                            -VirtualMachineScaleSet $VMssObject `
+                                            -IdentityType "UserAssigned" `
+                                            -IdentityID $userAssignedIdentityObject.Id
+            } catch {
+                $message = "Exception : " + $VMssObject.Name + ": Failed to assign user managed identity = " + $UserAssignedManagedIdentityName
+                Write-Output ($message)
+                $OnboardingStatus.Failed += $message
+                throw $_
+            }
+            if ($updateResult -and $updateResult.IsSuccessStatusCode) {
+                $message = $VMssObject.Name + ": Successfully assigned user managed identity = " + $UserAssignedManagedIdentityName
+                Write-Output($message)
+            }
+            else {
+                $updateCode = $updateResult.StatusCode
+                $errorMessage = $updateResult.ReasonPhrase
+                $message = $VMssObject.Name + ": Failed to assign managed identity = " + $UserAssignedManagedIdentityName + ". StatusCode = $updateCode. ErrorMessage = $errorMessage."
+                Write-Output($message)
+                $OnboardingStatus.Failed += $message
+            }
+        }
+    } else {
+        $message = "User Managed Identity: $UserAssignedManagedIdentityName not found in $UserAssignedManagedIdentityResourceGroup"
+        Write-Output ($message)
+        $OnboardingStatus.Failed += $message
+        return $Failure
+    }
+    
+    ##Assign roles to the provided managed identity.
+    try {
+        $targetScope = "/subscriptions/" + $vmssSubscriptionId + "/resourceGroups/" + $VMssObject.ResourceGroupName
+        $roleDefinitionList = @("Virtual Machine Contributor", "Azure Connected Machine Resource Administrator", "Log Analytics Contributor")
+        foreach ($role in $roleDefinitionList) {
+            $roleAssignmentFound = Get-AzRoleAssignment -ObjectId $userAssignedIdentityObject.principalId -RoleDefinitionName $role -Scope $targetScope
+            if (!$roleAssignmentFound) {
+                Write-Debug ("Scope $targetScope : assigning role $role")
+                try {
+                    $result = New-AzRoleAssignment -ObjectId $userAssignedIdentityObject.principalId -RoleDefinitionName $role -Scope $targetScope
+                    Write-Output ("Scope $targetScope : role assignment for $UserAssignedManagedIdentityName with $role succeeded")
+                }
+                catch {
+                    Write-Output("Scope $targetScope : role assignment with $role failed")
+                    throw $_
+                }
+            } else {
+                Write-Debug ("Scope $targetScope : role $role already set")
+            }
+        }
+    }
+    catch {
+        Write-Output ("$targetScope : Exception assigning $role")
+        throw $_
+    }
+
+    ##Assigned Managed identity to Azure Monitoring Agent
+    $amaPublicSettings.authentication.managedIdentity.'identifier-value' = $userAssignedIdentityObject.Id   
+}
+
+function Assign-VmManagedIdentity {
+    [CmdletBinding(SupportsShouldProcess = $true)]
+    param
+    (
+        [Parameter(Mandatory = $true)][Microsoft.Azure.Commands.Compute.Models.PSVirtualMachine]$VMObject,
+        [Parameter(mandatory = $true)][string]$UserAssignedManagedIdentityResourceGroup,
+        [Parameter(mandatory = $true)][string]$UserAssignedManagedIdentityName
+    )
+
+    try {
+        if ($VMObject.Id -match "/subscriptions/([^/]+)/") {
+            $vmSubscriptionId = $matches[1]
+        } else {
+            Write-Output($VMObject.Name + ": Invalid Azure Resource Id")
+            throw $_
+        }
+
+        $userAssignedIdentityObject = Get-AzUserAssignedIdentity -ResourceGroupName $UserAssignedManagedIdentityResourceGroup -Name $UserAssignedManagedIdentityName
+        if ($userAssignedIdentityObject) {
+            #TBD check for whether Managed identity is already assigned.
+            $statusResult = Get-AzVM -ResourceGroupName $VMObject.ResourceGroupName -Name $VMObject.Name
+            
+            if ($statusResult -and ($statusResult.Identity.Type -eq "UserAssigned") -and (Util-Assign-ManagedIdentity -VMObject $statusResult -UserAssignedManagedIdentyId $userAssignedIdentityObject.Id)) {
+                $message = $VMObject.Name + ": Already assigned with managed identity = " + $UserAssignedManagedIdentityName
+                Write-Output($message)
+            } else {
+                $updateResult = Update-AzVM -ResourceGroupName $VMObject.ResourceGroupName `
+                                            -VM $VMObject `
+                                            -IdentityType "UserAssigned" `
+                                            -IdentityID $userAssignedIdentityObject.Id
+                if ($updateResult -and $updateResult.IsSuccessStatusCode) {
+                        $message = $VMObject.Name + ": Successfully assigned managed identity = " + $UserAssignedManagedIdentityName
+                        Write-Output($message)
+                }
+                else {
+                    $statusCode = $updateResult.StatusCode
+                    $ErrorMessage = $updateResult.ReasonPhrase
+                    $message = $VMObject.Name + ": Failed to assign managed identity = " + $UserAssignedManagedIdentityName + ". StatusCode = $statusCode. ErrorMessage = $ErrorMessage."
+                    Write-Output($message)
+                    $OnboardingStatus.Failed += $message
+                }
+            }
+        } else {
+            Write-Output("User Managed Identity: $UserAssignedManagedIdentityName not found in $UserAssignedManagedIdentityResourceGroup")
+        }
+    }
+    catch {
+        Write-Output("Exception : ")
+        throw $_
+    }
+
+    ##Assign roles to the provided managed identity.
+    try {
+        $targetScope = "/subscriptions/" + $vmSubscriptionId + "/resourceGroups/" + $VM.ResourceGroupName
+        $roleDefinitionList = @("Virtual Machine Contributor", "Azure Connected Machine Resource Administrator", "Log Analytics Contributor")
+        foreach ($role in $roleDefinitionList) {
+            $roleAssignmentFound = Get-AzRoleAssignment -ObjectId $userAssignedIdentityObject.principalId -RoleDefinitionName $role -Scope $targetScope
+            if (!$roleAssignmentFound) {
+                Write-Debug ("Scope $targetScope : assigning role $role")
+                try {
+                    $result = New-AzRoleAssignment -ObjectId $userAssignedIdentityObject.principalId -RoleDefinitionName $role -Scope $targetScope
+                    Write-Output ("Scope $targetScope : role assignment for $UserAssignedManagedIdentityName with $role succeeded")
+                }
+                catch {
+                    Write-Output("Scope $targetScope : role assignment with $role failed")
+                    throw $_
+                }
+            } else {
+                Write-Debug ("Scope $targetScope : role $role found")
+            }
+        }
+    }
+    catch {
+        Write-Output ("$targetScope : Exception assigning $role")
+        throw $_
+    }
+
+    ##Assigned Managed identity to Azure Monitoring Agent
+    $amaPublicSettings.authentication.managedIdentity.'identifier-value' = $userAssignedIdentityObject.Id   
+}
+
+function Display-Exception {
+    try {
+        try { "ExceptionClass = $($_.Exception.GetType().Name)" | Write-Output } catch { }
+        try { "ExceptionMessage:`r`n$($_.Exception.Message)`r`n" | Write-Output } catch { }
+        try { "StackTrace:`r`n$($_.Exception.StackTrace)`r`n" | Write-Output } catch { }
+        try { "ScriptStackTrace:`r`n$($_.ScriptStackTrace)`r`n" | Write-Output } catch { }
+        try { "Exception.HResult = 0x{0,0:x8}" -f $_.Exception.HResult | Write-Output } catch { }
+    } 
+    catch {
+        #silently ignore
+    }
+}
+
 #
 # Main Script
 #
@@ -551,6 +773,7 @@ else {
     }
     else {
         Write-Output("Current Subscription:")
+        
         $account
         Write-Output("Changing to subscription: $SubscriptionId")
         Select-AzureRmSubscription -SubscriptionId $SubscriptionId
@@ -565,7 +788,7 @@ $AlreadyOnboarded = @()
 $OnboardingSucceeded = @()
 $OnboardingFailed = @()
 $OnboardingBlockedNotRunning = @()
-$OnboardingBlockedDifferentSetting = @()
+$OnboardingBlockedReInstallRequired = @()
 $OnboardingBlockedDifferenceUserAssignedManagedIdentity = @()
 $VMScaleSetNeedsUpdate = @()
 $OnboardingStatus = @{
@@ -573,7 +796,7 @@ $OnboardingStatus = @{
     Succeeded             = $OnboardingSucceeded;
     Failed                = $OnboardingFailed;
     NotRunning            = $OnboardingBlockedNotRunning;
-    DifferentSetting   = $OnboardingBlockedDifferentSetting;
+    ReInstallRequired   = $OnboardingBlockedReInstallRequired;
     VMScaleSetNeedsUpdate = $VMScaleSetNeedsUpdate;
 }
 
@@ -593,7 +816,6 @@ $amaExtensionName = "AzureMonitoringAgent"
 $amaPublicSettings = @{'authentication' = @{
                         'managedIdentity' = @{
                         'identifier-name' = 'mi_res_id'
-                        'identifier-value' = $userAssignedManagedIdentityResourceId
                         }
                       }
                     }
@@ -601,7 +823,7 @@ $amaProtectedSettings = @{}
 
 # Dependency Agent Extension constants
 $daExtensionMap = @{ "Windows" = "DependencyAgentWindows"; "Linux" = "DependencyAgentLinux" }
-$daExtensionVersionMap = @{ "Windows" = "9.5"; "Linux" = "9.5" }
+$daExtensionVersionMap = @{ "Windows" = "9.10"; "Linux" = "9.10" }
 $daExtensionPublisher = "Microsoft.Azure.Monitoring.DependencyAgent"
 $daExtensionName = "DAExtension"
 $daPublicSettings = @{}
@@ -666,9 +888,9 @@ Write-Output("`nVM's or VM ScaleSets matching criteria:`n")
 $VMS | ForEach-Object { Write-Output ($_.Name + " " + $_.PowerState) }
 
 # Validate customer wants to continue
-$monitoringAgent = if ($LogAnalyticsAgent) {"LogAnalyticsAgent"} else {"AzureMonitoringAgent"}
+$monitoringAgent = if ($DcrResourceId) {"AzureMonitoringAgent"} else {"LogAnalyticsAgent"}
 $infoMessage = "`For above $($VMS.Count) VM's or VM Scale Sets, this operation will install $monitoringAgent"
-if ($LogAnalyticsAgent -or ($AzureMonitoringAgent -and $ProcessAndDependencies)) {
+if (!$DcrResourceId -or ($DcrResourceId -and $ProcessAndDependencies)) {
     $infoMessage+=" and Dependency Agent extension"
 }
 Write-Output($infoMessage)
@@ -689,190 +911,193 @@ Register-AzureRmResourceProvider -ProviderNamespace Microsoft.AlertsManagement
 # Loop through each VM/VM Scale set, as appropriate handle installing VM Extensions
 #
 Foreach ($vm in $VMs) {
-    # set as variabels so easier to use in output strings
-    $vmName = $vm.Name
-    $vmLocation = $vm.Location
-    $vmResourceGroupName = $vm.ResourceGroupName
-    $vmId = $vm.Id
-    #
-    # Find OS Type
-    #
-    if ($vm.type -eq 'Microsoft.Compute/virtualMachineScaleSets') {
-        $isScaleset = $true
-
-        $scalesetVMs = @()
-        $scalesetVMs = Get-AzureRmVMssVM -ResourceGroupName $vmResourceGroupName -VMScaleSetName $vmName
-        if ($scalesetVMs.length -gt 0) {
-            if ($scalesetVMs[0]) {
-                $osType = $scalesetVMs[0].storageprofile.osdisk.ostype
-            }
-        }
-    }
-    else {
-        $isScaleset = $false
-        $osType = $vm.StorageProfile.OsDisk.OsType
-    }
-
-    #
-    # Map to correct extension for OS type
-    #
-    if ($LogAnalyticsAgent) {
-        $maExt = $mmaExtensionMap.($osType.ToString())
-        $maExtVersion = $mmaExtensionVersionMap.($osType.ToString())
-        $maExtensionPublisher = $mmaExtensionPublisher
-        $maExtensionName = $mmaExtensionName
-        $maPublicSettings = $mmaPublicSettings
-        $maProtectedSettings = $mmaProtectedSettings
-    } elseif ($AzureMonitoringAgent) {
-        $maExt = $amaExtensionMap.($osType.ToString())
-        $maExtVersion = $amaExtensionVersionMap.($osType.ToString())
-        $maExtensionPublisher = $amaExtensionPublisher
-        $maExtensionName = $amaExtensionName
-        $maPublicSettings = $amaPublicSettings
-        $maProtectedSettings = $amaProtectedSettings
-    } else {
-        Write-Warning("$vmName : has an unsupported OS: $osType")
-        continue
-    }
-    
-    $daExt = $daExtensionMap.($osType.ToString())
-    if ($AzureMonitoringAgent -and $ProcessAndDependencies) {
-        $daPublicSettings = @{"enableAMA" = "true"}
-        $daExtVersion = $daExtensionVersionMap.($osType.ToString())
-    }
-
-    Write-Verbose("Deployment settings: ")
-    Write-Verbose("ResourceGroup: $vmResourceGroupName")
-    Write-Verbose("VM: $vmName")
-    Write-Verbose("Location: $vmLocation")
-    Write-Verbose("OS Type: $ext")
-    Write-Verbose("Dependency Agent: $daExt, HandlerVersion: $daExtVersion")
-    Write-Verbose("Monitoring Agent: $mmaExt, HandlerVersion: $maExtVersion")
-
-    if ($isScaleset) {
-        Install-VMssExtension `
-            -VMName $vmName `
-            -VMLocation $vmLocation `
-            -VMResourceGroupName $vmResourceGroupName `
-            -ExtensionType $maExt `
-            -ExtensionName $maExtensionName `
-            -ExtensionPublisher $maExtensionPublisher `
-            -ExtensionVersion $maExtVersion `
-            -PublicSettings $maPublicSettings `
-            -ProtectedSettings $maProtectedSettings `
-            -ReInstall $ReInstall `
-
-        if ($LogAnalyticsAgent -or ($AzureMonitoringAgent -and $ProcessAndDependencies)) {
-            Install-VMssExtension `
-                -VMName $vmName `
-                -VMLocation $vmLocation `
-                -VMResourceGroupName $vmResourceGroupName `
-                -ExtensionType $daExt `
-                -ExtensionName $daExtensionName `
-                -ExtensionPublisher $daExtensionPublisher `
-                -ExtensionVersion $daextVersion `
-                -PublicSettings $daPublicSettings `
-                -ReInstall $ReInstall `
-        } else {
-            Remove-VMssExtension `
-                -VMResourceGroupName $vmResourceGroupName `
-                -VMName $vmName `
-                -ExtensionType $daExt `
-                -ExtensionName $daExtensionName
-        }
-
-        Install-DCRAssociation `
-                -TargetResourceId $vmId `
-                -TargetName $vmName `
-                -DcrName $DcrName `
-                -DcrResourceGroup $DcrResourceGroup `
-    
-        $scalesetObject = Get-AzureRMVMSS -VMScaleSetName $vmName -ResourceGroupName $vmResourceGroupName
-        if ($scalesetObject.UpgradePolicy.mode -eq 'Manual') {
-            if ($TriggerVmssManualVMUpdate -eq $true) {
-
-                Write-Output("$vmName : Upgrading scale set instances since the upgrade policy is set to Manual")
-                $scaleSetInstances = @{}
-                $scaleSetInstances = Get-AzureRMVMSSvm -ResourceGroupName $vmResourceGroupName -VMScaleSetName $vmName -InstanceView
-                $i = 0
-                $instanceCount = $scaleSetInstances.Length
-                Foreach ($scaleSetInstance in $scaleSetInstances) {
-                    $i++
-                    Write-Output("$vmName : Updating instance " + $scaleSetInstance.Name + " $i of $instanceCount")
-                    Update-AzureRmVmssInstance -ResourceGroupName $vmResourceGroupName -VMScaleSetName $vmName -InstanceId $scaleSetInstance.InstanceId
+    try {
+        # set as variabels so easier to use in output strings
+        $vmName = $vm.Name
+        $vmLocation = $vm.Location
+        $vmResourceGroupName = $vm.ResourceGroupName
+        $vmId = $vm.Id
+        #
+        # Find OS Type
+        #
+        if ($vm.type -eq 'Microsoft.Compute/virtualMachineScaleSets') {
+            $isScaleset = $true
+            $scalesetVMs = @()
+            $scalesetVMs = Get-AzureRmVMssVM -ResourceGroupName $vmResourceGroupName -VMScaleSetName $vmName
+            if ($scalesetVMs.length -gt 0) {
+                if ($scalesetVMs[0]) {
+                    $osType = $scalesetVMs[0].storageprofile.osdisk.ostype
                 }
-                Write-Output("$vmName All scale set instances upgraded")
-            }
-            else {
-                $message = "$vmName : has UpgradePolicy of Manual. Please trigger upgrade of VM Scale Set or call with -TriggerVmssManualVMUpdate"
-                Write-Warning($message)
-                $OnboardingStatus.VMScaleSetNeedsUpdate += $message
             }
         }
-    }
-    #
-    # Handle VM's
-    #
-    else {
-        if ("VM Running" -ne $vm.PowerState) {
-            $message = "$vmName : has a PowerState " + $vm.PowerState + " Skipping"
-            Write-Output($message)
-            $OnboardingStatus.NotRunning += $message
+        else {
+            $isScaleset = $false
+            $osType = $vm.StorageProfile.OsDisk.OsType
+        }
+
+        #
+        # Map to correct extension for OS type
+        #
+        if ($DcrResourceId) {
+            $maExt = $amaExtensionMap.($osType.ToString())
+            $maExtVersion = $amaExtensionVersionMap.($osType.ToString())
+            $maExtensionPublisher = $amaExtensionPublisher
+            $maExtensionName = $amaExtensionName
+            $maPublicSettings = $amaPublicSettings
+            $maProtectedSettings = $amaProtectedSettings
+        } else {
+            $maExt = $mmaExtensionMap.($osType.ToString())
+            $maExtVersion = $mmaExtensionVersionMap.($osType.ToString())
+            $maExtensionPublisher = $mmaExtensionPublisher
+            $maExtensionName = $mmaExtensionName
+            $maPublicSettings = $mmaPublicSettings
+            $maProtectedSettings = $mmaProtectedSettings
+        }
+        
+        if (! $maExt) {
+            Write-Warning("$vmName : has an unsupported OS: $osType")
             continue
         }
 
-        Install-VMExtension `
-            -VMName $vmName `
-            -VMLocation $vmLocation `
-            -VMResourceGroupName $vmResourceGroupName `
-            -ExtensionType $maExt `
-            -ExtensionName $maExtensionName `
-            -ExtensionPublisher $maExtensionPublisher `
-            -ExtensionVersion $maExtVersion `
-            -PublicSettings $maPublicSettings `
-            -ProtectedSettings $maProtectedSettings `
-            -ReInstall $ReInstall `
-            -OnboardingStatus $OnboardingStatus
-        
-        if ($LogAnalyticsAgent -or ($AzureMonitoringAgent -and $ProcessAndDependencies)) {
+        $daExt = $daExtensionMap.($osType.ToString())
+        if ($DcrResourceId -and $ProcessAndDependencies) {
+            $daPublicSettings = @{"enableAMA" = "true"}
+            $daExtVersion = $daExtensionVersionMap.($osType.ToString())
+        }
+
+        Write-Verbose("Deployment settings: ")
+        Write-Verbose("ResourceGroup: $vmResourceGroupName")
+        Write-Verbose("VM: $vmName")
+        Write-Verbose("Location: $vmLocation")
+        Write-Verbose("OS Type: $ext")
+        Write-Verbose("Dependency Agent: $daExt, HandlerVersion: $daExtVersion")
+        Write-Verbose("Monitoring Agent: $mmaExt, HandlerVersion: $maExtVersion")
+
+        try {
+            if ($DcrResourceId) {
+                if ($isScaleset) {
+                    Assign-VmssManagedIdentity -VMssObject $vm `
+                        -UserAssignedManagedIdentityResourceGroup $UserAssignedManagedIdentityResourceGroup `
+                        -UserAssignedManagedIdentityName $UserAssignedManagedIdentityName
+                } else {
+                    Assign-VmManagedIdentity -VMObject $vm `
+                        -UserAssignedManagedIdentityResourceGroup $UserAssignedManagedIdentityResourceGroup `
+                        -UserAssignedManagedIdentityName $UserAssignedManagedIdentityName
+                }
+            }
+        }
+        catch {
+            throw $_
+        }
+
+        if ($isScaleset) {
+            Install-VMssExtension `
+                -VMScaleSetName $vmName `
+                -VMScaleSetResourceGroupName $vmResourceGroupName `
+                -ExtensionType $maExt `
+                -ExtensionName $maExtensionName `
+                -ExtensionPublisher $maExtensionPublisher `
+                -ExtensionVersion $maExtVersion `
+                -PublicSettings $maPublicSettings `
+                -ProtectedSettings $maProtectedSettings `
+                -ReInstall $ReInstall `
+
+            if (!$DcrResourceId -or ($DcrResourceId -and $ProcessAndDependencies)) {
+                Install-VMssExtension `
+                    -VMScaleSetName $vmName `
+                    -VMScaleSetResourceGroupName $vmResourceGroupName `
+                    -ExtensionType $daExt `
+                    -ExtensionName $daExt `
+                    -ExtensionPublisher $daExtensionPublisher `
+                    -ExtensionVersion $daextVersion `
+                    -PublicSettings $daPublicSettings `
+                    -ReInstall $ReInstall `
+            }
+
+            $scalesetObject = Get-AzureRMVMSS -VMScaleSetName $vmName -ResourceGroupName $vmResourceGroupName
+            if ($scalesetObject.UpgradePolicy.mode -eq 'Manual') {
+                if ($TriggerVmssManualVMUpdate -eq $true) {
+
+                    Write-Output("$vmName : Upgrading scale set instances since the upgrade policy is set to Manual")
+                    $scaleSetInstances = @{}
+                    $scaleSetInstances = Get-AzureRMVMSSvm -ResourceGroupName $vmResourceGroupName -VMScaleSetName $vmName -InstanceView
+                    $i = 0
+                    $instanceCount = $scaleSetInstances.Length
+                    Foreach ($scaleSetInstance in $scaleSetInstances) {
+                        $i++
+                        Write-Output("$vmName : Updating instance " + $scaleSetInstance.Name + " $i of $instanceCount")
+                        Update-AzureRmVmssInstance -ResourceGroupName $vmResourceGroupName -VMScaleSetName $vmName -InstanceId $scaleSetInstance.InstanceId
+                    }
+                    Write-Output("$vmName All scale set instances upgraded")
+                }
+                else {
+                    $message = "$vmName : has UpgradePolicy of Manual. Please trigger upgrade of VM Scale Set or call with -TriggerVmssManualVMUpdate"
+                    Write-Warning($message)
+                    $OnboardingStatus.VMScaleSetNeedsUpdate += $message
+                }
+            }
+        }
+        #
+        # Handle VM's
+        #
+        else {
+            if ("VM Running" -ne $vm.PowerState) {
+                $message = "$vmName : has a PowerState " + $vm.PowerState + " Skipping"
+                Write-Output($message)
+                $OnboardingStatus.NotRunning += $message
+                continue
+            }
+            
             Install-VMExtension `
                 -VMName $vmName `
                 -VMLocation $vmLocation `
                 -VMResourceGroupName $vmResourceGroupName `
-                -ExtensionType $daExt `
-                -ExtensionName $daExtensionName `
-                -ExtensionPublisher $daExtensionPublisher `
-                -ExtensionVersion $daextVersion `
-                -PublicSettings $daPublicSettings `
+                -ExtensionType $maExt `
+                -ExtensionName $maExt `
+                -ExtensionPublisher $maExtensionPublisher `
+                -ExtensionVersion $maExtVersion `
+                -PublicSettings $maPublicSettings `
+                -ProtectedSettings $maProtectedSettings `
                 -ReInstall $ReInstall `
                 -OnboardingStatus $OnboardingStatus
-        } else {
-            Remove-VMExtension `
-                -VMResourceGroupName $vmResourceGroupName `
-                -VMName $vmName `
-                -ExtensionType $daExt `
-                -ExtensionName $daExtensionName
+            
+            if (!$DcrResourceId -or ($DcrResourceId -and $ProcessAndDependencies)) {
+                
+                Install-VMExtension `
+                    -VMName $vmName `
+                    -VMLocation $vmLocation `
+                    -VMResourceGroupName $vmResourceGroupName `
+                    -ExtensionType $daExt `
+                    -ExtensionName $daExt `
+                    -ExtensionPublisher $daExtensionPublisher `
+                    -ExtensionVersion $daextVersion `
+                    -PublicSettings $daPublicSettings `
+                    -ReInstall $ReInstall `
+                    -OnboardingStatus $OnboardingStatus
+            }
+
         }
-
         Install-DCRAssociation `
-                -TargetResourceId $vmId `
-                -TargetName $vmName `
-                -DcrName $DcrName `
-                -DcrResourceGroup $DcrResourceGroup
-
+            -TargetResourceId $vmId `
+            -TargetName $vmName `
+            -DcrResourceId $DcrResourceId `
+    }
+    catch {
+        Display-Exception $_
     }
 }
 
-Write-Output("`nSummary:")
-Write-Output("`nAlready Onboarded: (" + $OnboardingStatus.AlreadyOnboarded.Count + ")")
-$OnboardingStatus.AlreadyOnboarded  | ForEach-Object { Write-Output ($_) }
-Write-Output("`nSucceeded: (" + $OnboardingStatus.Succeeded.Count + ")")
-$OnboardingStatus.Succeeded | ForEach-Object { Write-Output ($_) }
-Write-Output("`nDifferent Setting: (" + $OnboardingStatus.DifferentSetting.Count + ")")
-$OnboardingStatus.DifferentSett | ForEach-Object { Write-Output ($_) }
-Write-Output("`nNot running - start VM to configure: (" + $OnboardingStatus.NotRunning.Count + ")")
-$OnboardingStatus.NotRunning  | ForEach-Object { Write-Output ($_) }
-Write-Output("`nVM Scale Set needs update: (" + $OnboardingStatus.VMScaleSetNeedsUpdate.Count + ")")
-$OnboardingStatus.VMScaleSetNeedsUpdate  | ForEach-Object { Write-Output ($_) }
-Write-Output("`nFailed: (" + $OnboardingStatus.Failed.Count + ")")
-$OnboardingStatus.Failed | ForEach-Object { Write-Output ($_) }
+#TBD
+#Write-Output("`nSummary:")
+#Write-Output("`nAlready Onboarded: (" + $OnboardingStatus.AlreadyOnboarded.Count + ")")
+#$OnboardingStatus.AlreadyOnboarded  | ForEach-Object { Write-Output ($_) }
+#Write-Output("`nSucceeded: (" + $OnboardingStatus.Succeeded.Count + ")")
+#$OnboardingStatus.Succeeded | ForEach-Object { Write-Output ($_) }
+#Write-Output("`nDifferent Setting: (" + $OnboardingStatus.DifferentSetting.Count + ")")
+#$OnboardingStatus.DifferentSett | ForEach-Object { Write-Output ($_) }
+#Write-Output("`nNot running - start VM to configure: (" + $OnboardingStatus.NotRunning.Count + ")")
+#$OnboardingStatus.NotRunning  | ForEach-Object { Write-Output ($_) }
+#Write-Output("`nVM Scale Set needs update: (" + $OnboardingStatus.VMScaleSetNeedsUpdate.Count + ")")
+#$OnboardingStatus.VMScaleSetNeedsUpdate  | ForEach-Object { Write-Output ($_) }
+#Write-Output("`nFailed: (" + $OnboardingStatus.Failed.Count + ")")
+#$OnboardingStatus.Failed | ForEach-Object { Write-Output ($_) }
