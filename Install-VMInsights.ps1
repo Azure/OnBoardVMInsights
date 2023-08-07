@@ -216,7 +216,8 @@ function Remove-VMssExtension {
         $extension = Get-VMssExtension -VMName $VMName -VMResourceGroup $VMResourceGroupName -ExtensionType $ExtensionType
     }
     catch {
-        Write-Output ("Exception : $VMName : Failed to lookup $ExtensionType")
+        $message = "$VMName : Failed to lookup $ExtensionType"
+        $OnboardingStatus.Failed += $message
         throw $_
     }
     if ($extension) {
@@ -224,7 +225,7 @@ function Remove-VMssExtension {
             $removeResult = Remove-AzVmssExtension -ResourceGroupName $VMResourceGroupName -VMName $VMName -Name $ExtensionName -Force
         }
         catch {
-            Write-Output ("Exception : $VMName : Failed to remove extension : $ExtensionType")
+            Write-Output ("$VMName : Failed to remove extension : $ExtensionType")
             throw $_
         }
         if ($removeResult -and $removeResult.IsSuccessStatusCode) {
@@ -235,12 +236,10 @@ function Remove-VMssExtension {
             $statusCode = $removeResult.StatusCode
             $errorMessage = $removeResult.ReasonPhrase
             $message = "$VMName : Failed to remove $ExtensionType. StatusCode = $statusCode. ErrorMessage = $errorMessage."
-            Write-Output($message)
             $OnboardingStatus.Failed += $message
-            return $statusCode
+            throw $message
         }
     }
-    return $success
 }
 
 function Remove-VMExtension {
@@ -256,8 +255,7 @@ function Remove-VMExtension {
     try {
         $extension = Get-VMExtension -VMName $VMName -VMResourceGroup $VMResourceGroupName -ExtensionType $ExtensionType
     } catch {
-        $message = "Exception : " + $VMName + ": Failed to lookup extension $ExtensionType"
-        Write-Output ($message)
+        $message = "$VMName : Failed to lookup extension $ExtensionType"
         $OnboardingStatus.Failed += $message
         throw $_
     }
@@ -265,10 +263,9 @@ function Remove-VMExtension {
         try {
             $removeResult = Remove-AzureRmVMExtension -ResourceGroupName $VMResourceGroupName -VMName $VMName -Name $ExtensionName -Force
         } catch {
-            $message = "Exception : $VMName : Failed to lookup extension : $ExtensionType"
-            Write-Output ($message)
+            $message = "$VMName : Failed to remove extension : $ExtensionType"
             $OnboardingStatus.Failed += $message
-            throw $_
+            throw $message
         }
         if ($removeResult) {
             if ($removeResult.IsSuccessStatusCode) {
@@ -279,18 +276,15 @@ function Remove-VMExtension {
                 $statusCode = $removeResult.StatusCode
                 $ErrorMessage = $removeResult.ReasonPhrase
                 $message = "$VMName : Failed to remove $ExtensionType. StatusCode = $statusCode. ErrorMessage = $ErrorMessage."
-                Write-Output($message)
                 $OnboardingStatus.Failed += $message
-                return $statusCode
+                throw $message
             }
         } else {
             $message = "$VMName : Failed to remove $ExtensionType"
-            Write-Output($message)
             $OnboardingStatus.Failed += $message
-            return $statusCode
+            throw $message
         }
     }
-    return $success
 }
 
 function Install-DCRAssociation {
@@ -320,7 +314,6 @@ function Install-DCRAssociation {
     } catch {
         $message = "Exception : $TargetName : Failed to lookup the Data Collection Rule : $TargetResourceId"
         $OnboardingStatus.Failed += $message
-        Write-Output ($message)
         throw $_
     }
     
@@ -331,9 +324,8 @@ function Install-DCRAssociation {
         try {
             $dcrassociation = New-AzDataCollectionRuleAssociation -TargetResourceId $TargetResourceId -AssociationName $dcrassociationName -RuleId $DcrResourceId
         } catch {
-           $message = "Exception : $TargetName : Failed to create Data Collection Rule Association for $TargetResourceId"
+           $message = "$TargetName : Failed to create Data Collection Rule Association for $TargetResourceId"
            $OnboardingStatus.Failed += $message
-           Write-Output ($message)
            throw $_
         }
     }
@@ -368,37 +360,32 @@ function Install-VMExtension {
         $extensionName = $extension.Name
     }
     catch {
-        $message = "Exception : $VMName : Failed to lookup $ExtensionType"
+        $message = "$VMName : Failed to lookup $ExtensionType"
         $OnboardingStatus.Failed += $message
-        Write-Output($message)
         throw $_
     }
     if ($extension) {
         $extensionName = $extension.Name
-        if (($extension.Settings)) {
-            if ($mmaExtensionMap.Values -contains $ExtensionType) {
-                if ($extension.Settings -and $extension.Settings.ToString().Contains($PublicSettings.workspaceId)) {
-                    $message = "$VMName : Extension $ExtensionType already configured for this workspace. Provisioning State: " + $extension.ProvisioningState + " " + $extension.Settings
-                    $OnboardingStatus.AlreadyOnboarded += $message
-                    Write-Output($message)
+        $message = "$VMName : $ExtensionType extension with name " + $extension.Name + " already installed. Provisioning State: " + $extension.ProvisioningState + " " + $extension.Settings
+        Write-Output ($message)
+        if ($mmaExtensionMap.Values -contains $ExtensionType -and $extension.Settings) {
+            if ($extension.Settings -and $extension.Settings.ToString().Contains($PublicSettings.workspaceId)) {
+                $message = "$VMName : Extension $ExtensionType already configured for this workspace. Provisioning State: " + $extension.ProvisioningState + " " + $extension.Settings
+                $OnboardingStatus.AlreadyOnboarded += $message
+                Write-Output($message)
+                return
+            } else {
+                if ($ReInstall -ne $true) {
+                    $message = "$VMName : Extension $ExtensionType present, run with -ReInstall again to move to new workspace. Provisioning State: " + $extension.ProvisioningState + " " + $extension.Settings
+                    $OnboardingStatus.ReInstallRequired += $message
+                    Write-Output ($message)
                     return
-                } else {
-                    if ($ReInstall -ne $true) {
-                        $message = "$VMName : Extension $ExtensionType present, run with -ReInstall again to move to new workspace. Provisioning State: " + $extension.ProvisioningState + " " + $extension.Settings
-                        $OnboardingStatus.ReInstallRequired += $message
-                        Write-Output($message)
-                        return
-                    }
                 }
             } 
         }
-        else {
-            $message = "$VMName : $ExtensionType extension with name " + $extension.Name + " already installed. Provisioning State: " + $extension.ProvisioningState + " " + $extension.Settings
-            Write-Output($message)
-        }
     }
 
-    if ($PSCmdlet.ShouldProcess($VMName, "install extension $ExtensionType") -and (!$extension)) {
+    if ($PSCmdlet.ShouldProcess($VMName, "install extension $ExtensionType")) {
 
         $parameters = @{
             ResourceGroupName  = $VMResourceGroupName
@@ -420,33 +407,25 @@ function Install-VMExtension {
 
         if ($ExtensionType -eq "OmsAgentForLinux") {
             Write-Output("$VMName : ExtensionType: $ExtensionType does not support updating workspace. Uninstalling and Re-Installing")
-            $removeStatusCode = Remove-VMExtension -VMResourceGroupName $VMResourceGroupName `
-                                            -VMName $VMName `
-                                            -ExtensionType $ExtensionType `
-                                            -ExtensionName $ExtensionName
-
-            if ($removeStatusCode -ne $success) {
-                Write-Output("$VMName : Skipping installation of $ExtensionType")
-                return
-            }
+            Remove-VMExtension -VMResourceGroupName $VMResourceGroupName `
+                               -VMName $VMName `
+                               -ExtensionType $ExtensionType `
+                               -ExtensionName $ExtensionName
         }
-
-        Write-Debug("$VMName : Deploying $ExtensionType with name $extensionName")
+        
+        Write-Debug("$VMName : Deploying/Updating $ExtensionType with name $extensionName")
         try {
             $result = Set-AzVMExtension @parameters
+            if ($result -and $result.IsSuccessStatusCode) {
+                Write-Output("$VMName : Successfully deployed/updated $ExtensionType")
+            }
+            else {
+                throw $_
+            }
         } catch {
-            Write-Output ("Exception : $VMName : Failed to deploy $ExtensionType")
-            throw $_
-        }
-        if ($result -and $result.IsSuccessStatusCode) {
-            $message = "$VMName : Successfully deployed $ExtensionType"
-            Write-Output($message)
-            $OnboardingStatus.Succeeded += $message
-        }
-        else {
-            $message = "$VMName : Failed to deploy $ExtensionType"
-            Write-Output($message)
+            $message = "$VMName : Failed to deploy/update $ExtensionType"
             $OnboardingStatus.Failed += $message
+            throw $_
         }
     }
                                                
@@ -465,6 +444,7 @@ function Get-VMssExtension {
     )
     foreach ($extension in $VMss.VirtualMachineProfile.ExtensionProfile.Extensions) {
         if ($ExtensionType -eq $extension.Type) {
+            $VMScaleSetName = $VMss.Name
             Write-Verbose("$VMScaleSetName : Extension: $ExtensionType found on VMSS")
             $extension
             return
@@ -494,16 +474,27 @@ function Install-VMssExtension {
     
     # Use supplied name unless already deployed, use same name
     $extensionName = $ExtensionName
+    try {
+        $scalesetObject = Get-AzureRMVMSS -VMScaleSetName $VMScaleSetName -ResourceGroupName $VMScaleSetResourceGroupName
+    } catch {
+        $message = "$VMScaleSetName : Failed to lookup VMss in $VMScaleSetResourceGroupName"
+        $OnboardingStatus.Failed += $message
+        throw $_
+    }
+    try {
+        $extension = Get-VMssExtension -VMss $scalesetObject -ExtensionType $ExtensionType
+    } catch {
+        $message = "$VMName : Failed to lookup $ExtensionType"
+        $OnboardingStatus.Failed += $message
+        throw $_
+    }
 
-    $scalesetObject = Get-AzureRMVMSS -VMScaleSetName $VMScaleSetName -ResourceGroupName $VMScaleSetResourceGroupName
-
-    $extension = Get-VMssExtension -VMss $scalesetObject -ExtensionType $ExtensionType
     if ($extension) {
         Write-Debug("$VMScaleSetName : $ExtensionType extension with name " + $extension.Name + " already installed. Provisioning State: " + $extension.ProvisioningState + " " + $extension.Settings)
         $extensionName = $extension.Name
     }
 
-    if ((!$extension) -and $PSCmdlet.ShouldProcess($VMScaleSetName, "install extension $ExtensionType")) {
+    if ($PSCmdlet.ShouldProcess($VMScaleSetName, "install extension $ExtensionType")) {
 
         $parameters = @{
             VirtualMachineScaleSet  = $scalesetObject
@@ -525,8 +516,14 @@ function Install-VMssExtension {
         Write-Verbose("$VMScaleSetName : Adding $ExtensionType with name $extensionName")
         $scalesetObject = Add-AzureRmVmssExtension @parameters
 
-        Write-Output("$VMScaleSetName Updating scale set with $ExtensionType extension")
-        $result = Update-AzureRmVmss -VMScaleSetName $VMScaleSetName -ResourceGroupName $VMScaleSetResourceGroupName -VirtualMachineScaleSet $scalesetObject
+        Write-Verbose("$VMScaleSetName Updating scale set with $ExtensionType extension")
+        try {
+            $result = Update-AzureRmVmss -VMScaleSetName $VMScaleSetName -ResourceGroupName $VMScaleSetResourceGroupName -VirtualMachineScaleSet $scalesetObject
+        } catch {
+            $message = "$VMScaleSetName : failed updating scale set with $ExtensionType extension"
+            $OnboardingStatus.Failed += $message
+            throw $_
+        }
         if ($result -and $result.ProvisioningState -eq "Succeeded") {
             $message = "$VMScaleSetName : Successfully updated scale set with $ExtensionType extension"
             Write-Output($message)
@@ -534,8 +531,8 @@ function Install-VMssExtension {
         }
         else {
             $message = "$VMScaleSetName : failed updating scale set with $ExtensionType extension"
-            Write-Warning($message)
             $OnboardingStatus.Failed += $message
+            throw $message
         }
     }
 }
@@ -577,18 +574,17 @@ function Assign-VmssManagedIdentity {
     if ($VMssObject.Id -match "/subscriptions/([^/]+)/") {
         $vmssSubscriptionId = $matches[1]
     } else {
-        Write-Output($VMssObject.Name + ": Invalid Azure Resource Id")
-        throw $_
+        $message = $VMssObject.Name + ": Invalid Azure Resource Id"
+        throw $message
     }
     
     try {
         $userAssignedIdentityObject = Get-AzUserAssignedIdentity -ResourceGroupName $UserAssignedManagedIdentityResourceGroup -Name $UserAssignedManagedIdentityName
         if (!$userAssignedIdentityObject) {
-            throw $_
+            throw
         }
     } catch {
-        $message = "Exception : Failed to lookup managed identity $UserAssignedManagedIdentityName"
-        Write-Output ($message)
+        $message = "Failed to lookup managed identity $UserAssignedManagedIdentityName"
         $OnboardingStatus.Failed += $message
         throw $_
     }
@@ -596,8 +592,7 @@ function Assign-VmssManagedIdentity {
     try {
         $statusResult = Get-AzVmss -ResourceGroupName $VMssObject.ResourceGroupName -Name $VMssObject.Name
     } catch {
-        $message = "Exception : " + $VMssObject.Name + " : Failed to lookup VMss $UserAssignedManagedIdentityName"
-        Write-Output ($message)
+        $message = $VMssObject.Name + " : Failed to lookup VMss in " + $VMssObject.ResourceGroupName
         $OnboardingStatus.Failed += $message
         throw $_
     }
@@ -607,6 +602,7 @@ function Assign-VmssManagedIdentity {
     } else {
         try {
             $updateResult = Update-AzVMss -ResourceGroupName $VMssObject.ResourceGroupName `
+                                        -VMScaleSetName $VMssObject.Name `
                                         -VirtualMachineScaleSet $VMssObject `
                                         -IdentityType "UserAssigned" `
                                         -IdentityID $userAssignedIdentityObject.Id
@@ -630,32 +626,26 @@ function Assign-VmssManagedIdentity {
     }
     
     ##Assign roles to the provided managed identity.
-    try {
-        $targetScope = "/subscriptions/" + $vmssSubscriptionId + "/resourceGroups/" + $VMssObject.ResourceGroupName
-        $roleDefinitionList = @("Virtual Machine Contributor", "Azure Connected Machine Resource Administrator", "Log Analytics Contributor")
-        foreach ($role in $roleDefinitionList) {
-            $roleAssignmentFound = Get-AzRoleAssignment -ObjectId $userAssignedIdentityObject.principalId -RoleDefinitionName $role -Scope $targetScope
-            if (!$roleAssignmentFound) {
-                Write-Debug ("Scope $targetScope : assigning role $role")
-                try {
-                    $result = New-AzRoleAssignment -ObjectId $userAssignedIdentityObject.principalId -RoleDefinitionName $role -Scope $targetScope
-                    Write-Output ("Scope $targetScope : role assignment for $UserAssignedManagedIdentityName with $role succeeded")
-                }
-                catch {
-                    Write-Output("Scope $targetScope : role assignment with $role failed")
-                    throw $_
-                }
-            } else {
-                Write-Debug ("Scope $targetScope : role $role already set")
+    $targetScope = "/subscriptions/" + $vmssSubscriptionId + "/resourceGroups/" + $VMssObject.ResourceGroupName
+    $roleDefinitionList = @("Virtual Machine Contributor", "Azure Connected Machine Resource Administrator", "Log Analytics Contributor")
+    foreach ($role in $roleDefinitionList) {
+        $roleAssignmentFound = Get-AzRoleAssignment -ObjectId $userAssignedIdentityObject.principalId -RoleDefinitionName $role -Scope $targetScope
+        if (!$roleAssignmentFound) {
+            Write-Debug ("Scope $targetScope : assigning role $role")
+            try {
+                $result = New-AzRoleAssignment -ObjectId $userAssignedIdentityObject.principalId -RoleDefinitionName $role -Scope $targetScope
+                Write-Output ("Scope $targetScope : role assignment for $UserAssignedManagedIdentityName with $role succeeded")
             }
+            catch {
+                $message = "Scope $targetScope : role assignment with $role failed"
+                throw $message
+            }
+        } else {
+            Write-Debug ("Scope $targetScope : role $role already set")
         }
     }
-    catch {
-        Write-Output ("$targetScope : Exception assigning $role")
-        throw $_
-    }
 
-    ##Assigned Managed identity to Azure Monitoring Agent
+    ##Assign Managed identity to Azure Monitoring Agent
     $amaPublicSettings.authentication.managedIdentity.'identifier-value' = $userAssignedIdentityObject.Id   
 }
 
@@ -671,18 +661,17 @@ function Assign-VmManagedIdentity {
     if ($VMObject.Id -match "/subscriptions/([^/]+)/") {
         $vmSubscriptionId = $matches[1]
     } else {
-        Write-Output($VMObject.Name + ": Invalid Azure Resource Id")
-        throw $_
+        $message = $VMObject.Name + ": Invalid Azure Resource Id"
+        throw $message
     }
 
     try {
         $userAssignedIdentityObject = Get-AzUserAssignedIdentity -ResourceGroupName $UserAssignedManagedIdentityResourceGroup -Name $UserAssignedManagedIdentityName
         if (!$userAssignedIdentityObject) {
-            throw $_
+            throw
         }
     } catch {
-        $message = "Exception : Failed to lookup managed identity $UserAssignedManagedIdentityName"
-        Write-Output ($message)
+        $message = "Failed to lookup managed identity $UserAssignedManagedIdentityName"
         $OnboardingStatus.Failed += $message
         throw $_
     }
@@ -690,13 +679,13 @@ function Assign-VmManagedIdentity {
     try {
         $statusResult = Get-AzVM -ResourceGroupName $VMObject.ResourceGroupName -Name $VMObject.Name    
     } catch {
-        $message = "Exception : " + $VMObject.Name + " : Failed to get status of VM $UserAssignedManagedIdentityName"
-        Write-Output ($message)
+        $message = $VMObject.Name + " : Failed to lookup VM in " + $VMObject.ResourceGroupName
         $OnboardingStatus.Failed += $message
         throw $_
     }
     if ($statusResult -and ($statusResult.Identity.Type -eq "UserAssigned") -and (Util-Assign-ManagedIdentity -VMObject $statusResult -UserAssignedManagedIdentyId $userAssignedIdentityObject.Id)) {
         $message = $VMObject.Name + " : Already assigned with managed identity : " + $UserAssignedManagedIdentityName
+        $OnboardingStatus.AlreadyOnboarded += $message
         Write-Output($message)
     } else {
         try {
@@ -705,8 +694,7 @@ function Assign-VmManagedIdentity {
                                         -IdentityType "UserAssigned" `
                                         -IdentityID $userAssignedIdentityObject.Id
         } catch {
-            $message = "Exception : " + $VMObject.Name + ": Failed to assign user managed identity = " + $UserAssignedManagedIdentityName
-            Write-Output ($message)
+            $message = $VMObject.Name + ": Failed to assign user managed identity = " + $UserAssignedManagedIdentityName
             $OnboardingStatus.Failed += $message
             throw $_
         }
@@ -718,45 +706,43 @@ function Assign-VmManagedIdentity {
             $statusCode = $updateResult.StatusCode
             $ErrorMessage = $updateResult.ReasonPhrase
             $message = $VMObject.Name + ": Failed to assign managed identity : " + $UserAssignedManagedIdentityName + ". StatusCode = $statusCode. ErrorMessage = $ErrorMessage."
-            Write-Output($message)
             $OnboardingStatus.Failed += $message
+            throw $message
         }
     }
     
     ##Assign roles to the provided managed identity.
-    try {
-        $targetScope = "/subscriptions/" + $vmSubscriptionId + "/resourceGroups/" + $VM.ResourceGroupName
-        $roleDefinitionList = @("Virtual Machine Contributor", "Azure Connected Machine Resource Administrator", "Log Analytics Contributor")
-        foreach ($role in $roleDefinitionList) {
-            $roleAssignmentFound = Get-AzRoleAssignment -ObjectId $userAssignedIdentityObject.principalId -RoleDefinitionName $role -Scope $targetScope
-            if (!$roleAssignmentFound) {
-                Write-Debug ("Scope $targetScope : assigning role $role")
-                try {
-                    $result = New-AzRoleAssignment -ObjectId $userAssignedIdentityObject.principalId -RoleDefinitionName $role -Scope $targetScope
-                    Write-Output ("Scope $targetScope : role assignment for $UserAssignedManagedIdentityName with $role succeeded")
-                }
-                catch {
-                    Write-Output("Scope $targetScope : role assignment with $role failed")
-                    throw $_
-                }
-            } else {
-                Write-Debug ("Scope $targetScope : role $role found")
+    $targetScope = "/subscriptions/" + $vmSubscriptionId + "/resourceGroups/" + $VM.ResourceGroupName
+    $roleDefinitionList = @("Virtual Machine Contributor", "Azure Connected Machine Resource Administrator", "Log Analytics Contributor")
+    foreach ($role in $roleDefinitionList) {
+        $roleAssignmentFound = Get-AzRoleAssignment -ObjectId $userAssignedIdentityObject.principalId -RoleDefinitionName $role -Scope $targetScope
+        if (!$roleAssignmentFound) {
+            Write-Debug ("Scope $targetScope : assigning role $role")
+            try {
+                $result = New-AzRoleAssignment -ObjectId $userAssignedIdentityObject.principalId -RoleDefinitionName $role -Scope $targetScope
+                Write-Output ("Scope $targetScope : role assignment for $UserAssignedManagedIdentityName with $role succeeded")
             }
+            catch {
+                $message = "Scope $targetScope : role assignment with $role failed"
+                $OnboardingStatus.Failed += $message
+                throw $_
+            }
+        } else {
+            Write-Debug ("Scope $targetScope : role $role found")
         }
     }
-    catch {
-        Write-Output ("$targetScope : Exception assigning $role")
-        throw $_
-    }
-
-    ##Assigned Managed identity to Azure Monitoring Agent
+    
+    ##Assign Managed identity to Azure Monitoring Agent
     $amaPublicSettings.authentication.managedIdentity.'identifier-value' = $userAssignedIdentityObject.Id   
 }
 
 function Display-Exception {
     try {
         try { "ExceptionClass = $($_.Exception.GetType().Name)" | Write-Output } catch { }
-        try { "ExceptionMessage:`r`n$($_.Exception.Message)`r`n" | Write-Output } catch { }
+        if ($OnboardingStatus.Failed.Length -ne 0) {
+            try { "ExceptionMessage:`r`n$($OnboardingStatus.Failed[-1])`r`n" | Write-Output } catch { }
+        }
+        try { "ExceptionDetailedMessage:`r`n$($_.Exception.Message)`r`n" | Write-Output } catch { }
         try { "StackTrace:`r`n$($_.Exception.StackTrace)`r`n" | Write-Output } catch { }
         try { "ScriptStackTrace:`r`n$($_.ScriptStackTrace)`r`n" | Write-Output } catch { }
         try { "Exception.HResult = 0x{0,0:x8}" -f $_.Exception.HResult | Write-Output } catch { }
@@ -1069,8 +1055,7 @@ Foreach ($vm in $VMs) {
                 -ReInstall $ReInstall `
                 -OnboardingStatus $OnboardingStatus
             
-            if (!$DcrResourceId -or ($DcrResourceId -and $ProcessAndDependencies)) {
-                
+            if (!$DcrResourceId -or ($DcrResourceId -and $ProcessAndDependencies)) {   
                 Install-VMExtension `
                     -VMName $vmName `
                     -VMLocation $vmLocation `
@@ -1088,23 +1073,26 @@ Foreach ($vm in $VMs) {
             -TargetResourceId $vmId `
             -TargetName $vmName `
             -DcrResourceId $DcrResourceId `
+
+        $message = "$TargetName : Successfully onboarded VMInsights"
+        Write-Output ($message)
+        #reached this point - indicates all previous deployments succeeded
+        $OnboardingStatus.Succeeded += $message
     }
     catch {
         Display-Exception $_
     }
 }
 
-#TBD
-#Write-Output("`nSummary:")
-#Write-Output("`nAlready Onboarded: (" + $OnboardingStatus.AlreadyOnboarded.Count + ")")
-#$OnboardingStatus.AlreadyOnboarded  | ForEach-Object { Write-Output ($_) }
-#Write-Output("`nSucceeded: (" + $OnboardingStatus.Succeeded.Count + ")")
-#$OnboardingStatus.Succeeded | ForEach-Object { Write-Output ($_) }
-#Write-Output("`nDifferent Setting: (" + $OnboardingStatus.DifferentSetting.Count + ")")
-#$OnboardingStatus.DifferentSett | ForEach-Object { Write-Output ($_) }
-#Write-Output("`nNot running - start VM to configure: (" + $OnboardingStatus.NotRunning.Count + ")")
-#$OnboardingStatus.NotRunning  | ForEach-Object { Write-Output ($_) }
-#Write-Output("`nVM Scale Set needs update: (" + $OnboardingStatus.VMScaleSetNeedsUpdate.Count + ")")
-#$OnboardingStatus.VMScaleSetNeedsUpdate  | ForEach-Object { Write-Output ($_) }
-#Write-Output("`nFailed: (" + $OnboardingStatus.Failed.Count + ")")
-#$OnboardingStatus.Failed | ForEach-Object { Write-Output ($_) }
+
+Write-Output("`nSummary:")
+Write-Output("`nAlready Onboarded: (" + $OnboardingStatus.AlreadyOnboarded.Count + ")")
+$OnboardingStatus.AlreadyOnboarded  | ForEach-Object { Write-Output ($_) }
+Write-Output("`nSucceeded: (" + $OnboardingStatus.Succeeded.Count + ")")
+$OnboardingStatus.Succeeded | ForEach-Object { Write-Output ($_) }
+Write-Output("`nNot running - start VM to configure: (" + $OnboardingStatus.NotRunning.Count + ")")
+$OnboardingStatus.NotRunning  | ForEach-Object { Write-Output ($_) }
+Write-Output("`nVM Scale Set needs update: (" + $OnboardingStatus.VMScaleSetNeedsUpdate.Count + ")")
+$OnboardingStatus.VMScaleSetNeedsUpdate  | ForEach-Object { Write-Output ($_) }
+Write-Output("`nFailed: (" + $OnboardingStatus.Failed.Count + ")")
+$OnboardingStatus.Failed | ForEach-Object { Write-Output ($_) }
