@@ -373,21 +373,42 @@ function Install-VMExtension {
         $extensionName = $extension.Name
         $message = "$VMName : $ExtensionType extension with name " + $extension.Name + " already installed. Provisioning State: " + $extension.ProvisioningState + " " + $extension.Settings
         Write-Output ($message)
-        if ($mmaExtensionMap.Values -contains $ExtensionType -and $extension.Settings) {
-            if ($extension.Settings -and $extension.Settings.ToString().Contains($PublicSettings.workspaceId)) {
-                $message = "$VMName : Extension $ExtensionType already configured for this workspace. Provisioning State: " + $extension.ProvisioningState + " " + $extension.Settings
-                $OnboardingStatus.AlreadyOnboarded += $message
-                Write-Output($message)
-                return
-            } else {
-                if ($ReInstall -ne $true) {
-                    $message = "$VMName : Extension $ExtensionType present, run with -ReInstall again to move to new workspace. Provisioning State: " + $extension.ProvisioningState + " " + $extension.Settings
-                    $OnboardingStatus.ReInstallRequired += $message
-                    Write-Output ($message)
+        if ($extension.Settings) {
+            if ($mmaExtensionMap.Values -contains $ExtensionType) {
+                if ($extension.Settings -and $extension.Settings.ToString().Contains($PublicSettings.workspaceId)) {
+                    $message = "$VMName : Extension $ExtensionType already configured for this workspace. Provisioning State: " + $extension.ProvisioningState + " " + $extension.Settings
+                    $OnboardingStatus.AlreadyOnboarded += $message
+                    Write-Output($message)
+                    return
+                } else {
+                    if ($ReInstall -ne $true) {
+                        $message = "$VMName : Extension $ExtensionType present, run with -ReInstall again to move to new workspace. Provisioning State: " + $extension.ProvisioningState + " " + $extension.Settings
+                        $OnboardingStatus.ReInstallRequired += $message
+                        Write-Output ($message)
+                        return
+                    }
+                } 
+            }
+
+            if ($amaExtensionMap.Values -contains $ExtensionType) {
+                if ($extension.Settings -and $extension.Settings.ToString().Contains($PublicSettings.authentication.managedIdentity.'identifier-value')) {
+                    $message = "$VMName : Extension $ExtensionType already configured with this user assigned managed identity. Provisioning State: " + $extension.ProvisioningState + "`n" + $extension.Settings
+                    $OnboardingStatus.AlreadyOnboarded += $message
+                    Write-Output($message)
                     return
                 }
-            } 
+            }
+
+            if ($daExtensionMap.Values -contains $ExtensionType) {
+                if ($extension.Settings -and $extension.Settings.ToString().Contains($PublicSettings.enableAMA)) {
+                    $message = "$VMName : Extension $ExtensionType already configured with AMA enabled. Provisioning State: " + $extension.ProvisioningState + " " + $extension.Settings
+                    $OnboardingStatus.AlreadyOnboarded += $message
+                    Write-Output($message)
+                    $ReInstall = $false
+                }
+            }
         }
+
     }
 
     if ($PSCmdlet.ShouldProcess($VMName, "install extension $ExtensionType")) {
