@@ -170,6 +170,36 @@ param(
     [Parameter(mandatory = $true, ParameterSetName = 'AzureMonitoringAgent')][string]$UserAssignedManagedIdentityName
     )
 
+# Log Analytics Extension constants
+Set-Variable -Name mmaExtensionMap -Option Constant -Value @{ "Windows" = "MicrosoftMonitoringAgent"; "Linux" = "OmsAgentForLinux" }
+Set-Variable -Name mmaExtensionVersionMap -Option Constant -Value @{ "Windows" = "1.0"; "Linux" = "1.6" }
+Set-Variable -Name mmaExtensionPublisher -Option Constant -Value "Microsoft.EnterpriseCloud.Monitoring"
+Set-Variable -Name mmaExtensionName -Option Constant -Value "MMAExtension"
+
+# Azure Monitoring Agent Extension constants
+Set-Variable -Name amaExtensionMap -Option Constant -Value @{ "Windows" = "AzureMonitorWindowsAgent"; "Linux" = "AzureMonitorLinuxAgent" }
+Set-Variable -Name amaExtensionVersionMap -Option Constant -Value @{ "Windows" = "1.16"; "Linux" = "1.16" }
+Set-Variable -Name amaExtensionPublisher -Option Constant -Value "Microsoft.Azure.Monitor"
+Set-Variable -Name amaExtensionName -Option Constant -Value "AzureMonitoringAgent"
+Set-Variable -Name amaPublicSettings = @{'authentication' = @{
+                        'managedIdentity' = @{
+                        'identifier-name' = 'mi_res_id'
+                        }
+                      }
+                    }
+$amaProtectedSettings = @{}
+
+# Dependency Agent Extension constants
+$daExtensionMap = @{ "Windows" = "DependencyAgentWindows"; "Linux" = "DependencyAgentLinux" }
+$daExtensionVersionMap = @{ "Windows" = "9.10"; "Linux" = "9.10" }
+$daExtensionPublisher = "Microsoft.Azure.Monitoring.DependencyAgent"
+$daExtensionName = "DAExtension"
+
+# Data Collection Rule Association constants
+$dcraExtensionType = "Microsoft.Insights/dataCollectionRules"
+$dcraName = "/Microsoft.Insights/VMInsights-Dcr-Association"
+$dcraExtensionVersion = "2019-11-01-preview"
+
 #
 # FUNCTIONS
 #
@@ -226,6 +256,7 @@ function Remove-VMssExtension {
         }
         catch {
             Write-Output ("$VMName : Failed to remove extension : $ExtensionType")
+            $OnboardingStatus.Failed += $message
             throw $_
         }
         if ($removeResult -and $removeResult.IsSuccessStatusCode) {
@@ -323,8 +354,7 @@ function Install-DCRAssociation {
         try {
             $dcrassociation = New-AzDataCollectionRuleAssociation -TargetResourceId $TargetResourceId -AssociationName $dcrassociationName -RuleId $DcrResourceId
             if ($dcrassociation -is [ErrorResponseCommonV2Exception]) {
-                #DCR Association creation failed.
-                #Tmp fix task:-
+                #Tmp fix task:- 21191002
                 throw
             }
         } catch {
@@ -399,7 +429,7 @@ function Install-VMExtension {
                 if ($extension.Settings -and $extension.Settings.ToString().Contains($PublicSettings.enableAMA)) {
                     $message = "$VMName : Extension $ExtensionType already configured with AMA enabled. Provisioning State: " + $extension.ProvisioningState + " " + $extension.Settings
                     Write-Output($message)
-                    $ReInstall = $false
+                    return
                 }
             }
         }
@@ -467,7 +497,6 @@ function Get-VMssExtension {
         if ($ExtensionType -eq $extension.Type) {
             $VMScaleSetName = $VMss.Name
             Write-Verbose("$VMScaleSetName : Extension: $ExtensionType found on VMSS")
-            $extension
             return
         }
     }
@@ -800,7 +829,6 @@ else {
 
 $VMs = @()
 $ScaleSets = @()
-$success = 0
 # To report on overall status
 $OnboardingSucceeded = @()
 $OnboardingFailed = @()
@@ -813,39 +841,9 @@ $OnboardingStatus = @{
     VMScaleSetNeedsUpdate = $VMScaleSetNeedsUpdate;
 }
 
-# Log Analytics Extension constants
-$mmaExtensionMap = @{ "Windows" = "MicrosoftMonitoringAgent"; "Linux" = "OmsAgentForLinux" }
-$mmaExtensionVersionMap = @{ "Windows" = "1.0"; "Linux" = "1.6" }
-$mmaExtensionPublisher = "Microsoft.EnterpriseCloud.Monitoring"
-$mmaExtensionName = "MMAExtension"
 $mmaPublicSettings = @{"workspaceId" = $WorkspaceId; "stopOnMultipleConnections" = "true"}
 $mmaProtectedSettings = @{"workspaceKey" = $WorkspaceKey}
-
-# Azure Monitoring Agent Extension constants
-$amaExtensionMap = @{ "Windows" = "AzureMonitorWindowsAgent"; "Linux" = "AzureMonitorLinuxAgent" }
-$amaExtensionVersionMap = @{ "Windows" = "1.16"; "Linux" = "1.16" }
-$amaExtensionPublisher = "Microsoft.Azure.Monitor"
-$amaExtensionName = "AzureMonitoringAgent"
-$amaPublicSettings = @{'authentication' = @{
-                        'managedIdentity' = @{
-                        'identifier-name' = 'mi_res_id'
-                        }
-                      }
-                    }
-$amaProtectedSettings = @{}
-
-# Dependency Agent Extension constants
-$daExtensionMap = @{ "Windows" = "DependencyAgentWindows"; "Linux" = "DependencyAgentLinux" }
-$daExtensionVersionMap = @{ "Windows" = "9.10"; "Linux" = "9.10" }
-$daExtensionPublisher = "Microsoft.Azure.Monitoring.DependencyAgent"
-$daExtensionName = "DAExtension"
 $daPublicSettings = @{}
-
-# Data Collection Rule Association constants
-$dcraExtensionType = "Microsoft.Insights/dataCollectionRules"
-$dcraName = "/Microsoft.Insights/VMInsights-Dcr-Association"
-$dcraExtensionVersion = "2019-11-01-preview"
-
 
 if ($PolicyAssignmentName) {
     Write-Output("Getting list of VM's from PolicyAssignmentName: " + $PolicyAssignmentName)
