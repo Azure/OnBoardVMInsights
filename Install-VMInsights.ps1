@@ -79,17 +79,13 @@ For Health supported is: "East US","eastus","West Central US","westcentralus", "
 If specified will only take from this source.
 
 .PARAMETER ReInstall
-<Optional> If for a VM/VM Scale Set Log Analytics Agent is already configured for a different workspace, set this to change to the new workspace
-If got s VM/VM Scale Set VM is associated with a different DCRId.
+<Optional> If for a VM/VM Scale Set, the Log Analytics Agent is already configured for a different workspace, provide this parameter to switch to the new workspace
 
 .PARAMETER TriggerVmssManualVMUpdate
 <Optional> Set this flag to trigger update of VM instances in a scale set whose upgrade policy is set to Manual
 
 .PARAMETER Approve
 <Optional> Gives the approval for the installation to start with no confirmation prompt for the listed VM's/VM Scale Sets
-
-.PARAMETER MonitoringAgent
-Supported values: MicrosoftMonotoringAgent, AzureMonitoringAgent
 
 .PARAMETER UserAssignedManagedIdentityResourceId
 Azure Resource Id of UserAssignedManagedIdentity needed for Azure Monitor Agent
@@ -181,13 +177,13 @@ Set-Variable -Name amaExtensionMap -Option Constant -Value @{ "Windows" = "Azure
 Set-Variable -Name amaExtensionVersionMap -Option Constant -Value @{ "Windows" = "1.16"; "Linux" = "1.16" }
 Set-Variable -Name amaExtensionPublisher -Option Constant -Value "Microsoft.Azure.Monitor"
 Set-Variable -Name amaExtensionName -Option Constant -Value "AzureMonitoringAgent"
-Set-Variable -Name amaPublicSettings = @{'authentication' = @{
+Set-Variable -Name amaPublicSettings -Option Constant -Value @{'authentication' = @{
                         'managedIdentity' = @{
                         'identifier-name' = 'mi_res_id'
                         }
                       }
                     }
-$amaProtectedSettings = @{}
+Set-Variable -Name amaProtectedSettings = @{}
 
 # Dependency Agent Extension constants
 $daExtensionMap = @{ "Windows" = "DependencyAgentWindows"; "Linux" = "DependencyAgentLinux" }
