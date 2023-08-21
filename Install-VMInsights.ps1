@@ -130,7 +130,7 @@ param(
             "Australia Southeast", "australiasoutheast",
             "Brazil South", "brazilsouth",
             "Brazil Southeast", "brazilsoutheast",
-            "Canada Central", "canadacentral", 
+            "Canada Central", "canadacentral",
             "Central India", "centralindia",
             "Central US", "centralus",
             "East Asia", "eastasia",
@@ -211,7 +211,7 @@ function Remove-VMssExtension {
         [Parameter(mandatory = $true)][string]$ExtensionType,
         [Parameter(mandatory = $true)][string]$ExtensionName
     )
-    
+
     try {
         $extension = Get-VMssExtension -VMName $VMName -VMResourceGroup $VMResourceGroupName -ExtensionType $ExtensionType
     }
@@ -251,7 +251,7 @@ function Remove-VMExtension {
         [Parameter(mandatory = $true)][string]$ExtensionType,
         [Parameter(mandatory = $true)][string]$ExtensionName
     )
-    
+
     try {
         $extension = Get-VMExtension -VMName $VMName -VMResourceGroup $VMResourceGroupName -ExtensionType $ExtensionType
     } catch {
@@ -315,7 +315,7 @@ function Install-DCRAssociation {
         $OnboardingStatus.Failed += $message
         throw $_
     }
-    
+
     #The Customer is responsible to uninstall the DCR Association themselves
     if ($PSCmdlet.ShouldProcess($TargetName, "Install Data Collection Rule Association")) {
         $dcrassociationName = "VM-Insights-$TargetName-Association"
@@ -358,7 +358,7 @@ function Install-VMExtension {
 
     # Use supplied name unless already deployed, use same name
     $extensionName = $ExtensionName
-    
+
     try {
         $extension = Get-VMExtension -VMName $VMName -VMResourceGroup $VMResourceGroupName -ExtensionType $ExtensionType
         $extensionName = $extension.Name
@@ -384,7 +384,7 @@ function Install-VMExtension {
                         Write-Output ($message)
                         return
                     }
-                } 
+                }
             }
 
             if ($amaExtensionMap.Values -contains $ExtensionType) {
@@ -433,7 +433,7 @@ function Install-VMExtension {
                                -ExtensionType $ExtensionType `
                                -ExtensionName $ExtensionName
         }
-        
+
         Write-Verbose("$VMName : Deploying/Updating $ExtensionType with name $extensionName")
         try {
             $result = Set-AzVMExtension @parameters
@@ -449,7 +449,7 @@ function Install-VMExtension {
             throw $_
         }
     }
-                                               
+
 }
 
 function Get-VMssExtension {
@@ -492,7 +492,7 @@ function Install-VMssExtension {
         [Parameter(mandatory = $false)][hashtable]$ProtectedSettings,
         [Parameter(mandatory = $false)][boolean]$ReInstall = $false
     )
-    
+
     # Use supplied name unless already deployed, use same name
     $extensionName = $ExtensionName
     try {
@@ -565,14 +565,14 @@ function Util-Assign-ManagedIdentity {
         [Parameter(Mandatory = $true, ParameterSetName = "VirtualMachine")][Microsoft.Azure.Commands.Compute.Models.PSVirtualMachine]$VMObject,
         [Parameter(Mandatory = $true, ParameterSetName = "VirtualMachineScaleSet")][Microsoft.Azure.Commands.Compute.Automation.Models.PSVirtualMachineScaleSet]$VMssObject,
         [Parameter(Mandatory = $true, ParameterSetName = "VirtualMachineScaleSet")][switch]$isScaleset,
-        [Parameter(Mandatory = $true)][string]$UserAssignedManagedIdentyId 
+        [Parameter(Mandatory = $true)][string]$UserAssignedManagedIdentyId
     )
     if ($isScaleset) {
         $userAssignedIdentitiesList = $VMssObject.Identity.UserAssignedIdentities
     } else {
         $userAssignedIdentitiesList = $VMObject.Identity.UserAssignedIdentities
     }
-    
+
     foreach ($userAssignDict in $userAssignedIdentitiesList) {
         if ($userAssignDict.Keys -eq $UserAssignedManagedIdentyId) {
             return $True
@@ -598,7 +598,7 @@ function Assign-VmssManagedIdentity {
         $message = $VMssObject.Name + ": Invalid Azure Resource Id"
         throw $message
     }
-    
+
     try {
         $userAssignedIdentityObject = Get-AzUserAssignedIdentity -ResourceGroupName $UserAssignedManagedIdentityResourceGroup -Name $UserAssignedManagedIdentityName
         if (!$userAssignedIdentityObject) {
@@ -609,7 +609,7 @@ function Assign-VmssManagedIdentity {
         $OnboardingStatus.Failed += $message
         throw $_
     }
-    
+
     try {
         $statusResult = Get-AzVmss -ResourceGroupName $VMssObject.ResourceGroupName -Name $VMssObject.Name
     } catch {
@@ -618,7 +618,7 @@ function Assign-VmssManagedIdentity {
         throw $_
     }
     if ($statusResult -and ($statusResult.Identity.Type -eq "UserAssigned") -and (Util-Assign-ManagedIdentity -isScaleset -VMssObject $statusResult -UserAssignedManagedIdentyId $userAssignedIdentityObject.Id)) {
-        $message = $VMssObject.Name + ": Already assigned with user managed identity : $UserAssignedManagedIdentityName" 
+        $message = $VMssObject.Name + ": Already assigned with user managed identity : $UserAssignedManagedIdentityName"
         Write-Verbose($message)
     } else {
         try {
@@ -645,7 +645,7 @@ function Assign-VmssManagedIdentity {
             $OnboardingStatus.Failed += $message
         }
     }
-    
+
     ##Assign roles to the provided managed identity.
     $targetScope = "/subscriptions/" + $vmssSubscriptionId + "/resourceGroups/" + $VMssObject.ResourceGroupName
     $roleDefinitionList = @("Virtual Machine Contributor", "Azure Connected Machine Resource Administrator", "Log Analytics Contributor")
@@ -667,7 +667,7 @@ function Assign-VmssManagedIdentity {
     }
 
     ##Assign Managed identity to Azure Monitoring Agent
-    $amaPublicSettings.authentication.managedIdentity.'identifier-value' = $userAssignedIdentityObject.Id   
+    $amaPublicSettings.authentication.managedIdentity.'identifier-value' = $userAssignedIdentityObject.Id
 }
 
 function Assign-VmManagedIdentity {
@@ -698,7 +698,7 @@ function Assign-VmManagedIdentity {
     }
 
     try {
-        $statusResult = Get-AzVM -ResourceGroupName $VMObject.ResourceGroupName -Name $VMObject.Name    
+        $statusResult = Get-AzVM -ResourceGroupName $VMObject.ResourceGroupName -Name $VMObject.Name
     } catch {
         $message = $VMObject.Name + " : Failed to lookup VM in " + $VMObject.ResourceGroupName
         $OnboardingStatus.Failed += $message
@@ -730,7 +730,7 @@ function Assign-VmManagedIdentity {
             throw $message
         }
     }
-    
+
     ##Assign roles to the provided managed identity.
     $targetScope = "/subscriptions/" + $vmSubscriptionId + "/resourceGroups/" + $VM.ResourceGroupName
     $roleDefinitionList = @("Virtual Machine Contributor", "Azure Connected Machine Resource Administrator", "Log Analytics Contributor")
@@ -751,9 +751,9 @@ function Assign-VmManagedIdentity {
             Write-Verbose ("Scope $targetScope : role $role found")
         }
     }
-    
+
     ##Assign Managed identity to Azure Monitoring Agent
-    $amaPublicSettings.authentication.managedIdentity.'identifier-value' = $userAssignedIdentityObject.Id   
+    $amaPublicSettings.authentication.managedIdentity.'identifier-value' = $userAssignedIdentityObject.Id
 }
 
 function Display-Exception {
@@ -766,7 +766,7 @@ function Display-Exception {
         try { "StackTrace:`r`n$($_.Exception.StackTrace)`r`n" | Write-Output } catch { }
         try { "ScriptStackTrace:`r`n$($_.ScriptStackTrace)`r`n" | Write-Output } catch { }
         try { "Exception.HResult = 0x{0,0:x8}" -f $_.Exception.HResult | Write-Output } catch { }
-    } 
+    }
     catch {
         #silently ignore
     }
@@ -776,7 +776,7 @@ function Display-Exception {
 # Main Script
 #
 
-#   
+#
 # First make sure authenticed and Select the subscription supplied
 #
 $account = Get-AzureRmContext
@@ -791,7 +791,7 @@ else {
     }
     else {
         Write-Output("Current Subscription:")
-        
+
         $account
         Write-Output("Changing to subscription: $SubscriptionId")
         Select-AzureRmSubscription -SubscriptionId $SubscriptionId
@@ -967,7 +967,7 @@ Foreach ($vm in $VMs) {
             $maPublicSettings = $mmaPublicSettings
             $maProtectedSettings = $mmaProtectedSettings
         }
-        
+
         if (! $maExt) {
             Write-Warning("$vmName : has an unsupported OS: $osType")
             continue
@@ -986,7 +986,7 @@ Foreach ($vm in $VMs) {
         Write-Verbose("OS Type: $ext")
         Write-Verbose("Dependency Agent: $daExt, HandlerVersion: $daExtVersion")
         Write-Verbose("Monitoring Agent: $mmaExt, HandlerVersion: $maExtVersion")
-       
+
         if ($DcrResourceId) {
             if ($isScaleset) {
                 Assign-VmssManagedIdentity -VMssObject $vm `
@@ -998,7 +998,7 @@ Foreach ($vm in $VMs) {
                     -UserAssignedManagedIdentityName $UserAssignedManagedIdentityName
             }
         }
-        
+
         if ($isScaleset) {
             Install-VMssExtension `
                 -VMScaleSetName $vmName `
@@ -1056,7 +1056,7 @@ Foreach ($vm in $VMs) {
                 $OnboardingStatus.NotRunning += $message
                 continue
             }
-            
+
             Install-VMExtension `
                 -VMName $vmName `
                 -VMLocation $vmLocation `
@@ -1069,8 +1069,8 @@ Foreach ($vm in $VMs) {
                 -ProtectedSettings $maProtectedSettings `
                 -ReInstall $ReInstall `
                 -OnboardingStatus $OnboardingStatus
-            
-            if (!$DcrResourceId -or ($DcrResourceId -and $ProcessAndDependencies)) {   
+
+            if (!$DcrResourceId -or ($DcrResourceId -and $ProcessAndDependencies)) {
                 Install-VMExtension `
                     -VMName $vmName `
                     -VMLocation $vmLocation `
