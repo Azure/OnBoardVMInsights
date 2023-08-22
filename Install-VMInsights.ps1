@@ -224,11 +224,11 @@ function Remove-VMExtension {
     }
 
     try {
-        $removeResult = Remove-AzureRmVMExtension -ResourceGroupName $VMResourceGroupName -VMName $VMName -Name $ExtensionName -Force
+        $removeResult = Remove-AzVMExtension -ResourceGroupName $VMResourceGroupName -VMName $VMName -Name $ExtensionName -Force
     } catch {
         $message = "$VMName : Failed to remove extension : $ExtensionType"
         $OnboardingStatus.Failed += $message
-        throw $message
+        throw $_
     }
     if ($removeResult) {
         if ($removeResult.IsSuccessStatusCode) {
@@ -240,12 +240,12 @@ function Remove-VMExtension {
             $ErrorMessage = $removeResult.ReasonPhrase
             $message = "$VMName : Failed to remove $ExtensionType. StatusCode = $statusCode. ErrorMessage = $ErrorMessage."
             $OnboardingStatus.Failed += $message
-            throw $message
+            throw
         }
     } else {
         $message = "$VMName : Failed to remove $ExtensionType"
         $OnboardingStatus.Failed += $message
-        throw $message
+        throw
     }
 }
 
@@ -330,41 +330,39 @@ function Install-VMExtension {
         throw $_
     }
 
-    if (!$extension) {
-        return
-    }
+    if ($extension) {
+        $extensionName = $extension.Name
+        $message = "$VMName : $ExtensionType extension with name " + $extension.Name + " already installed. Provisioning State: " + $extension.ProvisioningState + " " + $extension.Settings
+        Write-Output ($message)
+        if ($extension.Settings) {
+            if ($mmaExtensionMap.Values -contains $ExtensionType) {
+                if ($extension.Settings -and $extension.Settings.ToString().Contains($PublicSettings.workspaceId)) {
+                    $message = "$VMName : Extension $ExtensionType already configured for this workspace. Provisioning State: " + $extension.ProvisioningState + " " + $extension.Settings
+                    Write-Output($message)
+                    return
+                } else {
+                    if ($ReInstall -ne $true) {
+                        $message = "$VMName : Extension $ExtensionType present, run with -ReInstall again to move to new workspace. Provisioning State: " + $extension.ProvisioningState + " " + $extension.Settings
+                        Write-Output ($message)
+                        return
+                    }
+                }
+            }
 
-    $extensionName = $extension.Name
-    $message = "$VMName : $ExtensionType extension with name " + $extension.Name + " already installed. Provisioning State: " + $extension.ProvisioningState + " " + $extension.Settings
-    Write-Output ($message)
-    if ($extension.Settings) {
-        if ($mmaExtensionMap.Values -contains $ExtensionType) {
-            if ($extension.Settings -and $extension.Settings.ToString().Contains($PublicSettings.workspaceId)) {
-                $message = "$VMName : Extension $ExtensionType already configured for this workspace. Provisioning State: " + $extension.ProvisioningState + " " + $extension.Settings
-                Write-Output($message)
-                return
-            } else {
-                if ($ReInstall -ne $true) {
-                    $message = "$VMName : Extension $ExtensionType present, run with -ReInstall again to move to new workspace. Provisioning State: " + $extension.ProvisioningState + " " + $extension.Settings
-                    Write-Output ($message)
+            if ($amaExtensionMap.Values -contains $ExtensionType) {
+                if ($extension.Settings -and $extension.Settings.ToString().Contains($PublicSettings.authentication.managedIdentity.'identifier-value')) {
+                    $message = "$VMName : Extension $ExtensionType already configured with this user assigned managed identity. Provisioning State: " + $extension.ProvisioningState + "`n" + $extension.Settings
+                    Write-Output($message)
                     return
                 }
             }
-        }
 
-        if ($amaExtensionMap.Values -contains $ExtensionType) {
-            if ($extension.Settings -and $extension.Settings.ToString().Contains($PublicSettings.authentication.managedIdentity.'identifier-value')) {
-                $message = "$VMName : Extension $ExtensionType already configured with this user assigned managed identity. Provisioning State: " + $extension.ProvisioningState + "`n" + $extension.Settings
-                Write-Output($message)
-                return
-            }
-        }
-
-        if ($daExtensionMap.Values -contains $ExtensionType) {
-            if ($extension.Settings -and $extension.Settings.ToString().Contains($PublicSettings.enableAMA)) {
-                $message = "$VMName : Extension $ExtensionType already configured with AMA enabled. Provisioning State: " + $extension.ProvisioningState + " " + $extension.Settings
-                Write-Output($message)
-                return
+            if ($daExtensionMap.Values -contains $ExtensionType) {
+                if ($extension.Settings -and $extension.Settings.ToString().Contains($PublicSettings.enableAMA)) {
+                    $message = "$VMName : Extension $ExtensionType already configured with AMA enabled. Provisioning State: " + $extension.ProvisioningState + " " + $extension.Settings
+                    Write-Output($message)
+                    return
+                }
             }
         }
     }
@@ -494,7 +492,7 @@ function Install-VMssExtension {
         else {
             $message = "$VMScaleSetName : failed updating scale set with $ExtensionType extension"
             $OnboardingStatus.Failed += $message
-            throw $message
+            throw
         }
     }
 }
