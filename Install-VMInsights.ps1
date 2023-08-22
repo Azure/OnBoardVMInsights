@@ -199,76 +199,6 @@ $dcraExtensionVersion = "2019-11-01-preview"
 #
 # FUNCTIONS
 #
-function Get-VMExtension {
-    <#
-	.SYNOPSIS
-	Return the VM extension of specified ExtensionType
-	#>
-    [CmdletBinding()]
-    param
-    (
-        [Parameter(Mandatory = $true)][string]$VMName,
-        [Parameter(mandatory = $true)][string]$vmResourceGroupName,
-        [Parameter(mandatory = $true)][string]$ExtensionType
-    )
-    try {
-        $vm = Get-AzureRmVM -Name $VMName -ResourceGroupName $vmResourceGroupName -DisplayHint Expand
-    } catch {
-        throw $_
-    }
-    $extensions = $vm.Extensions
-
-    foreach ($extension in $extensions) {
-        if ($ExtensionType -eq $extension.VirtualMachineExtensionType) {
-            Write-Verbose("$VMName : Extension: $ExtensionType found on VM")
-            $extension
-            return
-        }
-    }
-    Write-Verbose("$VMName : Extension: $ExtensionType not found on VM")
-}
-
-function Remove-VMssExtension {
-    [CmdletBinding(SupportsShouldProcess = $true)]
-    param
-    (
-        [Parameter(mandatory = $true)][string]$VMResourceGroupName,
-        [Parameter(Mandatory = $true)][string]$VMName,
-        [Parameter(mandatory = $true)][string]$ExtensionType,
-        [Parameter(mandatory = $true)][string]$ExtensionName
-    )
-
-    try {
-        $extension = Get-VMssExtension -VMName $VMName -VMResourceGroup $VMResourceGroupName -ExtensionType $ExtensionType
-    }
-    catch {
-        $message = "$VMName : Failed to lookup $ExtensionType"
-        $OnboardingStatus.Failed += $message
-        throw $_
-    }
-    if ($extension) {
-        try {
-            $removeResult = Remove-AzVmssExtension -ResourceGroupName $VMResourceGroupName -VMName $VMName -Name $ExtensionName -Force
-        }
-        catch {
-            Write-Output ("$VMName : Failed to remove extension : $ExtensionType")
-            $OnboardingStatus.Failed += $message
-            throw $_
-        }
-        if ($removeResult -and $removeResult.IsSuccessStatusCode) {
-            $message = "$VMName : Successfully removed $ExtensionType"
-            Write-Verbose($message)
-        }
-        else {
-            $statusCode = $removeResult.StatusCode
-            $errorMessage = $removeResult.ReasonPhrase
-            $message = "$VMName : Failed to remove $ExtensionType. StatusCode = $statusCode. ErrorMessage = $errorMessage."
-            $OnboardingStatus.Failed += $message
-            throw $message
-        }
-    }
-}
-
 function Remove-VMExtension {
     [CmdletBinding(SupportsShouldProcess = $true)]
     param
@@ -280,37 +210,42 @@ function Remove-VMExtension {
     )
 
     try {
-        $extension = Get-VMExtension -VMName $VMName -VMResourceGroup $VMResourceGroupName -ExtensionType $ExtensionType
+        $extension = Get-AzVMExtension -VMName $VMName -VMResourceGroup $VMResourceGroupName -ExtensionType $ExtensionType
     } catch {
         $message = "$VMName : Failed to lookup extension $ExtensionType"
         $OnboardingStatus.Failed += $message
         throw $_
     }
-    if ($extension) {
-        try {
-            $removeResult = Remove-AzureRmVMExtension -ResourceGroupName $VMResourceGroupName -VMName $VMName -Name $ExtensionName -Force
-        } catch {
-            $message = "$VMName : Failed to remove extension : $ExtensionType"
+    
+    if (!$extension) {
+        $message = $VMName + " : " +  $ExtensionName + " with name : " + $ExtensionName + " does not exist"
+        Write-Verbose ($message)
+        return
+    }
+
+    try {
+        $removeResult = Remove-AzureRmVMExtension -ResourceGroupName $VMResourceGroupName -VMName $VMName -Name $ExtensionName -Force
+    } catch {
+        $message = "$VMName : Failed to remove extension : $ExtensionType"
+        $OnboardingStatus.Failed += $message
+        throw $message
+    }
+    if ($removeResult) {
+        if ($removeResult.IsSuccessStatusCode) {
+            $message = "$VMName : Successfully removed $ExtensionType"
+            Write-Verbose($message)
+        }
+        else {
+            $statusCode = $removeResult.StatusCode
+            $ErrorMessage = $removeResult.ReasonPhrase
+            $message = "$VMName : Failed to remove $ExtensionType. StatusCode = $statusCode. ErrorMessage = $ErrorMessage."
             $OnboardingStatus.Failed += $message
             throw $message
         }
-        if ($removeResult) {
-            if ($removeResult.IsSuccessStatusCode) {
-                $message = "$VMName : Successfully removed $ExtensionType"
-                Write-Verbose($message)
-            }
-            else {
-                $statusCode = $removeResult.StatusCode
-                $ErrorMessage = $removeResult.ReasonPhrase
-                $message = "$VMName : Failed to remove $ExtensionType. StatusCode = $statusCode. ErrorMessage = $ErrorMessage."
-                $OnboardingStatus.Failed += $message
-                throw $message
-            }
-        } else {
-            $message = "$VMName : Failed to remove $ExtensionType"
-            $OnboardingStatus.Failed += $message
-            throw $message
-        }
+    } else {
+        $message = "$VMName : Failed to remove $ExtensionType"
+        $OnboardingStatus.Failed += $message
+        throw $message
     }
 }
 
@@ -386,7 +321,7 @@ function Install-VMExtension {
     $extensionName = $ExtensionName
 
     try {
-        $extension = Get-VMExtension -VMName $VMName -VMResourceGroup $VMResourceGroupName -ExtensionType $ExtensionType
+        $extension = Get-AzVMExtension -VMName $VMName -VMResourceGroup $VMResourceGroupName -ExtensionType $ExtensionType
         $extensionName = $extension.Name
     }
     catch {
@@ -394,42 +329,44 @@ function Install-VMExtension {
         $OnboardingStatus.Failed += $message
         throw $_
     }
-    if ($extension) {
-        $extensionName = $extension.Name
-        $message = "$VMName : $ExtensionType extension with name " + $extension.Name + " already installed. Provisioning State: " + $extension.ProvisioningState + " " + $extension.Settings
-        Write-Output ($message)
-        if ($extension.Settings) {
-            if ($mmaExtensionMap.Values -contains $ExtensionType) {
-                if ($extension.Settings -and $extension.Settings.ToString().Contains($PublicSettings.workspaceId)) {
-                    $message = "$VMName : Extension $ExtensionType already configured for this workspace. Provisioning State: " + $extension.ProvisioningState + " " + $extension.Settings
-                    Write-Output($message)
-                    return
-                } else {
-                    if ($ReInstall -ne $true) {
-                        $message = "$VMName : Extension $ExtensionType present, run with -ReInstall again to move to new workspace. Provisioning State: " + $extension.ProvisioningState + " " + $extension.Settings
-                        Write-Output ($message)
-                        return
-                    }
-                }
-            }
 
-            if ($amaExtensionMap.Values -contains $ExtensionType) {
-                if ($extension.Settings -and $extension.Settings.ToString().Contains($PublicSettings.authentication.managedIdentity.'identifier-value')) {
-                    $message = "$VMName : Extension $ExtensionType already configured with this user assigned managed identity. Provisioning State: " + $extension.ProvisioningState + "`n" + $extension.Settings
-                    Write-Output($message)
-                    return
-                }
-            }
+    if (!$extension) {
+        return
+    }
 
-            if ($daExtensionMap.Values -contains $ExtensionType) {
-                if ($extension.Settings -and $extension.Settings.ToString().Contains($PublicSettings.enableAMA)) {
-                    $message = "$VMName : Extension $ExtensionType already configured with AMA enabled. Provisioning State: " + $extension.ProvisioningState + " " + $extension.Settings
-                    Write-Output($message)
+    $extensionName = $extension.Name
+    $message = "$VMName : $ExtensionType extension with name " + $extension.Name + " already installed. Provisioning State: " + $extension.ProvisioningState + " " + $extension.Settings
+    Write-Output ($message)
+    if ($extension.Settings) {
+        if ($mmaExtensionMap.Values -contains $ExtensionType) {
+            if ($extension.Settings -and $extension.Settings.ToString().Contains($PublicSettings.workspaceId)) {
+                $message = "$VMName : Extension $ExtensionType already configured for this workspace. Provisioning State: " + $extension.ProvisioningState + " " + $extension.Settings
+                Write-Output($message)
+                return
+            } else {
+                if ($ReInstall -ne $true) {
+                    $message = "$VMName : Extension $ExtensionType present, run with -ReInstall again to move to new workspace. Provisioning State: " + $extension.ProvisioningState + " " + $extension.Settings
+                    Write-Output ($message)
                     return
                 }
             }
         }
 
+        if ($amaExtensionMap.Values -contains $ExtensionType) {
+            if ($extension.Settings -and $extension.Settings.ToString().Contains($PublicSettings.authentication.managedIdentity.'identifier-value')) {
+                $message = "$VMName : Extension $ExtensionType already configured with this user assigned managed identity. Provisioning State: " + $extension.ProvisioningState + "`n" + $extension.Settings
+                Write-Output($message)
+                return
+            }
+        }
+
+        if ($daExtensionMap.Values -contains $ExtensionType) {
+            if ($extension.Settings -and $extension.Settings.ToString().Contains($PublicSettings.enableAMA)) {
+                $message = "$VMName : Extension $ExtensionType already configured with AMA enabled. Provisioning State: " + $extension.ProvisioningState + " " + $extension.Settings
+                Write-Output($message)
+                return
+            }
+        }
     }
 
     if ($PSCmdlet.ShouldProcess($VMName, "install extension $ExtensionType")) {
@@ -478,27 +415,6 @@ function Install-VMExtension {
 
 }
 
-function Get-VMssExtension {
-    <#
-	.SYNOPSIS
-	Return the VM extension of specified ExtensionType
-	#>
-    [CmdletBinding()]
-    param
-    (
-        [Parameter(Mandatory = $True)][System.Object]$VMss,
-        [Parameter(mandatory = $true)][string]$ExtensionType
-    )
-    foreach ($extension in $VMss.VirtualMachineProfile.ExtensionProfile.Extensions) {
-        if ($ExtensionType -eq $extension.Type) {
-            $VMScaleSetName = $VMss.Name
-            Write-Verbose("$VMScaleSetName : Extension: $ExtensionType found on VMSS")
-            return
-        }
-    }
-    Write-Verbose("$VMScaleSetName : Extension: $ExtensionType not found on VMSS")
-}
-
 function Install-VMssExtension {
     <#
 	.SYNOPSIS
@@ -528,7 +444,7 @@ function Install-VMssExtension {
         throw $_
     }
     try {
-        $extension = Get-VMssExtension -VMss $scalesetObject -ExtensionType $ExtensionType
+        $extension = Get-AzVMssExtension -VMss $scalesetObject -ExtensionType $ExtensionType
     } catch {
         $message = "$VMName : Failed to lookup $ExtensionType"
         $OnboardingStatus.Failed += $message
