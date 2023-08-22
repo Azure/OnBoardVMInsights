@@ -250,10 +250,8 @@ function Remove-VMExtension {
 }
 
 function Install-DCRAssociation {
-    <#
-	.SYNOPSIS
-	Install DCRA Extension, handling if already installed
-	#>
+    
+    #Customer is responsible to delete DCR association themselves.
     [CmdletBinding(SupportsShouldProcess = $true)]
     param
     (
@@ -284,7 +282,7 @@ function Install-DCRAssociation {
         Write-Verbose("$TargetName : Deploying Data Collection Rule Association with name $dcrassociationName")
         try {
             $dcrassociation = New-AzDataCollectionRuleAssociation -TargetResourceId $TargetResourceId -AssociationName $dcrassociationName -RuleId $DcrResourceId
-            if ($dcrassociation -is [ErrorResponseCommonV2Exception]) {
+            if (!$dcrassociation -or $dcrassociation -is [ErrorResponseCommonV2Exception] -or ($dcrassociation.DataCollectionRuleId -eq $DcrResourceId)) {
                 #Tmp fix task:- 21191002
                 throw
             }
