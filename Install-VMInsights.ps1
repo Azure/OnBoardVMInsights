@@ -279,7 +279,7 @@ function Install-DCRAssociation {
     $vmId = $VMObject.Id
 
     try {
-        $dcrAssociationList = @(cmdlet Get-AzDataCollectionRuleAssociation -TargetResourceId $vmId)
+        $dcrAssociationList = Get-AzDataCollectionRuleAssociation -TargetResourceId $vmId
     } catch {
         Set-FailureMessage "Exception : $vmName : Failed to lookup the Data Collection Rule : $DcrResourceId"
         throw $_
