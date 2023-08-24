@@ -225,17 +225,17 @@ function Remove-VMExtension {
     if (!$VMObject) {
         return
     }
-    
+
     $vmResourceGroupName = $VMObject.ResourceGroupName
     $vmName = $VMObject.VMName
-    
+
     try {
         $extension = Get-AzVMExtension -VMName $vmName -VMResourceGroup $vmResourceGroupName -ExtensionType $ExtensionType
     } catch {
         Set-FailureMessage "$vmName : Failed to lookup extension $ExtensionType"
         throw $_
     }
-    
+
     if (!$extension) {
         $message = $vmName + " : " +  $ExtensionName + " with name : " + $ExtensionName + " does not exist"
         Write-Verbose ($message)
@@ -284,7 +284,7 @@ function Install-DCRAssociation {
         Set-FailureMessage "Exception : $vmName : Failed to lookup the Data Collection Rule : $DcrResourceId"
         throw $_
     }
-    
+
     # A VM may have zero or more Data Collection Rule Associations
     foreach ($dcrAssociation in $dcrAssociationList) {
         if ($dcrAssociation.DataCollectionRuleId -eq $DcrResourceId) {
@@ -293,7 +293,7 @@ function Install-DCRAssociation {
             return
         }
     }
-    
+
     #The Customer is responsible to uninstall the DCR Association themselves
     if ($PSCmdlet.ShouldProcess($TargetName, "Install Data Collection Rule Association")) {
         $dcrassociationName = "VM-Insights-$TargetName-Association"
@@ -456,7 +456,7 @@ function Install-VMssExtension {
     $vmScaleSetResourceGroupName = $VMssObject.ResourceGroupName
     # Use supplied name unless already deployed, use same name
     $extensionName = $ExtensionName
-    
+
     try {
         $extension = Get-AzVMssExtension -VMss $VMssObject -ExtensionType $ExtensionType
     } catch {
@@ -520,9 +520,9 @@ function Assign-ManagedIdentityUtil {
     if (!$VMObject -or !$UserAssignedManagedIdentyId) {
         return
     }
-    
+
     $userAssignedIdentitiesList = $VMObject.Identity.UserAssignedIdentities
-    
+
     foreach ($userAssignDict in $userAssignedIdentitiesList) {
         if ($userAssignDict.Keys -eq $UserAssignedManagedIdentyId) {
             return $True
@@ -975,7 +975,7 @@ Foreach ($vm in $VMs) {
 
             if (!$DcrResourceId -or ($DcrResourceId -and $ProcessAndDependencies)) {
                 Install-VMExtension `
-                    -VMObject $vm 
+                    -VMObject $vm
                     -ExtensionType $daExt `
                     -ExtensionName $daExt `
                     -ExtensionPublisher $daExtensionPublisher `
