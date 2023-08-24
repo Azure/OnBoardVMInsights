@@ -263,7 +263,7 @@ function Remove-VMExtension {
     }
 }
 
-function Install-DCRAssociation {
+function New-DCRAssociation {
     [CmdletBinding(SupportsShouldProcess = $true)]
     param
     (
@@ -985,7 +985,7 @@ Foreach ($vm in $VMs) {
                     -OnboardingStatus $OnboardingStatus
             }
         }
-        Install-DCRAssociation `
+        New-DCRAssociation `
             -VMObject $vm `
             -DcrResourceId $DcrResourceId `
         #reached this point - indicates all previous deployments succeeded
