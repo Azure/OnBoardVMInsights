@@ -285,8 +285,7 @@ function Remove-VMExtension {
         Set-FailureMessage "$vmName : Failed to remove $ExtensionType. StatusCode = $statusCode. ErrorMessage = $errorMessage."
         throw "$vmName : Failed to remove $ExtensionType. StatusCode = $statusCode. ErrorMessage = $errorMessage."
     } else {
-        $message = "$vmName : Successfully removed $ExtensionType"
-        Write-Verbose $message
+        Write-Verbose "$vmName : Successfully removed $ExtensionType"
     }
 }
 
@@ -302,6 +301,7 @@ function New-DCRAssociation {
     $vmId = $VMObject.Id
 
     try {
+        # A VM may have zero or more Data Collection Rule Associations
         $dcrAssociationList = Get-AzDataCollectionRuleAssociation -TargetResourceId $vmId
     } catch {
         Set-FailureMessage "Exception : $vmName : Failed to lookup the Data Collection Rule : $DcrResourceId"
@@ -311,8 +311,7 @@ function New-DCRAssociation {
     # A VM may have zero or more Data Collection Rule Associations
     foreach ($dcrAssociation in $dcrAssociationList) {
         if ($dcrAssociation.DataCollectionRuleId -eq $DcrResourceId) {
-            $message = "$TargetName : Data Collection Rule already associated."
-            Write-Output $message
+            Write-Output "$TargetName : Data Collection Rule already associated."
             return
         }
     }
@@ -371,18 +370,15 @@ function Install-VMExtension {
 
     if ($extension) {
         $extensionName = $extension.Name
-        $message = "$vmName : $ExtensionType extension with name " + $extension.Name + " already installed. Provisioning State: " + $extension.ProvisioningState + " " + $extension.Settings
-        Write-Output $message
+        Write-Output "$vmName : $ExtensionType extension with name $($extension.Name) already installed. Provisioning State: $($extension.ProvisioningState) `n $($extension.Settings)"
         if ($extension.Settings) {
             if ($mmaExtensionMap.Values -contains $ExtensionType) {
                 if ($extension.Settings.ToString().Contains($PublicSettings.workspaceId)) {
-                    $message = "$vmName : Extension $ExtensionType already configured for this workspace. Provisioning State: " + $extension.ProvisioningState + " " + $extension.Settings
-                    Write-Output $message
+                    Write-Output "$vmName : Extension $ExtensionType already configured for this workspace. Provisioning State: $($extension.ProvisioningState) `n $($extension.Settings)"
                     return
                 } else {
                     if ($ReInstall -ne $true) {
-                        $message = "$vmName : Extension $ExtensionType present, run with -ReInstall again to move to new workspace. Provisioning State: " + $extension.ProvisioningState + " " + $extension.Settings
-                        Write-Output $message
+                        Write-Output "$vmName : Extension $ExtensionType present, run with -ReInstall again to move to new workspace. Provisioning State: $($extension.ProvisioningState) `n $($extension.Settings)"
                         return
                     }
                 }
@@ -390,16 +386,14 @@ function Install-VMExtension {
 
             if ($amaExtensionMap.Values -contains $ExtensionType) {
                 if ($extension.Settings.ToString().Contains($PublicSettings.authentication.managedIdentity.'identifier-value')) {
-                    $message = "$vmName : Extension $ExtensionType already configured with this user assigned managed identity. Provisioning State: " + $extension.ProvisioningState + "`n" + $extension.Settings
-                    Write-Output $message
+                    Write-Output "$vmName : Extension $ExtensionType already configured with this user assigned managed identity. Provisioning State: $($extension.ProvisioningState) `n $($extension.Settings)"
                     return
                 }
             }
 
             if ($daExtensionMap.Values -contains $ExtensionType) {
                 if ($extension.Settings.ToString().Contains($PublicSettings.enableAMA)) {
-                    $message = "$vmName : Extension $ExtensionType already configured with AMA enabled. Provisioning State: " + $extension.ProvisioningState + " " + $extension.Settings
-                    Write-Output $message
+                    Write-Output "$vmName : Extension $ExtensionType already configured with AMA enabled. Provisioning State: $($extension.ProvisioningState) `n $($extension.Settings)"
                     return
                 }
             }
@@ -518,8 +512,7 @@ function Install-VMssExtension {
             Set-FailureMessage "$vmScaleSetName : failed updating scale set with $ExtensionType extension"
             throw "$vmScaleSetName : failed updating scale set with $ExtensionType extension"
         } else {
-            $message = "$vmScaleSetName : Successfully updated scale set with $ExtensionType extension"
-            Write-Output $message
+            Write-Output "$vmScaleSetName : Successfully updated scale set with $ExtensionType extension"
         }
     }
 }
@@ -559,8 +552,7 @@ function Assign-VmssManagedIdentity {
     if ($VMssObject.Id -match "/subscriptions/([^/]+)/") {
         $vmssSubscriptionId = $matches[1]
     } else {
-        $message = $VMssObject.Name + ": Invalid Azure Resource Id"
-        throw $message
+        throw "$($VMssObject.Name) : Invalid Azure Resource Id"
     }
 
     try {
@@ -577,12 +569,11 @@ function Assign-VmssManagedIdentity {
     try {
         $statusResult = Get-AzVmss -ResourceGroupName $VMssObject.ResourceGroupName -Name $VMssObject.Name
     } catch {
-        $message = $VMssObject.Name + " : Failed to lookup VMss in " + $VMssObject.ResourceGroupName
+        Set-FailureMessage "$($VMssObject.Name) : Failed to lookup VMss in $($VMssObject.ResourceGroupName)"
         throw $_
     }
     if ($statusResult -and ($statusResult.Identity.Type -eq "UserAssigned") -and (Assign-ManagedIdentityUtil -isScaleset -VMssObject $statusResult -UserAssignedManagedIdentyId $userAssignedIdentityObject.Id)) {
-        $message = $VMssObject.Name + ": Already assigned with user managed identity : $UserAssignedManagedIdentityName"
-        Write-Verbose($message)
+        Write-Verbose "$($VMssObject.Name) : Already assigned with user managed identity : $UserAssignedManagedIdentityName"
     } else {
         try {
             $updateResult = Update-AzVMss -ResourceGroupName $VMssObject.ResourceGroupName `
@@ -595,8 +586,7 @@ function Assign-VmssManagedIdentity {
             throw $_
         }
         if ($updateResult -and $updateResult.IsSuccessStatusCode) {
-            $message = $VMssObject.Name + ": Successfully assigned user managed identity : $UserAssignedManagedIdentityName"
-            Write-Output $message
+            Write-Output "$($VMssObject.Name) : Successfully assigned user managed identity : $UserAssignedManagedIdentityName"
         }
         else {
             $updateCode = $updateResult.StatusCode
@@ -617,8 +607,7 @@ function Assign-VmssManagedIdentity {
                 Write-Output "Scope $targetScope : role assignment for $UserAssignedManagedIdentityName with $role succeeded"
             }
             catch {
-                $message = "Scope $targetScope : role assignment with $role failed"
-                throw $message
+                throw "Scope $targetScope : role assignment with $role failed"
             }
         } else {
             Write-Verbose "Scope $targetScope : role $role already set"
@@ -641,8 +630,7 @@ function Assign-VmManagedIdentity {
     if ($VMObject.Id -match "/subscriptions/([^/]+)/") {
         $vmSubscriptionId = $matches[1]
     } else {
-        $message = $VMObject.Name + ": Invalid Azure Resource Id"
-        throw $message
+        throw "$($VMObject.Name) : Invalid Azure Resource Id"
     }
 
     try {
@@ -663,8 +651,7 @@ function Assign-VmManagedIdentity {
         throw $_
     }
     if ($statusResult -and ($statusResult.Identity.Type -eq "UserAssigned") -and (Assign-ManagedIdentityUtil -VMObject $statusResult -UserAssignedManagedIdentyId $userAssignedIdentityObject.Id)) {
-        $message = $VMObject.Name + " : Already assigned with managed identity : " + $UserAssignedManagedIdentityName
-        Write-Output $message
+        Write-Verbose "$($VMObject.Name) : Already assigned with managed identity : $UserAssignedManagedIdentityName"
     } else {
         try {
             $updateResult = Update-AzVM -ResourceGroupName $VMObject.ResourceGroupName `
@@ -676,14 +663,13 @@ function Assign-VmManagedIdentity {
             throw $_
         }
         if ($updateResult -and $updateResult.IsSuccessStatusCode) {
-            $message = $VMObject.Name + ": Successfully assigned managed identity : " + $UserAssignedManagedIdentityName
-            Write-Output $message
+            Write-Output "$($VMObject.Name) : Successfully assigned managed identity : $UserAssignedManagedIdentityName"
         }
         else {
             $statusCode = $updateResult.StatusCode
-            $ErrorMessage = $updateResult.ReasonPhrase
-            Set-FailureMessage "$($VMObject.Name) : Failed to assign managed identity : $UserAssignedManagedIdentityName. StatusCode = $statusCode. ErrorMessage = $ErrorMessage."
-            throw $message
+            $errorMessage = $updateResult.ReasonPhrase
+            Set-FailureMessage "$($VMObject.Name) : Failed to assign managed identity : $UserAssignedManagedIdentityName. StatusCode = $statusCode. ErrorMessage = $errorMessage."
+            throw "$($VMObject.Name) : Failed to assign managed identity : $UserAssignedManagedIdentityName. StatusCode = $statusCode. ErrorMessage = $errorMessage."
         }
     }
 
