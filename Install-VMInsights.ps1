@@ -204,6 +204,41 @@ $daExtensionPublisher = "Microsoft.Azure.Monitoring.DependencyAgent"
 #
 # FUNCTIONS
 #
+
+function Get-VMExtension {
+    <#
+	.SYNOPSIS
+	Return the VM extension of specified ExtensionType
+	#>
+    [CmdletBinding()]
+    param
+    (
+        [Parameter(mandatory = $true)][Object]$VMObject,
+        [Parameter(mandatory = $true)][string]$ExtensionType
+    )
+
+    $vmResourceGroupName = $VMObject.ResourceGroupName
+    $vmName = $VMObject.VMName
+
+    try {
+        $vm = Get-AzVMExtension -VMName $vmName -ResourceGroupName $vmResourceGroupName
+    } catch {
+        Set-FailureMessage "$vmName : Failed to lookup for extensions in $vmResourceGroupName"
+        throw $_
+    }
+
+    $extensions = $vm.Extensions
+
+    foreach ($extension in $extensions) {
+        if ($ExtensionType -eq $extension.VirtualMachineExtensionType) {
+            Write-Verbose("$VMName : Extension: $ExtensionType found on VM")
+            $extension
+            return
+        }
+    }
+    Write-Verbose("$VMName : Extension: $ExtensionType not found on VM")
+}
+
 function Set-FailureMessage {
     [CmdletBinding(SupportsShouldProcess = $true)]
     param
@@ -222,15 +257,11 @@ function Remove-VMExtension {
         [Parameter(mandatory = $true)][string]$ExtensionName
     )
 
-    if (!$VMObject) {
-        return
-    }
-
     $vmResourceGroupName = $VMObject.ResourceGroupName
     $vmName = $VMObject.VMName
 
     try {
-        $extension = Get-AzVMExtension -VMName $vmName -VMResourceGroup $vmResourceGroupName -ExtensionType $ExtensionType
+        $extension = Get-VMExtension -VMObject $VMObject -ExtensionType $ExtensionType
     } catch {
         Set-FailureMessage "$vmName : Failed to lookup extension $ExtensionType"
         throw $_
@@ -270,10 +301,6 @@ function New-DCRAssociation {
         [Parameter(mandatory = $true)][Object]$VMObject,
         [Parameter(mandatory = $true)][string]$DcrResourceId
     )
-
-    if (!$VMObject -or !$DcrResourceId) {
-        return
-    }
 
     $vmName = $VMObject.Name
     $vmId = $VMObject.Id
@@ -338,7 +365,7 @@ function Install-VMExtension {
     $extensionName = $ExtensionName
 
     try {
-        $extension = Get-AzVMExtension -VMName $vmName -VMResourceGroup $vmResourceGroupName -ExtensionType $ExtensionType
+        $extension = Get-VMExtension -VMObject $VMObject -ExtensionType $ExtensionType
         $extensionName = $extension.Name
     }
     catch {
