@@ -32,8 +32,8 @@
 
 <#
 .SYNOPSIS
-This script installs VM extensions for Log Analytics/Azure Monitoring Agent(AMA) and Dependency Agent as needed for VM Insights. If the customer
-onboarded AMA a Data Collection Rule(DCR) and User Assigned Identity (UAMI) is also associated with the VM's and VM Scal Sets.
+This script installs VM extensions for Log Analytics/Azure Monitoring Agent (AMA) and Dependency Agent as needed for VM Insights. If the customer
+onboarded AMA a Data Collection Rule(DCR) and User Assigned Identity (UAMI) is also associated with the VM's and VM Scale Sets.
 
 .DESCRIPTION
 This script installs or re-configures following on VM's and VM Scale Sets:
@@ -217,7 +217,7 @@ function Remove-VMExtension {
     [CmdletBinding(SupportsShouldProcess = $true)]
     param
     (
-        [Parameter(Mandatory = $true)][Object]$VMObject,
+        [Parameter(mandatory = $true)][Object]$VMObject,
         [Parameter(mandatory = $true)][string]$ExtensionType,
         [Parameter(mandatory = $true)][string]$ExtensionName
     )
@@ -267,7 +267,7 @@ function New-DCRAssociation {
     [CmdletBinding(SupportsShouldProcess = $true)]
     param
     (
-        [Parameter(Mandatory = $true)][Object]$VMObject,
+        [Parameter(mandatory = $true)][Object]$VMObject,
         [Parameter(mandatory = $true)][string]$DcrResourceId
     )
 
@@ -319,7 +319,7 @@ function Install-VMExtension {
     [CmdletBinding(SupportsShouldProcess = $true)]
     param
     (
-        [Parameter(Mandatory = $true)][Object]$VMObject,
+        [Parameter(mandatory = $true)][Object]$VMObject,
         [Parameter(mandatory = $true)][string]$ExtensionType,
         [Parameter(mandatory = $true)][string]$ExtensionName,
         [Parameter(mandatory = $true)][string]$ExtensionPublisher,
