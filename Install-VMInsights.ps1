@@ -253,8 +253,7 @@ function Remove-VMExtension {
     param
     (
         [Parameter(mandatory = $true)][Object]$VMObject,
-        [Parameter(mandatory = $true)][string]$ExtensionType,
-        [Parameter(mandatory = $true)][string]$ExtensionName
+        [Parameter(mandatory = $true)][string]$ExtensionType
     )
 
     $vmResourceGroupName = $VMObject.ResourceGroupName
@@ -266,28 +265,25 @@ function Remove-VMExtension {
         Set-FailureMessage "$vmName : Failed to lookup extension $ExtensionType"
         throw $_
     }
-
+    
     if (!$extension) {
-        $message = $vmName + " : " +  $ExtensionName + " with name : " + $ExtensionName + " does not exist"
-        Write-Verbose ($message)
         return
     }
 
+    $extensionName = $extension.Name
+
     try {
-        $removeResult = Remove-AzVMExtension -ResourceGroupName $vmResourceGroupName -VMName $vmName -Name $ExtensionName -Force
+        $removeResult = Remove-AzVMExtension -ResourceGroupName $vmResourceGroupName -VMName $vmName -Name $extensionName -Force
     } catch {
         Set-FailureMessage "$vmName : Failed to remove extension : $ExtensionType"
         throw $_
     }
 
-    if (-not $removeResult) {
-        Set-FailureMessage "$vmName : Failed to remove $ExtensionType."
-        throw
-    } elseif (!$removeResult.IsSuccessStatusCode) {
+    if (!$removeResult.IsSuccessStatusCode) {
         $statusCode = $removeResult.StatusCode
-        $ErrorMessage = $removeResult.ReasonPhrase
-        Set-FailureMessage "$vmName : Failed to remove $ExtensionType. StatusCode = $statusCode. ErrorMessage = $ErrorMessage."
-        throw
+        $errorMessage = $removeResult.ReasonPhrase
+        Set-FailureMessage "$vmName : Failed to remove $ExtensionType. StatusCode = $statusCode. ErrorMessage = $errorMessage."
+        throw "$vmName : Failed to remove $ExtensionType. StatusCode = $statusCode. ErrorMessage = $errorMessage."
     } else {
         $message = "$vmName : Successfully removed $ExtensionType"
         Write-Verbose($message)
@@ -327,13 +323,14 @@ function New-DCRAssociation {
         Write-Verbose("$TargetName : Deploying Data Collection Rule Association with name $dcrassociationName")
         try {
             $dcrassociation = New-AzDataCollectionRuleAssociation -TargetResourceId $TargetResourceId -AssociationName $dcrassociationName -RuleId $DcrResourceId
-            if (!$dcrassociation -or $dcrassociation -is [ErrorResponseCommonV2Exception]) {
-                #Tmp fix task:- 21191002
-                throw
-            }
         } catch {
             Set-FailureMessage "$TargetName : Failed to create Data Collection Rule Association for $TargetResourceId"
-           throw $_
+            throw $_
+        }
+        #Tmp fix task:- 21191002
+        if (!$dcrassociation -or $dcrassociation -is [ErrorResponseCommonV2Exception]) {
+            Set-FailureMessage "$TargetName : Failed to create Data Collection Rule Association for $TargetResourceId"
+            throw "$TargetName : Failed to create Data Collection Rule Association for $TargetResourceId"
         }
     }
 }
@@ -366,7 +363,6 @@ function Install-VMExtension {
 
     try {
         $extension = Get-VMExtension -VMObject $VMObject -ExtensionType $ExtensionType
-        $extensionName = $extension.Name
     }
     catch {
         Set-FailureMessage "$vmName : Failed to lookup $ExtensionType"
@@ -433,22 +429,23 @@ function Install-VMExtension {
         if ($ExtensionType -eq "OmsAgentForLinux") {
             Write-Output("$vmName : ExtensionType: $ExtensionType does not support updating workspace. Uninstalling and Re-Installing")
             Remove-VMExtension -VMObject $VMObject `
-                               -ExtensionType $ExtensionType `
-                               -ExtensionName $ExtensionName
+                               -ExtensionType $ExtensionType
         }
 
         Write-Verbose("$vmName : Deploying/Updating $ExtensionType with name $extensionName")
         try {
             $result = Set-AzVMExtension @parameters
-            if ((-not $result) -or !$result.IsSuccessStatusCode) {
-                throw
-            }
-            else {
-                Write-Output("$vmName : Successfully deployed/updated $ExtensionType")
-            }
-        } catch {
+        }
+        catch {
             Set-FailureMessage "$vmName : Failed to deploy/update $ExtensionType"
             throw $_
+        }
+        if ((-not $result) -or !$result.IsSuccessStatusCode) {
+            Set-FailureMessage "$vmName : Failed to deploy/update $ExtensionType"
+            throw "$vmName : Failed to deploy/update $ExtensionType"
+        }
+        else {
+            Write-Output("$vmName : Successfully deployed/updated $ExtensionType")
         }
     }
 }
@@ -519,7 +516,7 @@ function Install-VMssExtension {
         }
         if (!$result -or $result.ProvisioningState -ne "Succeeded") {
             Set-FailureMessage "$vmScaleSetName : failed updating scale set with $ExtensionType extension"
-            throw
+            throw "$vmScaleSetName : failed updating scale set with $ExtensionType extension"
         } else {
             $message = "$vmScaleSetName : Successfully updated scale set with $ExtensionType extension"
             Write-Output($message)
@@ -569,12 +566,13 @@ function Assign-VmssManagedIdentity {
 
     try {
         $userAssignedIdentityObject = Get-AzUserAssignedIdentity -ResourceGroupName $UserAssignedManagedIdentityResourceGroup -Name $UserAssignedManagedIdentityName
-        if (!$userAssignedIdentityObject) {
-            throw
-        }
     } catch {
         Set-FailureMessage "Failed to lookup managed identity $UserAssignedManagedIdentityName"
         throw $_
+    }
+    
+    if (!$userAssignedIdentityObject) {
+        throw "Failed to lookup managed identity $UserAssignedManagedIdentityName"
     }
 
     try {
@@ -650,12 +648,13 @@ function Assign-VmManagedIdentity {
 
     try {
         $userAssignedIdentityObject = Get-AzUserAssignedIdentity -ResourceGroupName $UserAssignedManagedIdentityResourceGroup -Name $UserAssignedManagedIdentityName
-        if (!$userAssignedIdentityObject) {
-            throw
-        }
     } catch {
         Set-FailureMessage "Failed to lookup managed identity $UserAssignedManagedIdentityName"
         throw $_
+    }
+
+    if (!$userAssignedIdentityObject) {
+        throw "Failed to lookup managed identity $UserAssignedManagedIdentityName"
     }
 
     try {
@@ -716,9 +715,6 @@ function Assign-VmManagedIdentity {
 function Display-Exception {
     try {
         try { "ExceptionClass = $($_.Exception.GetType().Name)" | Write-Output } catch { }
-        if ($OnboardingStatus.Failed.Length -ne 0) {
-            try { "ExceptionMessage:`r`n$($OnboardingStatus.Failed[-1])`r`n" | Write-Output } catch { }
-        }
         try { "ExceptionDetailedMessage:`r`n$($_.Exception.Message)`r`n" | Write-Output } catch { }
         try { "StackTrace:`r`n$($_.Exception.StackTrace)`r`n" | Write-Output } catch { }
         try { "ScriptStackTrace:`r`n$($_.ScriptStackTrace)`r`n" | Write-Output } catch { }
