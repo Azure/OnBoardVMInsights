@@ -194,7 +194,7 @@ Set-Variable -Name amaPublicSettings -Option Constant -Value @{'authentication' 
                         }
                       }
                     }
-Set-Variable -Name amaProtectedSettings = @{}
+Set-Variable -Name amaProtectedSettings -Option Constant -Value @{}
 
 # Dependency Agent Extension constants
 $daExtensionMap = @{ "Windows" = "DependencyAgentWindows"; "Linux" = "DependencyAgentLinux" }
