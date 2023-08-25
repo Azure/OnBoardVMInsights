@@ -300,7 +300,7 @@ function New-DCRAssociation {
         Write-Verbose("$TargetName : Deploying Data Collection Rule Association with name $dcrassociationName")
         try {
             $dcrassociation = New-AzDataCollectionRuleAssociation -TargetResourceId $TargetResourceId -AssociationName $dcrassociationName -RuleId $DcrResourceId
-            if (!$dcrassociation -or $dcrassociation -is [ErrorResponseCommonV2Exception] -or ($dcrassociation.DataCollectionRuleId -eq $DcrResourceId)) {
+            if (!$dcrassociation -or $dcrassociation -is [ErrorResponseCommonV2Exception]) {
                 #Tmp fix task:- 21191002
                 throw
             }
@@ -329,10 +329,6 @@ function Install-VMExtension {
         [Parameter(mandatory = $false)][boolean]$ReInstall,
         [Parameter(mandatory = $true)][hashtable]$OnboardingStatus
     )
-
-    if (!$VMObject) {
-        return
-    }
 
     $vmName = $VMObject.Name
     $vmLocation = $VMObject.Location
@@ -447,10 +443,6 @@ function Install-VMssExtension {
         [Parameter(mandatory = $false)][hashtable]$ProtectedSettings,
         [Parameter(mandatory = $false)][boolean]$ReInstall = $false
     )
-
-    if (!$VMssObject) {
-        return
-    }
 
     $vmScaleSetName = $VMssObject.Name
     $vmScaleSetResourceGroupName = $VMssObject.ResourceGroupName
