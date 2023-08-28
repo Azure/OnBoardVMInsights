@@ -471,24 +471,24 @@ function Install-VMssExtension {
         [Parameter(mandatory = $false)][boolean]$ReInstall = $false
     )
 
-    $vmScaleSetName = $VMssObject.Name
-    $vmScaleSetResourceGroupName = $VMssObject.ResourceGroupName
+    $vmssName = $VMssObject.Name
+    $vmssResourceGroupName = $VMssObject.ResourceGroupName
     # Use supplied name unless already deployed, use same name
     $extensionName = $ExtensionName
 
     try {
         $extension = Get-VMssExtension -VMss $VMssObject -ExtensionType $ExtensionType
     } catch {
-        $OnboardingStatus.Failed += "$vmScaleSetName : Failed to lookup $ExtensionType"
+        $OnboardingStatus.Failed += "$vmssName : Failed to lookup $ExtensionType"
         throw $_
     }
 
     if ($extension) {
-        Write-Verbose("$vmScaleSetName : $ExtensionType extension with name " + $extension.Name + " already installed. Provisioning State: " + $extension.ProvisioningState + " " + $extension.Settings)
+        Write-Verbose("$vmssName : $ExtensionType extension with name " + $extension.Name + " already installed. Provisioning State: " + $extension.ProvisioningState + " " + $extension.Settings)
         $extensionName = $extension.Name
     }
 
-    if ($PSCmdlet.ShouldProcess($vmScaleSetName, "install extension $ExtensionType")) {
+    if ($PSCmdlet.ShouldProcess($vmssName, "install extension $ExtensionType")) {
 
         $parameters = @{
             VirtualMachineScaleSet  = $VMssObject
@@ -507,28 +507,28 @@ function Install-VMssExtension {
             $parameters.Add("ProtectedSetting", $ProtectedSettings)
         }
 
-        Write-Verbose("$vmScaleSetName : Adding $ExtensionType with name $extensionName")
+        Write-Verbose("$vmssName : Adding $ExtensionType with name $extensionName")
         try {
             $VMssObject = Add-AzVmssExtension @parameters
         }
         catch {
-            $OnboardingStatus.Failed += "$vmScaleSetName : Failed to install/update $ExtensionType"
+            $OnboardingStatus.Failed += "$vmssName : Failed to install/update $ExtensionType"
             throw $_
         }
-        Write-Verbose("$vmScaleSetName : Updating scale set with $ExtensionType extension")
+        Write-Verbose("$vmssName : Updating scale set with $ExtensionType extension")
         try {
-            $result = Update-AzVmss -VMScaleSetName $vmScaleSetName -ResourceGroupName $vmScaleSetResourceGroupName -VirtualMachineScaleSet $VMssObject
+            $result = Update-AzVmss -VMScaleSetName $vmssName -ResourceGroupName $vmssResourceGroupName -VirtualMachineScaleSet $VMssObject
         } catch {
-            $OnboardingStatus.Failed += "$vmScaleSetName : failed updating scale set with $ExtensionType extension"
+            $OnboardingStatus.Failed += "$vmssName : failed updating scale set with $ExtensionType extension"
             throw $_
         }
         
         if ($result -and $result.ProvisioningState -eq "Succeeded") {
-            Write-Output "$vmScaleSetName : Successfully updated scale set with $ExtensionType extension"
+            Write-Output "$vmssName : Successfully updated scale set with $ExtensionType extension"
         }
         
-        $OnboardingStatus.Failed += "$vmScaleSetName : failed updating scale set with $ExtensionType extension"
-        throw "$vmScaleSetName : failed updating scale set with $ExtensionType extension"
+        $OnboardingStatus.Failed += "$vmssName : failed updating scale set with $ExtensionType extension"
+        throw "$vmssName : failed updating scale set with $ExtensionType extension"
     }
 }
 
@@ -561,10 +561,11 @@ function Assign-VmssManagedIdentity {
         [Parameter(mandatory = $true)][hashtable]$OnboardingStatus
     )
 
+    $vmssName = $VMssObject.Name
+    $vmssResourceGroupName = $VMssObject.ResourceGroupName
+
     if ($VMssObject.Id -match "/subscriptions/([^/]+)/") {
         $vmssSubscriptionId = $matches[1]
-    } else {
-        throw "$($VMssObject.Name) : Invalid Azure Resource Id"
     }
 
     try {
@@ -578,44 +579,39 @@ function Assign-VmssManagedIdentity {
         throw "Failed to lookup managed identity $UserAssignedManagedIdentityName"
     }
 
-    try {
-        $statusResult = Get-AzVmss -ResourceGroupName $VMssObject.ResourceGroupName -Name $VMssObject.Name
-    } catch {
-        $OnboardingStatus.Failed += "$($VMssObject.Name) : Failed to lookup VMss in $($VMssObject.ResourceGroupName)"
-        throw $_
-    }
-    if ($statusResult -and ($statusResult.Identity.Type -eq "UserAssigned") -and (Assign-ManagedIdentityUtil -isScaleset -VMssObject $statusResult -UserAssignedManagedIdentyId $userAssignedIdentityObject.Id)) {
-        Write-Verbose "$($VMssObject.Name) : Already assigned with user managed identity : $UserAssignedManagedIdentityName"
+    if ($VMssObject -and ($VMssObject.Identity.Type -eq "UserAssigned") -and (Assign-ManagedIdentityUtil -VMObject $VMssObject -UserAssignedManagedIdentyId $userAssignedIdentityObject.Id)) {
+        Write-Verbose "$vmssName : Already assigned with user managed identity : $UserAssignedManagedIdentityName"
     } else {
         try {
-            $updateResult = Update-AzVMss -ResourceGroupName $VMssObject.ResourceGroupName `
-                                        -VMScaleSetName $VMssObject.Name `
+            $result = Update-AzVMss -ResourceGroupName $vmssResourceGroupName `
+                                        -VMScaleSetName $vmssName `
                                         -VirtualMachineScaleSet $VMssObject `
                                         -IdentityType "UserAssigned" `
                                         -IdentityID $userAssignedIdentityObject.Id
         } catch {
-            $OnboardingStatus.Failed += "$($VMssObject.Name) : Failed to assign user managed identity : $UserAssignedManagedIdentityName"
+            $OnboardingStatus.Failed += "$vmScaleSetName : Failed to assign user managed identity : $UserAssignedManagedIdentityName"
             throw $_
         }
-        if ($updateResult -and $updateResult.IsSuccessStatusCode) {
-            Write-Output "$($VMssObject.Name) : Successfully assigned user managed identity : $UserAssignedManagedIdentityName"
+
+        if ($result -and $result.IsSuccessStatusCode) {
+            Write-Output "$vmScaleSetName : Successfully assigned user managed identity : $UserAssignedManagedIdentityName"
+            return
         }
-        else {
-            $updateCode = $updateResult.StatusCode
-            $errorMessage = $updateResult.ReasonPhrase
-            $OnboardingStatus.Failed += "$($VMssObject.Name) : Failed to assign managed identity : $UserAssignedManagedIdentityName. StatusCode = $updateCode. ErrorMessage = $errorMessage."
-        }
+        
+        $updateCode = $result.StatusCode
+        $errorMessage = $result.ReasonPhrase
+        $OnboardingStatus.Failed += "$vmScaleSetName : Failed to assign managed identity : $UserAssignedManagedIdentityName. StatusCode = $updateCode. ErrorMessage = $errorMessage."
     }
 
     ##Assign roles to the provided managed identity.
-    $targetScope = "/subscriptions/" + $vmssSubscriptionId + "/resourceGroups/" + $VMssObject.ResourceGroupName
+    $targetScope = "/subscriptions/" + $vmssSubscriptionId + "/resourceGroups/" + $vmssResourceGroupName
     $roleDefinitionList = @("Virtual Machine Contributor", "Azure Connected Machine Resource Administrator", "Log Analytics Contributor")
     foreach ($role in $roleDefinitionList) {
         $roleAssignmentFound = Get-AzRoleAssignment -ObjectId $userAssignedIdentityObject.principalId -RoleDefinitionName $role -Scope $targetScope
         if (!$roleAssignmentFound) {
             Write-Verbose("Scope $targetScope : assigning role $role")
             try {
-                $result = New-AzRoleAssignment -ObjectId $userAssignedIdentityObject.principalId -RoleDefinitionName $role -Scope $targetScope
+                New-AzRoleAssignment  -ObjectId $userAssignedIdentityObject.principalId -RoleDefinitionName $role -Scope $targetScope
                 Write-Output "Scope $targetScope : role assignment for $UserAssignedManagedIdentityName with $role succeeded"
             }
             catch {
@@ -642,9 +638,10 @@ function Assign-VmManagedIdentity {
 
     if ($VMObject.Id -match "/subscriptions/([^/]+)/") {
         $vmSubscriptionId = $matches[1]
-    } else {
-        throw "$($VMObject.Name) : Invalid Azure Resource Id"
     }
+
+    $vmName = $VObject.Name
+    $vmResourceGroupName = $VMssObject.ResourceGroupName
 
     try {
         $userAssignedIdentityObject = Get-AzUserAssignedIdentity -ResourceGroupName $UserAssignedManagedIdentityResourceGroup -Name $UserAssignedManagedIdentityName
@@ -658,31 +655,33 @@ function Assign-VmManagedIdentity {
     }
 
     try {
-        $statusResult = Get-AzVM -ResourceGroupName $VMObject.ResourceGroupName -Name $VMObject.Name
+        $statusResult = Get-AzVM -ResourceGroupName $vmResourceGroupName -Name $vmName
     } catch {
-        $OnboardingStatus.Failed += "$($VMObject.Name) : Failed to lookup VM in $($VMObject.ResourceGroupName)"
+        $OnboardingStatus.Failed += "$vmName : Failed to lookup VM in $vmResourceGroupName"
         throw $_
     }
+
     if ($statusResult -and ($statusResult.Identity.Type -eq "UserAssigned") -and (Assign-ManagedIdentityUtil -VMObject $statusResult -UserAssignedManagedIdentyId $userAssignedIdentityObject.Id)) {
-        Write-Verbose "$($VMObject.Name) : Already assigned with managed identity : $UserAssignedManagedIdentityName"
+        Write-Verbose "$vmName : Already assigned with managed identity : $UserAssignedManagedIdentityName"
     } else {
         try {
-            $updateResult = Update-AzVM -ResourceGroupName $VMObject.ResourceGroupName `
+            $updateResult = Update-AzVM -ResourceGroupName $vmResourceGroupName `
                                         -VM $VMObject `
                                         -IdentityType "UserAssigned" `
                                         -IdentityID $userAssignedIdentityObject.Id
         } catch {
-            $OnboardingStatus.Failed += "$($VMObject.Name) : Failed to assign user managed identity = $UserAssignedManagedIdentityName"
+            $OnboardingStatus.Failed += "$vmName : Failed to assign user managed identity = $UserAssignedManagedIdentityName"
             throw $_
         }
+        
         if ($updateResult -and $updateResult.IsSuccessStatusCode) {
-            Write-Output "$($VMObject.Name) : Successfully assigned managed identity : $UserAssignedManagedIdentityName"
+            Write-Output "$vmName : Successfully assigned managed identity : $UserAssignedManagedIdentityName"
         }
         else {
             $statusCode = $updateResult.StatusCode
             $errorMessage = $updateResult.ReasonPhrase
-            $OnboardingStatus.Failed += "$($VMObject.Name) : Failed to assign managed identity : $UserAssignedManagedIdentityName. StatusCode = $statusCode. ErrorMessage = $errorMessage."
-            throw "$($VMObject.Name) : Failed to assign managed identity : $UserAssignedManagedIdentityName. StatusCode = $statusCode. ErrorMessage = $errorMessage."
+            $OnboardingStatus.Failed += "$vmName : Failed to assign managed identity : $UserAssignedManagedIdentityName. StatusCode = $statusCode. ErrorMessage = $errorMessage."
+            throw "$vmName : Failed to assign managed identity : $UserAssignedManagedIdentityName. StatusCode = $statusCode. ErrorMessage = $errorMessage."
         }
     }
 
@@ -694,7 +693,7 @@ function Assign-VmManagedIdentity {
         if (!$roleAssignmentFound) {
             Write-Verbose ("Scope $targetScope : assigning role $role")
             try {
-                $result = New-AzRoleAssignment -ObjectId $userAssignedIdentityObject.principalId -RoleDefinitionName $role -Scope $targetScope
+                New-AzRoleAssignment -ObjectId $userAssignedIdentityObject.principalId -RoleDefinitionName $role -Scope $targetScope
                 Write-Output "Scope $targetScope : role assignment for $UserAssignedManagedIdentityName with $role succeeded"
             }
             catch {
