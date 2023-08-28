@@ -224,7 +224,7 @@ function Get-VMExtension {
     try {
         $vm = Get-AzVMExtension -VMName $vmName -ResourceGroupName $vmResourceGroupName
     } catch {
-        $OnboardingStatus.Failed += "$vmName : Failed to lookup for extensions in $vmResourceGroupName"
+        $OnboardingStatus.Failed += "$vmName : Failed to lookup for extensions"
         throw $_
     }
 
@@ -232,12 +232,35 @@ function Get-VMExtension {
 
     foreach ($extension in $extensions) {
         if ($ExtensionType -eq $extension.VirtualMachineExtensionType) {
-            Write-Verbose("$VMName : Extension : $ExtensionType found on VM")
+            Write-Verbose("$vmName : Extension : $ExtensionType found")
             $extension
             return
         }
     }
-    Write-Verbose("$VMName : Extension : $ExtensionType not found on VM")
+    Write-Verbose("$vmName : Extension : $ExtensionType not found")
+}
+
+function Get-VMssExtension {
+    <#
+	.SYNOPSIS
+	Return the VMss extension of specified ExtensionType
+	#>
+    [CmdletBinding()]
+    param
+    (
+        [Parameter(Mandatory = $True)][Object]$VMssObject,
+        [Parameter(mandatory = $true)][string]$ExtensionType
+    )
+
+    $vmssName = $VMssObject.Name
+    foreach ($extension in $VMssObject.VirtualMachineProfile.ExtensionProfile.Extensions) {
+        if ($ExtensionType -eq $extension.Type) {
+            Write-Verbose("$vmssName : Extension: $ExtensionType found")
+            $extension
+            return
+        }
+    }
+    Write-Verbose("$vmScaleSetName : Extension: $ExtensionType not found")
 }
 
 function Remove-VMExtension {
@@ -418,13 +441,14 @@ function Install-VMExtension {
             $OnboardingStatus.Failed += "$vmName : Failed to deploy/update $ExtensionType"
             throw $_
         }
-        if ((-not $result) -or !$result.IsSuccessStatusCode) {
-            $OnboardingStatus.Failed += "$vmName : Failed to deploy/update $ExtensionType"
-            throw "$vmName : Failed to deploy/update $ExtensionType"
-        }
-        else {
+        
+        if ($result -and $result.IsSuccessStatusCode) {
             Write-Output "$vmName : Successfully deployed/updated $ExtensionType"
+            return
         }
+
+        $OnboardingStatus.Failed += "$vmName : Failed to install/update $ExtensionType"
+        throw "$vmName : Failed to deploy/update $ExtensionType"
     }
 }
 
@@ -453,7 +477,7 @@ function Install-VMssExtension {
     $extensionName = $ExtensionName
 
     try {
-        $extension = Get-AzVMssExtension -VMss $VMssObject -ExtensionType $ExtensionType
+        $extension = Get-VMssExtension -VMss $VMssObject -ExtensionType $ExtensionType
     } catch {
         $OnboardingStatus.Failed += "$vmScaleSetName : Failed to lookup $ExtensionType"
         throw $_
@@ -484,21 +508,27 @@ function Install-VMssExtension {
         }
 
         Write-Verbose("$vmScaleSetName : Adding $ExtensionType with name $extensionName")
-        $scalesetObject = Add-AzureRmVmssExtension @parameters
-
+        try {
+            $VMssObject = Add-AzVmssExtension @parameters
+        }
+        catch {
+            $OnboardingStatus.Failed += "$vmScaleSetName : Failed to install/update $ExtensionType"
+            throw $_
+        }
         Write-Verbose("$vmScaleSetName : Updating scale set with $ExtensionType extension")
         try {
-            $result = Update-AzureRmVmss -VMScaleSetName $vmScaleSetName -ResourceGroupName $vmScaleSetResourceGroupName -VirtualMachineScaleSet $scalesetObject
+            $result = Update-AzVmss -VMScaleSetName $vmScaleSetName -ResourceGroupName $vmScaleSetResourceGroupName -VirtualMachineScaleSet $VMssObject
         } catch {
             $OnboardingStatus.Failed += "$vmScaleSetName : failed updating scale set with $ExtensionType extension"
             throw $_
         }
-        if (!$result -or $result.ProvisioningState -ne "Succeeded") {
-            $OnboardingStatus.Failed += "$vmScaleSetName : failed updating scale set with $ExtensionType extension"
-            throw "$vmScaleSetName : failed updating scale set with $ExtensionType extension"
-        } else {
+        
+        if ($result -and $result.ProvisioningState -eq "Succeeded") {
             Write-Output "$vmScaleSetName : Successfully updated scale set with $ExtensionType extension"
         }
+        
+        $OnboardingStatus.Failed += "$vmScaleSetName : failed updating scale set with $ExtensionType extension"
+        throw "$vmScaleSetName : failed updating scale set with $ExtensionType extension"
     }
 }
 
@@ -509,10 +539,6 @@ function Assign-ManagedIdentityUtil {
         [Parameter(Mandatory = $true)][Object]$VMObject,
         [Parameter(Mandatory = $true)][string]$UserAssignedManagedIdentyId
     )
-
-    if (!$VMObject -or !$UserAssignedManagedIdentyId) {
-        return
-    }
 
     $userAssignedIdentitiesList = $VMObject.Identity.UserAssignedIdentities
 
