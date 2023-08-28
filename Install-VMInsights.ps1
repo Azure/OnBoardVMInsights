@@ -692,7 +692,7 @@ function Assign-VmManagedIdentity {
 function Display-Exception {
     try {
         try { "ExceptionClass = $($_.Exception.GetType().Name)" | Write-Output } catch { }
-        try { "ExceptionDetailedMessage:`r`n$($_.Exception.Message)`r`n" | Write-Output } catch { }
+        try { "ExceptionMessage:`r`n$($_.Exception.Message)`r`n" | Write-Output } catch { }
         try { "StackTrace:`r`n$($_.Exception.StackTrace)`r`n" | Write-Output } catch { }
         try { "ScriptStackTrace:`r`n$($_.ScriptStackTrace)`r`n" | Write-Output } catch { }
         try { "Exception.HResult = 0x{0,0:x8}" -f $_.Exception.HResult | Write-Output } catch { }
