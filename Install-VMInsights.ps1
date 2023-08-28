@@ -118,7 +118,7 @@ This script is posted to and further documented at the following location:
 http://aka.ms/OnBoardVMInsights
 #>
 
-[CmdletBinding(SupportsShouldProcess = $true)]
+[CmdletBinding(SupportsShouldProcess = $true, ConfirmImpact = 'High')]
 param(
     [Parameter(mandatory = $true)][string]$SubscriptionId,
     [Parameter(mandatory = $false)][string]$ResourceGroup,
@@ -310,7 +310,7 @@ function Remove-VMExtension {
 }
 
 function New-DCRAssociation {
-    [CmdletBinding(SupportsShouldProcess = $true)]
+    [CmdletBinding(SupportsShouldProcess = $true, ConfirmImpact = 'High')]
     param
     (
         [Parameter(mandatory = $true)][Object]$VMObject,
@@ -360,7 +360,7 @@ function Install-VMExtension {
 	.SYNOPSIS
 	Install VM Extension, handling if already installed
 	#>
-    [[CmdletBinding(SupportsShouldProcess = $true, ConfirmImpact = 'Medium')]
+    [CmdletBinding(SupportsShouldProcess = $true, ConfirmImpact = 'Medium')]
     param
     (
         [Parameter(mandatory = $true)][Object]$VMObject,
@@ -534,6 +534,7 @@ function Install-VMssExtension {
 }
 
 function Check-ManagedIdentityAssigned {
+    [CmdletBinding()]
     param
     (
         [Parameter(Mandatory = $true)][Object]$VMObject,
