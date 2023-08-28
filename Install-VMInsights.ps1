@@ -232,12 +232,12 @@ function Get-VMExtension {
 
     foreach ($extension in $extensions) {
         if ($ExtensionType -eq $extension.VirtualMachineExtensionType) {
-            Write-Verbose("$VMName : Extension: $ExtensionType found on VM")
+            Write-Verbose("$VMName : Extension : $ExtensionType found on VM")
             $extension
             return
         }
     }
-    Write-Verbose("$VMName : Extension: $ExtensionType not found on VM")
+    Write-Verbose("$VMName : Extension : $ExtensionType not found on VM")
 }
 
 function Remove-VMExtension {
@@ -267,14 +267,15 @@ function Remove-VMExtension {
         throw $_
     }
 
-    if (!$removeResult.IsSuccessStatusCode) {
-        $statusCode = $removeResult.StatusCode
-        $errorMessage = $removeResult.ReasonPhrase
-        $OnboardingStatus.Failed += "$vmName : Failed to remove $ExtensionType. StatusCode = $statusCode. ErrorMessage = $errorMessage."
-        throw "$vmName : Failed to remove $ExtensionType. StatusCode = $statusCode. ErrorMessage = $errorMessage."
-    } else {
+    if ($removeResult.IsSuccessStatusCode) {
         Write-Verbose "$vmName : Successfully removed $ExtensionType"
+        return
     }
+
+    $statusCode = $removeResult.StatusCode
+    $errorMessage = $removeResult.ReasonPhrase
+    $OnboardingStatus.Failed += "$vmName : Failed to remove $ExtensionType. StatusCode = $statusCode. ErrorMessage = $errorMessage."
+    throw "$vmName : Failed to remove $ExtensionType. StatusCode = $statusCode. ErrorMessage = $errorMessage."
 }
 
 function New-DCRAssociation {
@@ -348,15 +349,8 @@ function Install-VMExtension {
 
     # Use supplied name unless already deployed, use same name
     $extensionName = $ExtensionName
-
-    try {
-        $extension = Get-VMExtension -VMObject $VMObject -ExtensionType $ExtensionType -OnboardingStatus $OnboardingStatus
-    }
-    catch {
-        $OnboardingStatus.Failed += "$vmName : Failed to lookup $ExtensionType"
-        throw $_
-    }
-
+    $extension = Get-VMExtension -VMObject $VMObject -ExtensionType $ExtensionType -OnboardingStatus $OnboardingStatus
+    
     if ($extension) {
         $extensionName = $extension.Name
         Write-Output "$vmName : $ExtensionType extension with name $($extension.Name) already installed. Provisioning State: $($extension.ProvisioningState) `n $($extension.Settings)"
