@@ -283,22 +283,24 @@ function Remove-VMExtension {
 
     $extensionName = $extension.Name
 
-    try {
-        $removeResult = Remove-AzVMExtension -ResourceGroupName $vmResourceGroupName -VMName $vmName -Name $extensionName -Force
-    } catch {
-        $OnboardingStatus.Failed += "$vmName : Failed to remove extension : $ExtensionType"
-        throw $_
-    }
+    if ($PSCmdlet.ShouldProcess($vmssName, "remove Microsoft Monitoring Agent")) {
+        try {
+            $removeResult = Remove-AzVMExtension -ResourceGroupName $vmResourceGroupName -VMName $vmName -Name $extensionName -Force
+        } catch {
+            $OnboardingStatus.Failed += "$vmName : Failed to remove extension : $ExtensionType"
+            throw $_
+        }
 
-    if ($removeResult.IsSuccessStatusCode) {
-        Write-Verbose "$vmName : Successfully removed $ExtensionType"
-        return
-    }
+        if ($removeResult.IsSuccessStatusCode) {
+            Write-Verbose "$vmName : Successfully removed $ExtensionType"
+            return
+        }
 
-    $statusCode = $removeResult.StatusCode
-    $errorMessage = $removeResult.ReasonPhrase
-    $OnboardingStatus.Failed += "$vmName : Failed to remove $ExtensionType. StatusCode = $statusCode. ErrorMessage = $errorMessage."
-    throw "$vmName : Failed to remove $ExtensionType. StatusCode = $statusCode. ErrorMessage = $errorMessage."
+        $statusCode = $removeResult.StatusCode
+        $errorMessage = $removeResult.ReasonPhrase
+        $OnboardingStatus.Failed += "$vmName : Failed to remove $ExtensionType. StatusCode = $statusCode. ErrorMessage = $errorMessage."
+        throw "$vmName : Failed to remove $ExtensionType. StatusCode = $statusCode. ErrorMessage = $errorMessage."
+    }
 }
 
 function New-DCRAssociation {
@@ -373,7 +375,7 @@ function Install-VMExtension {
     # Use supplied name unless already deployed, use same name
     $extensionName = $ExtensionName
     $extension = Get-VMExtension -VMObject $VMObject -ExtensionType $ExtensionType -OnboardingStatus $OnboardingStatus
-    
+
     if ($extension) {
         $extensionName = $extension.Name
         Write-Output "$vmName : $ExtensionType extension with name $($extension.Name) already installed. Provisioning State: $($extension.ProvisioningState) `n $($extension.Settings)"
@@ -441,7 +443,7 @@ function Install-VMExtension {
             $OnboardingStatus.Failed += "$vmName : Failed to deploy/update $ExtensionType"
             throw $_
         }
-        
+
         if ($result -and $result.IsSuccessStatusCode) {
             Write-Output "$vmName : Successfully deployed/updated $ExtensionType"
             return
@@ -522,11 +524,11 @@ function Install-VMssExtension {
             $OnboardingStatus.Failed += "$vmssName : failed updating scale set with $ExtensionType extension"
             throw $_
         }
-        
+
         if ($result -and $result.ProvisioningState -eq "Succeeded") {
             Write-Output "$vmssName : Successfully updated scale set with $ExtensionType extension"
         }
-        
+
         $OnboardingStatus.Failed += "$vmssName : failed updating scale set with $ExtensionType extension"
         throw "$vmssName : failed updating scale set with $ExtensionType extension"
     }
@@ -597,7 +599,7 @@ function Assign-VmssManagedIdentity {
             Write-Output "$vmScaleSetName : Successfully assigned user managed identity : $UserAssignedManagedIdentityName"
             return
         }
-        
+
         $updateCode = $result.StatusCode
         $errorMessage = $result.ReasonPhrase
         $OnboardingStatus.Failed += "$vmScaleSetName : Failed to assign managed identity : $UserAssignedManagedIdentityName. StatusCode = $updateCode. ErrorMessage = $errorMessage."
@@ -673,7 +675,7 @@ function Assign-VmManagedIdentity {
             $OnboardingStatus.Failed += "$vmName : Failed to assign user managed identity = $UserAssignedManagedIdentityName"
             throw $_
         }
-        
+
         if ($updateResult -and $updateResult.IsSuccessStatusCode) {
             Write-Output "$vmName : Successfully assigned managed identity : $UserAssignedManagedIdentityName"
         }
@@ -732,7 +734,7 @@ function Display-Exception {
 $account =  Get-AzContext
 if ($null -eq $account.Account) {
     Write-Output "Account Context not found, please login"
-    Login-AzureRmAccount -subscriptionid $SubscriptionId
+    Connect-AzAccount -subscriptionid $SubscriptionId
 }
 else {
     if ($account.Subscription.Id -eq $SubscriptionId) {
@@ -741,10 +743,9 @@ else {
     }
     else {
         Write-Output "Current Subscription:"
-
         $account
         Write-Output "Changing to subscription: $SubscriptionId"
-        Select-AzureRmSubscription -SubscriptionId $SubscriptionId
+        Select-AzureSubscription -SubscriptionId $SubscriptionId
     }
 }
 
@@ -768,7 +769,7 @@ $daPublicSettings = @{}
 
 if ($PolicyAssignmentName) {
     Write-Output "Getting list of VM's from PolicyAssignmentName: " + $PolicyAssignmentName
-    $complianceResults = Get-AzureRmPolicyState -PolicyAssignmentName $PolicyAssignmentName
+    $complianceResults = Get-AzPolicyState -PolicyAssignmentName $PolicyAssignmentName
 
     foreach ($result in $complianceResults) {
         Write-Verbose($result.ResourceId)
@@ -784,8 +785,8 @@ if ($PolicyAssignmentName) {
         if ($ResourceGroup -and $ResourceGroup -ne $vmResourceGroup) { continue }
         if ($Name -and $Name -ne $vmName) { continue }
 
-        $vm = Get-AzureRmVM -Name $vmName -ResourceGroupName $vmResourceGroup
-        $vmStatus = Get-AzureRmVM -Status -Name $vmName -ResourceGroupName $vmResourceGroup
+        $vm = Get-AzVM -Name $vmName -ResourceGroupName $vmResourceGroup
+        $vmStatus = Get-AzVM -Status -Name $vmName -ResourceGroupName $vmResourceGroup
 
         # fix to have same property as VM that is retrieved without Name
         $vm | Add-Member -NotePropertyName PowerState -NotePropertyValue $vmStatus.Statuses[1].DisplayStatus
@@ -798,17 +799,17 @@ if (! $PolicyAssignmentName) {
     Write-Output "Getting list of VM's or VM ScaleSets matching criteria specified"
     if (!$ResourceGroup -and !$Name) {
         # If ResourceGroup value is not passed - get all VMs under given SubscriptionId
-        $VMs = Get-AzureRmVM -Status
-        $ScaleSets = Get-AzureRmVmss
+        $VMs = Get-AzVM -Status
+        $ScaleSets = Get-AzVmss
         $VMs = @($VMs) + $ScaleSets
     }
     else {
         # If ResourceGroup value is passed - select all VMs under given ResourceGroupName
-        $VMs = Get-AzureRmVM -ResourceGroupName $ResourceGroup -Status
+        $VMs = Get-AzVM -ResourceGroupName $ResourceGroup -Status
         if ($Name) {
             $VMs = $VMs | Where-Object {$_.Name -like $Name}
         }
-        $ScaleSets = Get-AzureRmVmss -ResourceGroupName $ResourceGroup
+        $ScaleSets = Get-AzVmss -ResourceGroupName $ResourceGroup
         if ($Name) {
             $ScaleSets = $ScaleSets | Where-Object {$_.Name -like $Name}
         }
@@ -1001,6 +1002,7 @@ Foreach ($vm in $VMs) {
                     -OnboardingStatus $OnboardingStatus
             }
         }
+
         New-DCRAssociation `
             -VMObject $vm `
             -DcrResourceId $DcrResourceId `
