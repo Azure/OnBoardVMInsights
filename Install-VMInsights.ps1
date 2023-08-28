@@ -254,6 +254,7 @@ function Remove-VMExtension {
     $extension = Get-VMExtension -VMObject $VMObject -ExtensionType $ExtensionType -OnboardingStatus $OnboardingStatus
 
     if (!$extension) {
+        Write-Verbose "$vmName : Failed to lookup $ExtensionType"
         return
     }
 
