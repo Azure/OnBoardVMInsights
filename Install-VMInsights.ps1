@@ -570,7 +570,7 @@ function Assign-ManagedIdentityRoles {
     ##Assign roles to the provided managed identity.
     $targetScope = "/subscriptions/" + $vmSubscriptionId + "/resourceGroups/" + $vmResourceGroupName
     $roleDefinitionList = @("Virtual Machine Contributor", "Azure Connected Machine Resource Administrator", "Log Analytics Contributor") 
-    if ($PSCmdlet.ShouldProcess($vmName, "assign roles to managed identity $UserAssignedManagedIdentityName")) {
+    if ($PSCmdlet.ShouldProcess($vmName, "assign roles = [Virtual Machine Contributor,Azure Connected Machine Resource Administrator, Log Analytics Contributor] to managed identity $UserAssignedManagedIdentityName")) {
         foreach ($role in $roleDefinitionList) {
             try {
                 $roleAssignmentFound = Get-AzRoleAssignment -ObjectId $userAssignedIdentityObject.principalId -RoleDefinitionName $role -Scope $targetScope
