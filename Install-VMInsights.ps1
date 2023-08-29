@@ -222,13 +222,13 @@ function Get-VMExtension {
     $vmName = $VMObject.VMName
 
     try {
-        $vm = Get-AzVMExtension -VMName $vmName -ResourceGroupName $vmResourceGroupName
+        $extensions = Get-AzVMExtension -VMName $vmName -ResourceGroupName $vmResourceGroupName
     } catch {
         $OnboardingStatus.Failed += "$vmName : Failed to lookup for extensions"
         throw $_
     }
 
-    $extensions = $vm.Extensions
+     
 
     foreach ($extension in $extensions) {
         if ($ExtensionType -eq $extension.VirtualMachineExtensionType) {
@@ -383,30 +383,30 @@ function Install-VMExtension {
 
     if ($extension) {
         $extensionName = $extension.Name
-        Write-Output "$vmName : $ExtensionType extension with name $($extension.Name) already installed. Provisioning State: $($extension.ProvisioningState) `n $($extension.Settings)"
-        if ($extension.Settings) {
+        Write-Verbose "$vmName : $ExtensionType extension with name $($extension.Name) already installed. Provisioning State: $($extension.ProvisioningState) `n $($extension.PublicSettings)"
+        if ($extension.PublicSettings) {
             if ($mmaExtensionMap.Values -contains $ExtensionType) {
-                if ($extension.Settings.ToString().Contains($PublicSettings.workspaceId)) {
-                    Write-Output "$vmName : Extension $ExtensionType already configured for this workspace. Provisioning State: $($extension.ProvisioningState) `n $($extension.Settings)"
+                if ($extension.PublicSettings.ToString().Contains($PublicSettings.workspaceId)) {
+                    Write-Output "$vmName : Extension $ExtensionType already configured for this workspace. Provisioning State: $($extension.ProvisioningState) `n $($extension.PublicSettings)"
                     return
                 } else {
-                    if ($ReInstall -ne $true) {
-                        Write-Output "$vmName : Extension $ExtensionType present, run with -ReInstall again to move to new workspace. Provisioning State: $($extension.ProvisioningState) `n $($extension.Settings)"
+                    if (! $ReInstall) {
+                        Write-Output "$vmName : Extension $ExtensionType present, run with -ReInstall again to move to new workspace. Provisioning State: $($extension.ProvisioningState) `n $($extension.PublicSettings)"
                         return
                     }
                 }
             }
 
             if ($amaExtensionMap.Values -contains $ExtensionType) {
-                if ($extension.Settings.ToString().Contains($PublicSettings.authentication.managedIdentity.'identifier-value')) {
-                    Write-Output "$vmName : Extension $ExtensionType already configured with this user assigned managed identity. Provisioning State: $($extension.ProvisioningState) `n $($extension.Settings)"
+                if ($extension.PublicSettings.ToString().Contains($PublicSettings.authentication.managedIdentity.'identifier-value')) {
+                    Write-Output "$vmName : Extension $ExtensionType already configured with this user assigned managed identity. Provisioning State: $($extension.ProvisioningState) `n $($extension.PublicSettings)"
                     return
                 }
             }
 
             if ($daExtensionMap.Values -contains $ExtensionType) {
-                if ($extension.Settings.ToString().Contains($PublicSettings.enableAMA)) {
-                    Write-Output "$vmName : Extension $ExtensionType already configured with AMA enabled. Provisioning State: $($extension.ProvisioningState) `n $($extension.Settings)"
+                if ($extension.PublicSettings.ToString().Contains($PublicSettings.enableAMA)) {
+                    Write-Output "$vmName : Extension $ExtensionType already configured with AMA enabled. Provisioning State: $($extension.ProvisioningState) `n $($extension.PublicSettings)"
                     return
                 }
             }
@@ -429,7 +429,7 @@ function Install-VMExtension {
             $parameters.Add("Settings", $PublicSettings)
         }
 
-        if ($ProtectedSettin) {
+        if ($ProtectedSettings) {
             $parameters.Add("ProtectedSettings", $ProtectedSettings)
         }
 
@@ -445,7 +445,7 @@ function Install-VMExtension {
             $result = Set-AzVMExtension @parameters
         }
         catch {
-            $OnboardingStatus.Failed += "$vmName : Failed to deploy/update $ExtensionType"
+            $OnboardingStatus.Failed += "$vmName : Failed to install/update $ExtensionType"
             throw $_
         }
 
@@ -483,10 +483,11 @@ function Install-VMssExtension {
     # Use supplied name unless already deployed, use same name
     $extensionName = $ExtensionName
     $extension = Get-VMssExtension -VMss $VMssObject -ExtensionType $ExtensionType
-    
+    $extAutoUpgradeMinorVersion = $true
     if ($extension) {
         Write-Verbose("$vmssName : $ExtensionType extension with name " + $extension.Name + " already installed. Provisioning State: " + $extension.ProvisioningState + " " + $extension.Settings)
         $extensionName = $extension.Name
+        $extAutoUpgradeMinorVersion = $extension.AutoUpgradeMinorVersion
     }
 
     if ($PSCmdlet.ShouldProcess($vmssName, "install extension $ExtensionType")) {
@@ -497,7 +498,7 @@ function Install-VMssExtension {
             Publisher               = $ExtensionPublisher
             Type                    = $ExtensionType
             TypeHandlerVersion      = $ExtensionVersion
-            AutoUpgradeMinorVersion = $true
+            AutoUpgradeMinorVersion = $extAutoUpgradeMinorVersion
         }
 
         if ($PublicSettings) {
@@ -829,7 +830,7 @@ $VMS | ForEach-Object { Write-Output $_.Name + " " + $_.PowerState }
 # Validate customer wants to continue
 $monitoringAgent = if ($DcrResourceId) {"AzureMonitoringAgent"} else {"LogAnalyticsAgent"}
 $infoMessage = "`For above $($VMS.Count) VM's or VM Scale Sets, this operation will install $monitoringAgent"
-if (!$DcrResourceId -or ($DcrResourceId -and $ProcessAndDependencies)) {
+if (!$DcrResourceId -or ( -and $ProcessAndDependencies)) {
     $infoMessage+=" and Dependency Agent extension"
 }
 Write-Output $infoMessage
@@ -847,6 +848,7 @@ else {
 #
 Foreach ($vm in $VMs) {
     try {
+        #$vm refers to both VM/VM Scale Set objects
         # set as variabels so easier to use in output strings
         $vmName = $vm.Name
         $vmLocation = $vm.Location
@@ -1008,15 +1010,17 @@ Foreach ($vm in $VMs) {
                     -OnboardingStatus $OnboardingStatus
             }
         }
-
-        New-DCRAssociation `
-            -VMObject $vm `
-            -DcrResourceId $DcrResourceId `
-            -OnboardingStatus $OnboardingStatus
-        #reached this point - indicates all previous deployments succeeded
-        $message = "$vmName : Successfully onboarded VMInsights"
-        Write-Output $message
-        $OnboardingStatus.Succeeded += $message
+ 
+        if ($DcrResourceId) {
+            New-DCRAssociation `
+                -VMObject $vm `
+                -DcrResourceId $DcrResourceId `
+                -OnboardingStatus $OnboardingStatus
+            #reached this point - indicates all previous deployments succeeded
+            $message = "$vmName : Successfully onboarded VMInsights"
+            Write-Output $message
+            $OnboardingStatus.Succeeded += $message
+        }
     }
     catch {
         Display-Exception $_
