@@ -544,7 +544,7 @@ function Install-VMssExtension {
     }
 }
 
-function Check-ManagedIdentityAssigned {
+function Check-UserManagedIdentityAlreadyAssigned {
     [CmdletBinding()]
     param
     (
@@ -552,11 +552,12 @@ function Check-ManagedIdentityAssigned {
         [Parameter(Mandatory = $true)][string]$UserAssignedManagedIdentyId
     )
 
-    $userAssignedIdentitiesList = $VMObject.Identity.UserAssignedIdentities
-
-    foreach ($userAssignDict in $userAssignedIdentitiesList) {
-        if ($userAssignDict.Keys -eq $UserAssignedManagedIdentyId) {
-            return $True
+    if ($VMObject.Identity.Type -eq "UserAssigned") {
+        $userAssignedIdentitiesList = $VMObject.Identity.UserAssignedIdentities
+        foreach ($userAssignDict in $userAssignedIdentitiesList) {
+            if ($userAssignDict.Keys -eq $UserAssignedManagedIdentyId) {
+                return $True
+            }
         }
     }
 
@@ -615,39 +616,39 @@ function Assign-VmssManagedIdentity {
     )
 
     $vmssName = $VMssObject.Name
-    $vmssResourceGroupName = $VMssObject.ResourceGroupName
+    $userAssignedManagedIdentityName = $UserAssignedManagedIdentityObject.Name
+    $userAssignedManagedIdentityId = $UserAssignedManagedIdentityObject.Id
 
-    if (($VMssObject.Identity.Type -eq "UserAssigned") `
-              -and (Check-ManagedIdentityAssigned -VMObject $VMssObject `
-                        -UserAssignedManagedIdentyId $UserAssignedManagedIdentityObject.Id)) {
-        Write-Verbose "$vmssName : Already assigned with user managed identity : $UserAssignedManagedIdentityName"
+    if (Check-UserManagedIdentityAlreadyAssigned -VMObject $VMssObject `
+                                                 -UserAssignedManagedIdentyId $userAssignedManagedIdentityId) {
+        Write-Verbose "$vmssName : Already assigned with user managed identity : $userAssignedManagedIdentityName"
     } else {
-        if (!($PSCmdlet.ShouldProcess($vmName, "assign managed identity $UserAssignedManagedIdentityName"))) {
+        if (!($PSCmdlet.ShouldProcess($vmssName, "assign managed identity $userAssignedManagedIdentityName"))) {
             return
         }
 
         try {
             $result = Update-AzVMss -VirtualMachineScaleSet $VMssObject `
                                     -IdentityType "UserAssigned" `
-                                    -IdentityID $userAssignedIdentityObject.Id
+                                    -IdentityID $userAssignedManagedIdentityId
         } catch {
-            $OnboardingStatus.Failed += "$vmScaleSetName : Failed to assign user managed identity : $UserAssignedManagedIdentityName"
+            $OnboardingStatus.Failed += "$vmScaleSetName : Failed to assign user managed identity : $userAssignedManagedIdentityName"
             throw $_
         }
 
         if ($result -and $result.IsSuccessStatusCode) {
-            Write-Output "$vmScaleSetName : Successfully assigned user managed identity : $UserAssignedManagedIdentityName"
+            Write-Output "$vmScaleSetName : Successfully assigned user managed identity : $userAssignedManagedIdentityName"
             return
         }
 
         $updateCode = $result.StatusCode
         $errorMessage = $result.ReasonPhrase
-        $OnboardingStatus.Failed += "$vmScaleSetName : Failed to assign managed identity : $UserAssignedManagedIdentityName. StatusCode = $updateCode. ErrorMessage = $errorMessage."
+        $OnboardingStatus.Failed += "$vmScaleSetName : Failed to assign managed identity : $userAssignedManagedIdentityName. StatusCode = $updateCode. ErrorMessage = $errorMessage."
         
     }
 
     ##Assign Managed identity to Azure Monitoring Agent
-    $amaPublicSettings.authentication.managedIdentity.'identifier-value' = $userAssignedIdentityObject.Id
+    $amaPublicSettings.authentication.managedIdentity.'identifier-value' = $UserAssignedManagedIdentityObject.Id
 }
 
 function Assign-VmManagedIdentity {
@@ -660,39 +661,39 @@ function Assign-VmManagedIdentity {
     )
 
     $vmName = $VMObject.Name
-    $vmResourceGroupName = $VMObject.ResourceGroupName
+    $userAssignedManagedIdentityName = $UserAssignedManagedIdentityObject.Name
+    $userAssignedManagedIdentityId = $UserAssignedManagedIdentityObject.Id
 
-    if (($VMObject.Identity.Type -eq "UserAssigned") `
-              -and (Check-ManagedIdentityAssigned -VMObject $VMObject `
-                        -UserAssignedManagedIdentyId $UserAssignedManagedIdentityObject.Id)) {
-        Write-Verbose "$vmName : Already assigned with managed identity : $UserAssignedManagedIdentityName"
+    if (Check-UserManagedIdentityAlreadyAssigned -VMObject $VMObject `
+                                                 -UserAssignedManagedIdentyId $userAssignedManagedIdentityId) {
+        Write-Verbose "$vmName : Already assigned with managed identity : $userAssignedManagedIdentityName"
     } else {
-        if (!($PSCmdlet.ShouldProcess($vmName, "assign managed identity $UserAssignedManagedIdentityName"))) {
+        if (!($PSCmdlet.ShouldProcess($vmName, "assign managed identity $userAssignedManagedIdentityName"))) {
             return
         }
 
         try {
             $result = Update-AzVM -VM $VMObject `
                                   -IdentityType "UserAssigned" `
-                                  -IdentityID $userAssignedIdentityObject.Id                                 
+                                  -IdentityID $userAssignedManagedIdentityId                               
         } catch {
-            $OnboardingStatus.Failed += "$vmName : Failed to assign user managed identity = $UserAssignedManagedIdentityName"
+            $OnboardingStatus.Failed += "$vmName : Failed to assign user managed identity = $userAssignedManagedIdentityName"
             throw $_
         }
 
         if ($result -and $result.IsSuccessStatusCode) {
-            Write-Output "$vmName : Successfully assigned managed identity : $UserAssignedManagedIdentityName"
+            Write-Output "$vmName : Successfully assigned managed identity : $userAssignedManagedIdentityName"
         }
         else {
             $statusCode = $updateResult.StatusCode
             $errorMessage = $updateResult.ReasonPhrase
-            $OnboardingStatus.Failed += "$vmName : Failed to assign managed identity : $UserAssignedManagedIdentityName. StatusCode = $statusCode. ErrorMessage = $errorMessage."
-            throw "$vmName : Failed to assign managed identity : $UserAssignedManagedIdentityName. StatusCode = $statusCode. ErrorMessage = $errorMessage."
+            $OnboardingStatus.Failed += "$vmName : Failed to assign managed identity : $userAssignedManagedIdentityName. StatusCode = $statusCode. ErrorMessage = $errorMessage."
+            throw "$vmName : Failed to assign managed identity : $userAssignedManagedIdentityName. StatusCode = $statusCode. ErrorMessage = $errorMessage."
         }
     }
 
     ##Assign Managed identity to Azure Monitoring Agent
-    $amaPublicSettings.authentication.managedIdentity.'identifier-value' = $userAssignedIdentityObject.Id
+    $amaPublicSettings.authentication.managedIdentity.'identifier-value' = $UserAssignedManagedIdentityObject.Id
 }
 
 function Display-Exception {
@@ -750,6 +751,14 @@ $OnboardingStatus = @{
 $mmaPublicSettings = @{"workspaceId" = $WorkspaceId; "stopOnMultipleConnections" = "true"}
 $mmaProtectedSettings = @{"workspaceKey" = $WorkspaceKey}
 $daPublicSettings = @{}
+
+if ($DcrResourceId) {
+    $userAssignedIdentityObject = Get-AzUserAssignedIdentity -ResourceGroupName $UserAssignedManagedIdentityResourceGroup -Name $UserAssignedManagedIdentityName
+    if (!$userAssignedIdentityObject) {
+        Write-Output "Failed to lookup managed identity $UserAssignedManagedIdentityName"
+    }
+    exit
+}
 
 if ($PolicyAssignmentName) {
     Write-Output "Getting list of VM's from PolicyAssignmentName: " + $PolicyAssignmentName
@@ -895,13 +904,11 @@ Foreach ($vm in $VMs) {
         if ($DcrResourceId) {
             if ($isScaleset) {
                 Assign-VmssManagedIdentity -VMssObject $vm `
-                    -UserAssignedManagedIdentityResourceGroup $UserAssignedManagedIdentityResourceGroup `
-                    -UserAssignedManagedIdentityName $UserAssignedManagedIdentityName `
+                    -UserAssignedManagedIdentityObject $UserAssignedManagedIdentityObject
                     -OnboardingStatus $OnboardingStatus
             } else {
                 Assign-VmManagedIdentity -VMObject $vm `
-                    -UserAssignedManagedIdentityResourceGroup $UserAssignedManagedIdentityResourceGroup `
-                    -UserAssignedManagedIdentityName $UserAssignedManagedIdentityName `
+                    -UserAssignedManagedIdentityObject $UserAssignedManagedIdentityObject
                     -OnboardingStatus $OnboardingStatus
             }
 
