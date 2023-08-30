@@ -339,7 +339,7 @@ function New-DCRAssociation {
     # A VM may have zero or more Data Collection Rule Associations
     foreach ($dcrAssociation in $dcrAssociationList) {
         if ($dcrAssociation.DataCollectionRuleId -eq $DcrResourceId) {
-            Write-Output "$vmName : Data Collection Rule already associated."
+            Write-Output "$vmName : Data Collection Rule already associated under $($dcrAssociation.Name)"
             return
         }
     }
@@ -357,7 +357,7 @@ function New-DCRAssociation {
         #Tmp fix task:- 21191002
         if (!$dcrassociation -or $dcrassociation -is [ErrorResponseCommonV2Exception]) {
             $OnboardingStatus.Failed += "$vmName : Failed to create Data Collection Rule Association for $vmId"
-            throw "$vmName : Failed to create Data Collection Rule Association for $vmId"
+            throw "$vmName : Failed to create Data Collection Rule Association for $vmId. ErrorMessage = $($dcrassociation.Response)"
         }
     }
 }
