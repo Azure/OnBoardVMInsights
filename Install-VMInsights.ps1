@@ -296,24 +296,23 @@ function Remove-VMExtension {
 
     $extensionName = $extension.Name
 
-    if ($PSCmdlet.ShouldProcess($vmssName, "remove Microsoft Monitoring Agent")) {
-        try {
-            $removeResult = Remove-AzVMExtension -ResourceGroupName $vmResourceGroupName -VMName $vmName -Name $extensionName -Force
-        } catch {
-            $OnboardingStatus.Failed += "$vmName : Failed to remove extension : $ExtensionType"
-            throw $_
-        }
-
-        if ($removeResult.IsSuccessStatusCode) {
-            Write-Verbose "$vmName : Successfully removed $ExtensionType"
-            return
-        }
-
-        $statusCode = $removeResult.StatusCode
-        $errorMessage = $removeResult.ReasonPhrase
-        $OnboardingStatus.Failed += "$vmName : Failed to remove $ExtensionType. StatusCode = $statusCode. ErrorMessage = $errorMessage."
-        throw "$vmName : Failed to remove $ExtensionType. StatusCode = $statusCode. ErrorMessage = $errorMessage."
+    try {
+        $removeResult = Remove-AzVMExtension -ResourceGroupName $vmResourceGroupName -VMName $vmName -Name $extensionName -Force
+    } catch {
+        $OnboardingStatus.Failed += "$vmName : Failed to remove extension : $ExtensionType"
+        throw $_
     }
+
+    if ($removeResult.IsSuccessStatusCode) {
+        Write-Verbose "$vmName : Successfully removed $ExtensionType"
+        return
+    }
+
+    $statusCode = $removeResult.StatusCode
+    $errorMessage = $removeResult.ReasonPhrase
+    $OnboardingStatus.Failed += "$vmName : Failed to remove $ExtensionType. StatusCode = $statusCode. ErrorMessage = $errorMessage."
+    throw "$vmName : Failed to remove $ExtensionType. StatusCode = $statusCode. ErrorMessage = $errorMessage."
+
 }
 
 function New-DCRAssociation {
@@ -387,6 +386,11 @@ function Install-VMExtension {
     # Use supplied name unless already deployed, use same name
     $extensionName = $ExtensionName
     $extension = Get-VMExtension -VMObject $VMObject -ExtensionType $ExtensionType -OnboardingStatus $OnboardingStatus
+    $shouldProcessPromptMessage = "install extension $ExtensionType"
+    
+    if ($ExtensionType -eq "OmsAgentForLinux") {
+        $shouldProcessPromptMessage = "ExtensionType: OmsAgentForLinux does not support updating workspace. Uninstallating and Re-Installing."
+    }
 
     if ($extension) {
         $extensionName = $extension.Name
@@ -420,7 +424,7 @@ function Install-VMExtension {
         }
     }
 
-    if ($PSCmdlet.ShouldProcess($VMName, "install extension $ExtensionType")) {
+    if ($PSCmdlet.ShouldProcess($VMName,  $shouldProcessPromptMessage)) {
 
         $parameters = @{
             ResourceGroupName  = $vmResourceGroupName
