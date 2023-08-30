@@ -568,39 +568,37 @@ function Assign-ManagedIdentityRoles {
     [CmdletBinding(SupportsShouldProcess = $true, ConfirmImpact = 'Medium')]
     param {
         [Parameter(Mandatory = $true)][String]$SubscriptionId,
-        [Parameter(Mandatory = $true)][Object]$VMObject,
-        [Parameter(Mandatory = $true)][IIdentity]$UserAssignedIdentityObject,
-        [Parameter(mandatory = $true)][hashtable]$OnboardingStatus
+        [Parameter(Mandatory = $true)][IIdentity]$UserAssignedManagedIdentityObject
     }
 
-    $vmName = $VMObject.Name
     $vmResourceGroupName = $VMObject.ResourceGroupName
-
-    ##Assign roles to the provided managed identity.
+    $userAssignedManagedIdentityName = $UserAssignedManagedIdentityObject.Name
+    $userAssignedManagedIdentityId = $UserAssignedManagedIdentityObject.principalId
     $targetScope = "/subscriptions/" + $vmSubscriptionId + "/resourceGroups/" + $vmResourceGroupName
     $roleDefinitionList = @("Virtual Machine Contributor", "Azure Connected Machine Resource Administrator", "Log Analytics Contributor") 
-    if ($PSCmdlet.ShouldProcess($vmName, "assign roles = $roleDefinitionList to managed identity $UserAssignedManagedIdentityName")) {
-        foreach ($role in $roleDefinitionList) {
+    
+    if (!($PSCmdlet.ShouldProcess($vmResourceGroupName, "assign roles : $roleDefinitionList to user assigned managed identity : $userAssignedManagedIdentityName"))) {
+        return
+    }
+
+    foreach ($role in $roleDefinitionList) {
+        try {
+            $roleAssignmentFound = Get-AzRoleAssignment -ObjectId $userAssignedManagedIdentityId -RoleDefinitionName $role -Scope $targetScope
+        }
+        catch {
+            throw $_
+        }
+
+        if ($roleAssignmentFound) {
+            Write-Verbose "Scope $targetScope : role $role already set"
+        } else {
+            Write-Verbose("Scope $targetScope : assigning role $role")
             try {
-                $roleAssignmentFound = Get-AzRoleAssignment -ObjectId $userAssignedIdentityObject.principalId -RoleDefinitionName $role -Scope $targetScope
+                New-AzRoleAssignment  -ObjectId $userAssignedManagedIdentityId -RoleDefinitionName $role -Scope $targetScope
+                Write-Output "Scope $targetScope : role assignment for $userAssignedManagedIdentityName with $role succeeded"
             }
             catch {
-                $OnboardingStatus.Failed += "Scope $targetScope : Failed to lookup role assignment "
                 throw $_
-            }
-
-            if ($roleAssignmentFound) {
-                Write-Verbose "Scope $targetScope : role $role already set"
-            } else {
-                Write-Verbose("Scope $targetScope : assigning role $role")
-                try {
-                    New-AzRoleAssignment  -ObjectId $userAssignedIdentityObject.principalId -RoleDefinitionName $role -Scope $targetScope
-                    Write-Output "Scope $targetScope : role assignment for $UserAssignedManagedIdentityName with $role succeeded"
-                }
-                catch {
-                    $OnboardingStatus.Failed += "Scope $targetScope : role assignment with $role failed"
-                    throw $_
-                }
             }
         }
     }
@@ -753,11 +751,20 @@ $mmaProtectedSettings = @{"workspaceKey" = $WorkspaceKey}
 $daPublicSettings = @{}
 
 if ($DcrResourceId) {
-    $userAssignedIdentityObject = Get-AzUserAssignedIdentity -ResourceGroupName $UserAssignedManagedIdentityResourceGroup -Name $UserAssignedManagedIdentityName
-    if (!$userAssignedIdentityObject) {
-        Write-Output "Failed to lookup managed identity $UserAssignedManagedIdentityName"
+    try {
+        $userAssignedIdentityObject = Get-AzUserAssignedIdentity 
+                                        -ResourceGroupName $UserAssignedManagedIdentityResourceGroup `
+                                        -Name $UserAssignedManagedIdentityName
+        if (!$userAssignedIdentityObject) {
+            Write-Output "Failed to lookup managed identity $($userAssignedIdentityObject.Name)"
+            Write-Output "Exiting..."
+            exit
+        } else {
+            Assign-ManagedIdentityRoles -SubscriptionId $SubscriptionId -UserAssignedIdentityObject $userAssignedIdentityObject
+        }
+    } catch {
+        Display-Exception $_
     }
-    exit
 }
 
 if ($PolicyAssignmentName) {
@@ -911,8 +918,6 @@ Foreach ($vm in $VMs) {
                     -UserAssignedManagedIdentityObject $UserAssignedManagedIdentityObject
                     -OnboardingStatus $OnboardingStatus
             }
-
-            Assign-ManagedIdentityRoles -VMObject $VMssObject -SubscriptionId $SubscriptionId -UserAssignedIdentityObject $UserAssignedManagedIdentityName -OnboardingStatus $OnboardingStatus
         }
 
         if ($isScaleset) {
