@@ -32,8 +32,8 @@
 
 <#
 .SYNOPSIS
-This script installs VM extensions for Log Analytics/Azure Monitoring Agent (AMA) and Dependency Agent as needed for VM Insights. If the customer
-onboarded AMA a Data Collection Rule(DCR) and User Assigned Identity (UAMI) is also associated with the VM's and VM Scale Sets.
+This script installs VM extensions for Log Analytics/Azure Monitoring Agent (AMA) and Dependency Agent as needed for VM Insights.
+If AMA is onboarded a Data Collection Rule(DCR) and an User Assigned Managed Identity (UAMI) is also associated with the VM's and VM Scale Sets.
 
 .DESCRIPTION
 This script installs or re-configures following on VM's and VM Scale Sets:
@@ -46,6 +46,8 @@ Can be applied to:
 - Resource Group in a Subscription
 - Specific VM/VM Scale Set
 - Compliance results of a policy for a VM or VM Extension
+
+If the extensions are already installed will not be installed again.
 
 Script will show you list of VM's/VM Scale Sets that will apply to and let you confirm to continue.
 Use -Approve switch to run without prompting, if all required parameters are provided.
@@ -80,7 +82,7 @@ For Health supported is: "East US","eastus","West Central US","westcentralus", "
 If specified will only take from this source.
 
 .PARAMETER ReInstall
-<Optional> If for a VM/VM Scale Set, the Log Analytics Agent is already configured for a different workspace, provide this parameter to switch to the new workspace
+If for a VM/VM Scale Set, the Log Analytics Agent is already configured for a different workspace, provide this parameter to switch to the new workspace
 
 .PARAMETER TriggerVmssManualVMUpdate
 <Optional> Set this flag to trigger update of VM instances in a scale set whose upgrade policy is set to Manual
@@ -112,6 +114,11 @@ Specify to use a PolicyAssignmentName for source, and to ReInstall (move to a ne
 
 .EXAMPLE
 .\Install-VMInsights.ps1 -SubscriptionId <SubscriptionId> -ResourceGroup <ResourceGroup>  -DcrResourceId <DataCollectionRuleResourceId> -UserAssignedManagedIdentityName <UserAssignedIdentityName> -ProcessAndDependencies -UserAssignedManagedIdentityResourceGroup <UserAssignedIdentityResourceGroup>
+(the above command will onboard Assign a UAMI to a VM/VMss for AMA, Onboard AMA, DA and Associate a DCR with the VM/Vmss)
+
+.EXAMPLE
+.\Install-VMInsights.ps1 -SubscriptionId <SubscriptionId> -ResourceGroup <ResourceGroup>  -DcrResourceId <DataCollectionRuleResourceId> -UserAssignedManagedIdentityName <UserAssignedIdentityName> -UserAssignedManagedIdentityResourceGroup <UserAssignedIdentityResourceGroup>
+(the above command will onboard Assign a UAMI to a VM/VMss for AMA, Onboard AMA and Associate a DCR with the VM/Vmss)
 
 .LINK
 This script is posted to and further documented at the following location:
@@ -635,16 +642,16 @@ function Assign-VmssManagedIdentity {
                 $OnboardingStatus.Failed += "$vmScaleSetName : Failed to assign user managed identity : $UserAssignedManagedIdentityName"
                 throw $_
             }
+        }
 
-            if ($result -and $result.IsSuccessStatusCode) {
-                Write-Output "$vmScaleSetName : Successfully assigned user managed identity : $UserAssignedManagedIdentityName"
-                return
-            }
+        if ($result -and $result.IsSuccessStatusCode) {
+            Write-Output "$vmScaleSetName : Successfully assigned user managed identity : $UserAssignedManagedIdentityName"
+            return
+        }
 
-            $updateCode = $result.StatusCode
-            $errorMessage = $result.ReasonPhrase
-            $OnboardingStatus.Failed += "$vmScaleSetName : Failed to assign managed identity : $UserAssignedManagedIdentityName. StatusCode = $updateCode. ErrorMessage = $errorMessage."
-        }    
+        $updateCode = $result.StatusCode
+        $errorMessage = $result.ReasonPhrase
+        $OnboardingStatus.Failed += "$vmScaleSetName : Failed to assign managed identity : $UserAssignedManagedIdentityName. StatusCode = $updateCode. ErrorMessage = $errorMessage."
     }
 
     Assign-ManagedIdentityRoles -VMObject $VMssObject -UserAssignedIdentityObject $UserAssignedManagedIdentityName -OnboardingStatus $OnboardingStatus
@@ -661,10 +668,6 @@ function Assign-VmManagedIdentity {
         [Parameter(mandatory = $true)][string]$UserAssignedManagedIdentityName,
         [Parameter(mandatory = $true)][hashtable]$OnboardingStatus
     )
-
-    if ($VMObject.Id -match "/subscriptions/([^/]+)/") {
-        $vmSubscriptionId = $matches[1]
-    }
 
     $vmName = $VObject.Name
     $vmResourceGroupName = $VMssObject.ResourceGroupName
