@@ -47,7 +47,7 @@ Can be applied to:
 - Specific VM/VM Scale Set
 - Compliance results of a policy for a VM or VM Extension
 
-If the extensions are already installed will not be installed again.
+If the extensions are already installed won't be reinstalled and rather updated unless extensionType = OmsAgentForLinux where uninstall + install operation is performed.
 
 Script will show you list of VM's/VM Scale Sets that will apply to and let you confirm to continue.
 Use -Approve switch to run without prompting, if all required parameters are provided.
@@ -345,20 +345,22 @@ function New-DCRAssociation {
     }
 
     #The Customer is responsible to uninstall the DCR Association themselves
-    if ($PSCmdlet.ShouldProcess($vmName, "Install Data Collection Rule Association. (NOTE : Customer is responsible for deleting data collection rule association)")) {
-        $dcrassociationName = "VM-Insights-$vmName-Association"
-        Write-Verbose "$vmName : Deploying Data Collection Rule Association with name $dcrassociationName"
-        try {
-            $dcrassociation = New-AzDataCollectionRuleAssociation -TargetResourceId $vmId -AssociationName $dcrassociationName -RuleId $DcrResourceId
-        } catch {
-            $OnboardingStatus.Failed += "$vmName : Failed to create Data Collection Rule Association for $vmId"
-            throw $_
-        }
-        #Tmp fix task:- 21191002
-        if (!$dcrassociation -or $dcrassociation -is [ErrorResponseCommonV2Exception]) {
-            $OnboardingStatus.Failed += "$vmName : Failed to create Data Collection Rule Association for $vmId"
-            throw "$vmName : Failed to create Data Collection Rule Association for $vmId. ErrorMessage = $($dcrassociation.Response)"
-        }
+    if (!($PSCmdlet.ShouldProcess($vmName, "Install Data Collection Rule Association. (NOTE : Customer is responsible for uninstalling a data collection rule association)"))) {
+        return
+    }
+
+    $dcrassociationName = "VM-Insights-$vmName-Association"
+    Write-Verbose "$vmName : Deploying Data Collection Rule Association with name $dcrassociationName"
+    try {
+        $dcrassociation = New-AzDataCollectionRuleAssociation -TargetResourceId $vmId -AssociationName $dcrassociationName -RuleId $DcrResourceId
+    } catch {
+        $OnboardingStatus.Failed += "$vmName : Failed to create Data Collection Rule Association for $vmId"
+        throw $_
+    }
+    #Tmp fix task:- 21191002
+    if (!$dcrassociation -or $dcrassociation -is [ErrorResponseCommonV2Exception]) {
+        $OnboardingStatus.Failed += "$vmName : Failed to create Data Collection Rule Association for $vmId"
+        throw "$vmName : Failed to create Data Collection Rule Association for $vmId. ErrorMessage = $($dcrassociation.Response)"
     }
 }
 
@@ -434,6 +436,7 @@ function Install-VMExtension {
             ExtensionType      = $ExtensionType
             ExtensionName      = $extensionName
             TypeHandlerVersion = $ExtensionVersion
+            ForceRerun         = $True
         }
 
         if ($PublicSettings) {
