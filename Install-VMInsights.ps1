@@ -297,7 +297,7 @@ function Remove-VMExtension {
     if (!$PSCmdlet.ShouldProcess($vmssName, "Remove OmsAgentForLinux")) {
         return
     }
-    
+
     try {
         $removeResult = Remove-AzVMExtension -ResourceGroupName $vmResourceGroupName -VMName $vmName -Name $extensionName -Force
     } catch {
@@ -501,7 +501,7 @@ function Install-VMssExtension {
     $extension = Get-VMssExtension -VMss $VMssObject -ExtensionType $ExtensionType
     $extAutoUpgradeMinorVersion = $true
     if ($extension) {
-        Write-Verbose("$vmssName : $ExtensionType extension with name " + $extension.Name + " already installed. Provisioning State: " + $extension.ProvisioningState + " " + $extension.Settings)
+        Write-Verbose "$vmssName : $ExtensionType extension with name $($extension.Name) already installed. Provisioning State: $($extension.ProvisioningState)  $($extension.Settings)"
         $extensionName = $extension.Name
         $extAutoUpgradeMinorVersion = $extension.AutoUpgradeMinorVersion
     }
@@ -687,15 +687,16 @@ function Assign-VmManagedIdentity {
             throw $_
         }
 
-        if ($result -and $result.IsSuccessStatusCode) {
+        if ($result.IsSuccessStatusCode) {
             Write-Output "$vmName : Successfully assigned managed identity : $userAssignedManagedIdentityName"
+            return
         }
-        else {
-            $statusCode = $updateResult.StatusCode
-            $errorMessage = $updateResult.ReasonPhrase
-            $OnboardingStatus.Failed += "$vmName : Failed to assign managed identity : $userAssignedManagedIdentityName. StatusCode = $statusCode. ErrorMessage = $errorMessage."
-            throw "$vmName : Failed to assign managed identity : $userAssignedManagedIdentityName. StatusCode = $statusCode. ErrorMessage = $errorMessage."
-        }
+       
+        $statusCode = $result.StatusCode
+        $errorMessage = $result.ReasonPhrase
+        $OnboardingStatus.Failed += "$vmName : Failed to assign managed identity : $userAssignedManagedIdentityName. StatusCode = $statusCode. ErrorMessage = $errorMessage."
+        throw "$vmName : Failed to assign managed identity : $userAssignedManagedIdentityName. StatusCode = $statusCode. ErrorMessage = $errorMessage."
+    
     }
 
     ##Assign Managed identity to Azure Monitoring Agent
@@ -776,7 +777,7 @@ if ($DcrResourceId) {
 }
 
 if ($PolicyAssignmentName) {
-    Write-Output "Getting list of VM's from PolicyAssignmentName: " + $PolicyAssignmentName
+    Write-Output "Getting list of VM's from PolicyAssignmentName: $($PolicyAssignmentName)"
     $complianceResults = Get-AzPolicyState -PolicyAssignmentName $PolicyAssignmentName
 
     foreach ($result in $complianceResults) {
@@ -811,6 +812,9 @@ if (! $PolicyAssignmentName) {
         $ScaleSets = Get-AzVmss
         $VMs = @($VMs) + $ScaleSets
     }
+    elseif (!$ResourceGroup)  {
+        exit
+    } 
     else {
         # If ResourceGroup value is passed - select all VMs under given ResourceGroupName
         $VMs = Get-AzVM -ResourceGroupName $ResourceGroup -Status
@@ -826,7 +830,7 @@ if (! $PolicyAssignmentName) {
 }
 
 Write-Output("`nVM's or VM ScaleSets matching criteria:`n")
-$VMS | ForEach-Object { Write-Output $_.Name + " " + $_.PowerState }
+$VMS | ForEach-Object { Write-Output "$($_.Name) $($_.PowerState)" }
 
 # Validate customer wants to continue
 $monitoringAgent = if ($DcrResourceId) {"AzureMonitoringAgent"} else {"LogAnalyticsAgent"}
@@ -836,7 +840,7 @@ if (!$DcrResourceId -or ( -and $ProcessAndDependencies)) {
 }
 Write-Output $infoMessage
 Write-Output "VM's in a non-running state will be skipped."
-if ($Approve -eq $true -or !$PSCmdlet.ShouldProcess("All") -or $PSCmdlet.ShouldContinue("Continue?", "")) {
+if ($Approve -or !$PSCmdlet.ShouldProcess("All") -or $PSCmdlet.ShouldContinue("Continue?", "")) {
     Write-Output ""
 }
 else {
@@ -954,7 +958,7 @@ Foreach ($vm in $VMs) {
 
             $scalesetObject = Get-AzureRMVMSS -VMScaleSetName $vmName -ResourceGroupName $vmResourceGroupName
             if ($scalesetObject.UpgradePolicy.mode -eq 'Manual') {
-                if ($TriggerVmssManualVMUpdate -eq $true) {
+                if ($TriggerVmssManualVMUpdate) {
 
                     Write-Output "$vmName : Upgrading scale set instances since the upgrade policy is set to Manual"
                     $scaleSetInstances = @{}
@@ -980,7 +984,7 @@ Foreach ($vm in $VMs) {
         #
         else {
             if ("VM Running" -ne $vm.PowerState) {
-                $message = "$vmName : has a PowerState " + $vm.PowerState + " Skipping"
+                $message = "$vmName : has a PowerState $($vm.PowerState) Skipping"
                 Write-Output $message
                 $OnboardingStatus.NotRunning += $message
                 continue
