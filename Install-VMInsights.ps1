@@ -235,8 +235,6 @@ function Get-VMExtension {
         throw $_
     }
 
-     
-
     foreach ($extension in $extensions) {
         if ($ExtensionType -eq $extension.VirtualMachineExtensionType) {
             Write-Verbose("$vmName : Extension : $ExtensionType found")
@@ -296,24 +294,27 @@ function Remove-VMExtension {
 
     $extensionName = $extension.Name
 
-    if ($PSCmdlet.ShouldProcess($vmssName, "Remove OmsAgentForLinux")) {
-        try {
-            $removeResult = Remove-AzVMExtension -ResourceGroupName $vmResourceGroupName -VMName $vmName -Name $extensionName -Force
-        } catch {
-            $OnboardingStatus.Failed += "$vmName : Failed to remove extension : $ExtensionType"
-            throw $_
-        }
-
-        if ($removeResult.IsSuccessStatusCode) {
-            Write-Verbose "$vmName : Successfully removed $ExtensionType"
-            return
-        }
-
-        $statusCode = $removeResult.StatusCode
-        $errorMessage = $removeResult.ReasonPhrase
-        $OnboardingStatus.Failed += "$vmName : Failed to remove $ExtensionType. StatusCode = $statusCode. ErrorMessage = $errorMessage."
-        throw "$vmName : Failed to remove $ExtensionType. StatusCode = $statusCode. ErrorMessage = $errorMessage."
+    if (!$PSCmdlet.ShouldProcess($vmssName, "Remove OmsAgentForLinux")) {
+        return
     }
+    
+    try {
+        $removeResult = Remove-AzVMExtension -ResourceGroupName $vmResourceGroupName -VMName $vmName -Name $extensionName -Force
+    } catch {
+        $OnboardingStatus.Failed += "$vmName : Failed to remove extension : $ExtensionType"
+        throw $_
+    }
+
+    if ($removeResult.IsSuccessStatusCode) {
+        Write-Verbose "$vmName : Successfully removed $ExtensionType"
+        return
+    }
+
+    $statusCode = $removeResult.StatusCode
+    $errorMessage = $removeResult.ReasonPhrase
+    $OnboardingStatus.Failed += "$vmName : Failed to remove $ExtensionType. StatusCode = $statusCode. ErrorMessage = $errorMessage."
+    throw "$vmName : Failed to remove $ExtensionType. StatusCode = $statusCode. ErrorMessage = $errorMessage."
+    
 }
 
 function New-DCRAssociation {
@@ -426,50 +427,52 @@ function Install-VMExtension {
         Write-Output "$vmName : ExtensionType: $ExtensionType does not support updating workspace. An uninstall followed by re-install is required"
     }
 
-    if ($PSCmdlet.ShouldProcess($VMName, "install extension $ExtensionType")) {
-
-        $parameters = @{
-            ResourceGroupName  = $vmResourceGroupName
-            VMName             = $vmName
-            Location           = $vmLocation
-            Publisher          = $ExtensionPublisher
-            ExtensionType      = $ExtensionType
-            ExtensionName      = $extensionName
-            TypeHandlerVersion = $ExtensionVersion
-            ForceRerun         = $True
-        }
-
-        if ($PublicSettings) {
-            $parameters.Add("Settings", $PublicSettings)
-        }
-
-        if ($ProtectedSettings) {
-            $parameters.Add("ProtectedSettings", $ProtectedSettings)
-        }
-
-        if ($ExtensionType -eq "OmsAgentForLinux") {
-            Remove-VMExtension -VMObject $VMObject `
-                               -ExtensionType $ExtensionType `
-                               -OnboardingStatus $OnboardingStatus
-        }
-
-        Write-Verbose("$vmName : Deploying/Updating $ExtensionType with name $extensionName")
-        try {
-            $result = Set-AzVMExtension @parameters
-        }
-        catch {
-            $OnboardingStatus.Failed += "$vmName : Failed to install/update $ExtensionType"
-            throw $_
-        }
-
-        if ($result -and $result.IsSuccessStatusCode) {
-            Write-Output "$vmName : Successfully deployed/updated $ExtensionType"
-            return
-        }
-
-        $OnboardingStatus.Failed += "$vmName : Failed to install/update $ExtensionType"
-        throw "$vmName : Failed to deploy/update $ExtensionType"
+    if (!($PSCmdlet.ShouldProcess($VMName, "install extension $ExtensionType"))) {
+        return
     }
+
+    $parameters = @{
+        ResourceGroupName  = $vmResourceGroupName
+        VMName             = $vmName
+        Location           = $vmLocation
+        Publisher          = $ExtensionPublisher
+        ExtensionType      = $ExtensionType
+        ExtensionName      = $extensionName
+        TypeHandlerVersion = $ExtensionVersion
+        ForceRerun         = $True
+    }
+
+    if ($PublicSettings) {
+        $parameters.Add("Settings", $PublicSettings)
+    }
+
+    if ($ProtectedSettings) {
+        $parameters.Add("ProtectedSettings", $ProtectedSettings)
+    }
+
+    if ($ExtensionType -eq "OmsAgentForLinux") {
+        Remove-VMExtension -VMObject $VMObject `
+                            -ExtensionType $ExtensionType `
+                            -OnboardingStatus $OnboardingStatus
+    }
+
+    Write-Verbose("$vmName : Deploying/Updating $ExtensionType with name $extensionName")
+    try {
+        $result = Set-AzVMExtension @parameters
+    }
+    catch {
+        $OnboardingStatus.Failed += "$vmName : Failed to install/update $ExtensionType"
+        throw $_
+    }
+
+    if ($result -and $result.IsSuccessStatusCode) {
+        Write-Output "$vmName : Successfully deployed/updated $ExtensionType"
+        return
+    }
+
+    $OnboardingStatus.Failed += "$vmName : Failed to install/update $ExtensionType"
+    throw "$vmName : Failed to deploy/update $ExtensionType"
+    
 }
 
 function Install-VMssExtension {
@@ -503,48 +506,50 @@ function Install-VMssExtension {
         $extAutoUpgradeMinorVersion = $extension.AutoUpgradeMinorVersion
     }
 
-    if ($PSCmdlet.ShouldProcess($vmssName, "install extension $ExtensionType")) {
-
-        $parameters = @{
-            VirtualMachineScaleSet  = $VMssObject
-            Name                    = $extensionName
-            Publisher               = $ExtensionPublisher
-            Type                    = $ExtensionType
-            TypeHandlerVersion      = $ExtensionVersion
-            AutoUpgradeMinorVersion = $extAutoUpgradeMinorVersion
-        }
-
-        if ($PublicSettings) {
-            $parameters.Add("Setting", $PublicSettings)
-        }
-
-        if ($ProtectedSettings) {
-            $parameters.Add("ProtectedSetting", $ProtectedSettings)
-        }
-
-        Write-Verbose("$vmssName : Adding $ExtensionType with name $extensionName")
-        try {
-            $VMssObject = Add-AzVmssExtension @parameters
-        }
-        catch {
-            $OnboardingStatus.Failed += "$vmssName : Failed to install/update $ExtensionType"
-            throw $_
-        }
-        Write-Verbose("$vmssName : Updating scale set with $ExtensionType extension")
-        try {
-            $result = Update-AzVmss -VMScaleSetName $vmssName -ResourceGroupName $vmssResourceGroupName -VirtualMachineScaleSet $VMssObject
-        } catch {
-            $OnboardingStatus.Failed += "$vmssName : failed updating scale set with $ExtensionType extension"
-            throw $_
-        }
-
-        if ($result -and $result.ProvisioningState -eq "Succeeded") {
-            Write-Output "$vmssName : Successfully updated scale set with $ExtensionType extension"
-        }
-
-        $OnboardingStatus.Failed += "$vmssName : failed updating scale set with $ExtensionType extension"
-        throw "$vmssName : failed updating scale set with $ExtensionType extension"
+    if (!($PSCmdlet.ShouldProcess($vmssName, "install extension $ExtensionType"))) {
+        return
     }
+
+    $parameters = @{
+        VirtualMachineScaleSet  = $VMssObject
+        Name                    = $extensionName
+        Publisher               = $ExtensionPublisher
+        Type                    = $ExtensionType
+        TypeHandlerVersion      = $ExtensionVersion
+        AutoUpgradeMinorVersion = $extAutoUpgradeMinorVersion
+    }
+
+    if ($PublicSettings) {
+        $parameters.Add("Setting", $PublicSettings)
+    }
+
+    if ($ProtectedSettings) {
+        $parameters.Add("ProtectedSetting", $ProtectedSettings)
+    }
+
+    Write-Verbose("$vmssName : Adding $ExtensionType with name $extensionName")
+    try {
+        $VMssObject = Add-AzVmssExtension @parameters
+    }
+    catch {
+        $OnboardingStatus.Failed += "$vmssName : Failed to install/update $ExtensionType"
+        throw $_
+    }
+    Write-Verbose("$vmssName : Updating scale set with $ExtensionType extension")
+    try {
+        $result = Update-AzVmss -VMScaleSetName $vmssName -ResourceGroupName $vmssResourceGroupName -VirtualMachineScaleSet $VMssObject
+    } catch {
+        $OnboardingStatus.Failed += "$vmssName : failed updating scale set with $ExtensionType extension"
+        throw $_
+    }
+
+    if ($result -and $result.ProvisioningState -eq "Succeeded") {
+        Write-Output "$vmssName : Successfully updated scale set with $ExtensionType extension"
+    }
+
+    $OnboardingStatus.Failed += "$vmssName : failed updating scale set with $ExtensionType extension"
+    throw "$vmssName : failed updating scale set with $ExtensionType extension"
+    
 }
 
 function Check-UserManagedIdentityAlreadyAssigned {
