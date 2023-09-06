@@ -197,13 +197,6 @@ Set-Variable -Name amaExtensionMap -Option Constant -Value @{ "Windows" = "Azure
 Set-Variable -Name amaExtensionVersionMap -Option Constant -Value @{ "Windows" = "1.16"; "Linux" = "1.16" }
 Set-Variable -Name amaExtensionPublisher -Option Constant -Value "Microsoft.Azure.Monitor"
 Set-Variable -Name amaExtensionName -Option Constant -Value "AzureMonitoringAgent"
-Set-Variable -Name amaPublicSettings -Option Constant -Value @{'authentication' = @{
-                        'managedIdentity' = @{
-                        'identifier-name' = 'mi_res_id'
-                        }
-                      }
-                    }
-Set-Variable -Name amaProtectedSettings -Option Constant -Value @{}
 
 # Dependency Agent Extension constants
 Set-Variable -Name daExtensionMap -Option Constant -Value @{"Windows" = "DependencyAgentWindows"; "Linux" = "DependencyAgentLinux" }
@@ -302,8 +295,11 @@ function Remove-VMExtension {
     }
 
     try {
-        $removeResult = Remove-AzVMExtension -ResourceGroupName $vmResourceGroupName -VMName $vmName -Name $extensionName -Force
-    } catch {
+        $removeResult = Remove-AzVMExtension -ResourceGroupName $vmResourceGroupName -VMName $vmName -Name $extensionName -Force -ErrorAction "Stop"
+    } catch [ParameterBindingException] {
+
+    } 
+    catch {
         $OnboardingStatus.Failed += "$vmName : Failed to remove extension : $ExtensionType"
         throw $_
     }
@@ -375,7 +371,7 @@ function Onboard-VmiWithMmaVm {
 	#>
     param
     (
-        [Parameter(mandatory = $false)][Object]$VMObject,
+        [Parameter(mandatory = $true)][Object]$VMObject,
         [Parameter(mandatory = $true)][hashtable]$OnboardingStatus    
     )
 
@@ -419,26 +415,31 @@ function Onboard-VmiWithAmaVm {
 	.SYNOPSIS
 	Onboard VMI with AMA on Vms
 	#>
-    [CmdletBinding(SupportsShouldProcess = $true, ConfirmImpact = 'Medium')]
     param
     (
         [Parameter(mandatory = $false)][Object]$VMObject,
-        [Parameter(mandatory = $false)][Switch]$ProcessAndDependencies,
-        [Parameter(mandatory = $true)][String]$DcrResourceId,
-        [Parameter(mandatory = $true)][hashtable]$OnboardingStatus,
-        [Parameter(mandatory = $true)][hashtable]$UserAssignedManagedIdentityObject
+        [Parameter(mandatory = $true)][hashtable]$OnboardingStatus
     )
+
+    $amaPublicSettings = @{'authentication' = @{
+        'managedIdentity' = @{
+        'identifier-name' = 'mi_res_id'
+        }
+      }
+    }
             
     Assign-VmManagedIdentity -VMObject $VMObject `
-                             -UserAssignedManagedIdentityObject $UserAssignedManagedIdentityObject
+                             -UserAssignedManagedIdentityObject $UserAssignedManagedIdentityObject `
+                             -AmaPublicSettings $amaPublicSettings `
                              -OnboardingStatus $OnboardingStatus
         
     Install-AmaVm -VMObject $VMObject `
-                     -OnboardingStatus $OnboardingStatus
+                  -AmaPublicSettings $amaPublicSettings `
+                  -OnboardingStatus $OnboardingStatus
 
     if ($ProcessAndDependencies) {
         Install-DaVm -VMObject $VMObject `
-                    -IsAmaOnboarded
+                    -IsAmaOnboarded `
                     -OnboardingStatus $OnboardingStatus                
     }
 
@@ -467,17 +468,26 @@ function Onboard-VmiWithAmaOnVmss {
         [Parameter(mandatory = $true)][hashtable]$OnboardingStatus,
         [Parameter(mandatory = $true)][hashtable]$UserAssignedManagedIdentityObject
     )
+
+    $amaPublicSettings = @{'authentication' = @{
+        'managedIdentity' = @{
+        'identifier-name' = 'mi_res_id'
+        }
+      }
+    }
             
     Assign-VmssManagedIdentity -VMssObject $VMObject `
                                -UserAssignedManagedIdentityObject $UserAssignedManagedIdentityObject
+                               -AmaPublicSettings $amaPublicSettings
                                -OnboardingStatus $OnboardingStatus
         
     Install-AmaVmss -VMObject $VMObject `
-                     -OnboardingStatus $OnboardingStatus
+                    -AmaPublicSettings $amaPublicSettings `
+                    -OnboardingStatus $OnboardingStatus
 
     if ($ProcessAndDependencies) {
         Install-DaVmss -VMObject $VMObject `
-                       -IsAmaOnboarded
+                       -IsAmaOnboarded `
                        -OnboardingStatus $OnboardingStatus                
     }
 
@@ -520,7 +530,7 @@ function Install-DaVm {
         if (!$IsAmaOnboarded) {
             return
         } else {
-            if ($extension.PublicSettings -and $extension.PublicSettings.ToString().Contains($processAndDependenciesPublicSettings.enableAMA)) {
+            if ($extension.PublicSettings -and $extension.PublicSettings.ToString().Contains($processAndDependenciesPublicSettings.ToString())) {
                 Write-Output "$vmName : Extension $extensionType already configured with AMA enabled. Provisioning State: $($extension.ProvisioningState) `n $($extension.PublicSettings)"
                 return
             }
@@ -589,7 +599,7 @@ function Install-DaVmss {
         if (!$IsAmaOnboarded) {
             return
         } else {
-            if ($extension.PublicSettings -and $extension.PublicSettings.ToString().Contains($processAndDependenciesPublicSettings.enableAMA)) {
+            if ($extension.PublicSettings -and $extension.PublicSettings.Contains($processAndDependenciesPublicSettings.ToString())) {
                 Write-Output "$vmssName : Extension $extensionType already configured with AMA enabled. Provisioning State: $($extension.ProvisioningState) `n $($extension.PublicSettings)"
                 return
             }
@@ -627,6 +637,7 @@ function Install-AmaVm {
     param
     (
         [Parameter(mandatory = $true)][Object]$VMObject,
+        [Parameter(mandatory = $true)][String]$AmaPublicSettings,
         [Parameter(mandatory = $true)][hashtable]$OnboardingStatus
     )
 
@@ -635,16 +646,15 @@ function Install-AmaVm {
     $vmResourceGroupName = $VMObject.ResourceGroupName
     # Use supplied name unless already deployed, use same name
     $extensionName = $amaExtensionName
-    $osType = $vm.StorageProfile.OsDisk.OsType
+    $osType = $VMObject.StorageProfile.OsDisk.OsType
     $extensionType = $amaExtensionMap.($osType.ToString())
-
     $extension = Get-VMExtension -VMObject $VMObject -ExtensionType $extensionType -OnboardingStatus $OnboardingStatus
     
     if ($extension) {
         $extensionName = $extension.Name
         Write-Verbose "$vmName : $extensionType extension with name $extensionName already installed. Provisioning State: $($extension.ProvisioningState) `n $($extension.PublicSettings)"
         if ($extension.PublicSettings) {
-            if ($extension.PublicSettings.ToString().Contains($UserAssignedManagedIdentityObject.Id)) {
+            if ($extension.PublicSettings.ToString().Contains($AmaPublicSettings.ToString())) {
                 Write-Output "$vmName : Extension $extensionType already configured with this user assigned managed identity. Provisioning State: $($extension.ProvisioningState) `n $($extension.PublicSettings)"
                 return
             }
@@ -666,14 +676,7 @@ function Install-AmaVm {
         ForceRerun         = $True
     }
 
-    if ($PublicSettings) {
-        $parameters.Add("Settings", $amaPublicSettings)
-    }
-
-    if ($ProtectedSettings) {
-        $parameters.Add("ProtectedSettings", $amaProtectedSettings)
-    }
-
+    $parameters.Add("Settings", $AmaPublicSettings)
     Install-VMExtension @parameters -OnboardingStatus $OnboardingStatus 
 }
 
@@ -686,7 +689,7 @@ function Install-MmaVm {
     param
     (
         [Parameter(mandatory = $true)][Object]$VMObject,
-        [Parameter(mandatory = $false)][boolean]$ReInstall,
+        [Parameter(mandatory = $false)][Switch]$ReInstall,
         [Parameter(mandatory = $true)][hashtable]$OnboardingStatus
     )
 
@@ -698,12 +701,14 @@ function Install-MmaVm {
     $osType = $VMObject.StorageProfile.OsDisk.OsType
     $extensionType = $mmaExtensionMap.($osType.ToString())
     $extension = Get-VMExtension -VMObject $VMObject -ExtensionType $extensionType -OnboardingStatus $OnboardingStatus
+    $mmaPublicSettings = @{"workspaceId" = $WorkspaceId; "stopOnMultipleConnections" = "true"}
+    $mmaProtectedSettings = @{"workspaceKey" = $WorkspaceKey}
 
     if ($extension) {
         $extensionName = $extension.Name
         Write-Verbose "$vmName : $extensionType extension with name $extensionName already installed. Provisioning State: $($extension.ProvisioningState) `n $($extension.PublicSettings)"
         if ($extension.PublicSettings) {
-            if ($extension.PublicSettings.ToString().Contains($mmaPublicSettings.workspaceId)) {
+            if ($extension.PublicSettings.ToString().Contains($MmaPublicSettings.ToString())) {
                 Write-Output "$vmName : Extension $extensionType already configured for this workspace. Provisioning State: $($extension.ProvisioningState) `n $($extension.PublicSettings)"
                 return
             } else {
@@ -734,14 +739,8 @@ function Install-MmaVm {
         ForceRerun         = $True
     }
 
-    if ($PublicSettings) {
-        $parameters.Add("Settings", $mmaPublicSettings)
-    }
-
-    if ($ProtectedSettings) {
-        $parameters.Add("ProtectedSettings", $mmaProtectedSettings)
-    }
-
+    $parameters.Add("Settings", $mmaPublicSettings)
+    $parameters.Add("ProtectedSettings", $mmaProtectedSettings)
     if ($ExtensionType -eq "OmsAgentForLinux") {
         Remove-VMExtension -VMObject $VMObject `
                             -ExtensionType $extensionType `
@@ -774,6 +773,7 @@ function Install-AmaVMss {
         Write-Output "Exception : $vmssName : Failed to lookup constituent VMs"
         throw $_
     }
+
     if ($scalesetVMs.length -gt 0) {
         if ($scalesetVMs[0]) {
             $osType = $scalesetVMs[0].storageprofile.osdisk.ostype
@@ -804,14 +804,7 @@ function Install-AmaVMss {
         AutoUpgradeMinorVersion = $extAutoUpgradeMinorVersion
     }
 
-    if ($PublicSettings) {
-        $parameters.Add("Settings", $amaPublicSettings)
-    }
-
-    if ($ProtectedSettings) {
-        $parameters.Add("ProtectedSettings", $amaProtectedSettings)
-    }
-
+    $parameters.Add("Settings", $amaPublicSettings)
     Install-VMssExtension -InstallParameters $parameters -OnboardingStatus $OnboardingStatus   
 }
 
@@ -828,7 +821,6 @@ function Install-MmaVMss {
     )
 
     $vmssName = $VMssObject.Name
-    $vmssResourceGroupName = $VMssObject.ResourceGroupName
     # Use supplied name unless already deployed, use same name
     $extensionName = $mmaExtensionName
     $osType = $VMssObject.StorageProfile.OsDisk.OsType
@@ -836,6 +828,8 @@ function Install-MmaVMss {
     # Use supplied name unless already deployed, use same name
     $extension = Get-VMssExtension -VMss $VMssObject -ExtensionType $extensionType
     $extAutoUpgradeMinorVersion = $true
+    $mmaPublicSettings = @{"workspaceId" = $WorkspaceId; "stopOnMultipleConnections" = "true"}
+    $mmaProtectedSettings = @{"workspaceKey" = $WorkspaceKey}
     
     if ($extension) {
         $extensionName = $extension.Name
@@ -856,14 +850,8 @@ function Install-MmaVMss {
         AutoUpgradeMinorVersion = $extAutoUpgradeMinorVersion
     }
 
-    if ($PublicSettings) {
-        $parameters.Add("Settings", $mmaPublicSettings)
-    }
-
-    if ($ProtectedSettings) {
-        $parameters.Add("ProtectedSettings", $mmaProtectedSettings)
-    }
-
+    $parameters.Add("Settings", $mmaPublicSettings)
+    $parameters.Add("ProtectedSettings", $mmaProtectedSettings)
     Install-VMssExtension -InstallParameters $parameters -OnboardingStatus $OnboardingStatus
 }
 
@@ -891,14 +879,13 @@ function Install-VMExtension {
         throw $_
     }
 
-    if ($result -and $result.IsSuccessStatusCode) {
+    if ($result.IsSuccessStatusCode) {
         Write-Output "$vmName : Successfully deployed/updated $extensionType"
         return
     }
 
     $OnboardingStatus.Failed += "$vmName : Failed to install/update $extensionType"
     throw "$vmName : Failed to deploy/update $extensionType"
-
 }
 
 function Install-VMssExtension {
@@ -1004,10 +991,12 @@ function Assign-VmssManagedIdentity {
     (
         [Parameter(Mandatory = $true)][Object]$VMssObject,
         [Parameter(Mandatory = $true)][IIdentity]$UserAssignedManagedIdentityObject,
+        [Parameter(mandatory = $true)][hashtable]$AmaPublicSettings,
         [Parameter(mandatory = $true)][hashtable]$OnboardingStatus
     )
 
     $vmssName = $VMssObject.Name
+    $vmssResourceGroup = $VMssObject.ResourceGroupName
     $userAssignedManagedIdentityName = $UserAssignedManagedIdentityObject.Name
     $userAssignedManagedIdentityId = $UserAssignedManagedIdentityObject.Id
 
@@ -1021,6 +1010,7 @@ function Assign-VmssManagedIdentity {
 
         try {
             $result = Update-AzVMss -VirtualMachineScaleSet $VMssObject `
+                                    -ResourceGroupName $vmssResourceGroup `
                                     -IdentityType "UserAssigned" `
                                     -IdentityID $userAssignedManagedIdentityId
         } catch {
@@ -1040,7 +1030,7 @@ function Assign-VmssManagedIdentity {
     }
 
     ##Assign Managed identity to Azure Monitoring Agent
-    $amaPublicSettings.authentication.managedIdentity.'identifier-value' = $UserAssignedManagedIdentityObject.Id
+    $AmaPublicSettings.authentication.managedIdentity.'identifier-value' = $UserAssignedManagedIdentityObject.Id
 }
 
 function Assign-VmManagedIdentity {
@@ -1049,10 +1039,12 @@ function Assign-VmManagedIdentity {
     (
         [Parameter(Mandatory = $true)][Object]$VMObject,
         [Parameter(Mandatory = $true)][IIdentity]$UserAssignedManagedIdentityObject,
+        [Parameter(mandatory = $true)][hashtable]$AmaPublicSettings,
         [Parameter(mandatory = $true)][hashtable]$OnboardingStatus
     )
 
     $vmName = $VMObject.Name
+    $vmResourceGroup = $VMObject.ResourceGroupName
     $userAssignedManagedIdentityName = $UserAssignedManagedIdentityObject.Name
     $userAssignedManagedIdentityId = $UserAssignedManagedIdentityObject.Id
 
@@ -1066,6 +1058,7 @@ function Assign-VmManagedIdentity {
 
         try {
             $result = Update-AzVM -VM $VMObject `
+                                  -ResourceGroupName $vmResourceGroup `
                                   -IdentityType "UserAssigned" `
                                   -IdentityID $userAssignedManagedIdentityId                               
         } catch {
@@ -1086,7 +1079,7 @@ function Assign-VmManagedIdentity {
     }
 
     ##Assign Managed identity to Azure Monitoring Agent
-    $amaPublicSettings.authentication.managedIdentity.'identifier-value' = $UserAssignedManagedIdentityObject.Id
+    $AmaPublicSettings.authentication.managedIdentity.'identifier-value' = $UserAssignedManagedIdentityObject.Id
 }
 
 function Display-Exception {
@@ -1140,8 +1133,7 @@ $OnboardingStatus = @{
     NotRunning            = $OnboardingBlockedNotRunning;
     VMScaleSetNeedsUpdate = $VMScaleSetNeedsUpdate;
 }
-$mmaPublicSettings = @{"workspaceId" = $WorkspaceId; "stopOnMultipleConnections" = "true"}
-$mmaProtectedSettings = @{"workspaceKey" = $WorkspaceKey}
+
 
 if ($PolicyAssignmentName) {
     Write-Output "Getting list of VM's from PolicyAssignmentName: $($PolicyAssignmentName)"
@@ -1182,8 +1174,9 @@ if ($PolicyAssignmentName) {
     } else {
         # If ResourceGroup value is passed - select all VMs under given ResourceGroupName
         $Vms = Get-AzVM -ResourceGroupName $ResourceGroup -Status
+        $Vms = $Vms | Where-Object {$_.PowerState -eq 'VM running' -and !($_.VirtualMachineScaleSet)}
         if ($Name) {
-            $Vms = $Vms | Where-Object {$_.Name -like $Name -and $vm.PowerState -eq 'VM running' -and !($_.VirtualMachineScaleSet)}
+            $Vms = $Vms | Where-Object {$_.Name -like $Name}
         }
         $Vmss = Get-AzVmss -ResourceGroupName $ResourceGroup
         if ($Name) {
@@ -1197,18 +1190,13 @@ $Vms | ForEach-Object { Write-Output "$($_.Name) $($_.PowerState)" }
 $Vmss | ForEach-Object { Write-Output "$($_.Name) $($_.PowerState)" }
 
 #script blocks
-sb_ama_vm = { param($vmObj, $onboardingStatus); Onboard-VmiWithAmaVm -VMObject $vmObj -OnboardingStatus $onboardingStatus}
-sb_mma_vm = { param($vmObj, $onboardingStatus); Onboard-VmiWithMmaVm -VMObject $vmObj -OnboardingStatus $onboardingStatus}
-sb_ama_vmss = { param($vmssObj, $onboardingStatus); Onboard-VmiWithAmaVmss -VMssObject $vmssObj -OnboardingStatus $onboardingStatus}
-sb_mma_vmss =   { param($vmssObj, $onboardingStatus);  Onboard-VmiWithMmaVmss -VMssObject $vmssObj -OnboardingStatus $onboardingStatus}
+sb_ama_vm = { param($vmObj, $obs); Onboard-VmiWithAmaVm -VMObject $vmObj -OnboardingStatus $obs}
+sb_mma_vm = { param($vmObj, $obs); Onboard-VmiWithMmaVm -VMObject $vmObj -OnboardingStatus $obs}
+sb_ama_vmss = { param($vmssObj, $obs); Onboard-VmiWithAmaVmss -VMssObject $vmssObj -OnboardingStatus $obs}
+sb_mma_vmss =   { param($vmssObj, $obs);  Onboard-VmiWithMmaVmss -VMssObject $vmssObj -OnboardingStatus $obs}
 
 sb_vmss =  sb_mma_vmss
 sb_vm = sb_mma_vm
-
-if ($DcrResourceId) {
-    sb_vmss = sb_ama_vmss 
-    sb_vm = sb_ama_vm
-}
 
 # Validate customer wants to continue
 Write-Output "VM's in a non-running state will be skipped."
@@ -1223,6 +1211,15 @@ else {
 #assign roles to the user managed identity.
 if ($DcrResourceId) {
     try {
+        if ($ProcessAndDependencies) {
+            sb_vm = sb_ama_pd_vm
+            sb_vmss = sb_ama_pd_vmss
+        } else {
+            sb_vm = sb_ama_vm
+            sb_vmss = sb_ama_vmss
+        }
+        
+        #readonly object
         $userAssignedIdentityObject = Get-AzUserAssignedIdentity 
                                         -ResourceGroupName $UserAssignedManagedIdentityResourceGroup `
                                         -Name $UserAssignedManagedIdentityName
@@ -1250,11 +1247,11 @@ if ($DcrResourceId) {
 # Loop through each VM/VM Scale set, as appropriate handle installing VM Extensions
 #
 Foreach ($vm in $Vms) {
-    &$sb_vm -vmObj $Vm -onboardingStatus $OnboardingStatus
+    &$sb_vm -vmObj $Vm -obs $OnboardingStatus
 }
 
 Foreach ($vm in $Vmss) {
-    &$sb_vmss -vmssObj $Vmss -onboardingStatus $OnboardingStatus
+    &$sb_vmss -vmssObj $Vmss -obs $OnboardingStatus
 }
 
 
