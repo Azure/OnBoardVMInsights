@@ -217,7 +217,7 @@ Set-Variable -Name serverIssueToleranceLimit -Option Constant -Value 3
 
 # Script Util Constants
 Set-Variable -Name UNAVAILABLE -Option Constant -Value 0
-
+Set-Variable -Name invalidOperationParserPattern -Option Constant -Value "^Operation returned an invalid status code (.*)"
 class InputParameterObsolete : System.Exception {
     [String]$errorMessage
     [Object]$innerExcepObj
@@ -444,20 +444,25 @@ function New-DCRAssociation {
     try {
         $dcrassociation = New-AzDataCollectionRuleAssociation -TargetResourceId $vmId -AssociationName $dcrassociationName -RuleId $DcrResourceId -ErrorAction "Stop"
     } catch [System.Management.Automation.PSInvalidOperationException] {
-        $innerException = $_.InnerException.Message
-        if ($innerException -contains 'BadRequest') {
-            throw [InputParameterObsolete]::new("$DcrResourceId : Failed to lookup dataCollectionRule",$_,"DataCollectionRule")
-        } elseif ($innerException -contains 'NotFound') {
-            throw [InputParameterObsolete]::new("$vmName ($vmResourceGroupName) : Failed to lookup VM",$_,"VirtualMachine")
-        } elseif ($innerException -contains 'Forbidden') {
-            throw [InputParameterObsolete]::new("$DcrResourceId : Failed to access dataCollectionRule",$_,"DataCollectionRule")     
-        }
-        else {
+        $exceptionMessage = $_.Exception.InnerException.Message
+        
+        if (!($exceptionMessage -match $invalidOperationParserPattern)){
             throw [FatalException]::new("$vmName ($vmResourceGroupName) : Failed to create data collection rule association for $DcrResourceId", $_)
+        } else {
+            $statusCode = $matches[1]
+            if ($statusCode.Contains('BadRequest')) {
+                throw [InputParameterObsolete]::new("$DcrResourceId : Failed to lookup dataCollectionRule",$_,"DataCollectionRule")
+            } elseif ($statusCode.Contains('NotFound')) {
+                throw [InputParameterObsolete]::new("$vmName ($vmResourceGroupName) : Failed to lookup VM",$_,"VirtualMachine")
+            } elseif ($statusCode.Contains('Forbidden')) {
+                throw [InputParameterObsolete]::new("$DcrResourceId : Failed to access dataCollectionRule",$_,"DataCollectionRule")     
+            } else {
+                throw [FatalException]::new("$DcrResourceId : Failed to lookup dataCollectionRule. UnknownStatusCode = $statusCode", $_,"DataCollectionRule")
+            }
         }
     }
     #Tmp fix task:- 21191002
-    if (!$dcrassociation -or $dcrassociation -is [ErrorResponseCommonV2Exception]) {
+    if (!$dcrassociation -or $dcrassociation -is [Microsoft.Azure.Management.Monitor.Models.ErrorResponseCommonV2Exception]) {
         throw [FatalException]::new("$vmName ($vmResourceGroupName) : Failed to create data collection rule association for $DcrResourceId", $_)
     }
 }
