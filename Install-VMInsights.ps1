@@ -273,7 +273,7 @@ function Get-VMssOsType {
             } elseif($exceptionInfo["errorCode"].contains("ResourceGroupNotFound")) {
                 throw [InputParameterObsolete]::new("$VmssResourceGroupName : Failed to lookup resource group",$_,"ResourceGroup")       
             } else {
-                throw [FatalException]::new("$VmssName : Failed to lookup VM instances in VMSS", $_)
+                throw [FatalException]::new("$VmssName ($VmssResourceGroupName) : Failed to lookup VM instances in VMSS", $_)
             }
         }
     }
