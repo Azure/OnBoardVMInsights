@@ -213,10 +213,14 @@ Set-Variable -Name daExtensionVersionMap -Option Constant -Value @{ "Windows" = 
 Set-Variable -Name daExtensionPublisher -Option Constant -Value "Microsoft.Azure.Monitoring.DependencyAgent"
 Set-Variable -Name daExtensionName -Option Constant -Value "DA-Extension"
 Set-Variable -Name processAndDependenciesPublicSettings -Option Constant -Value @{"enableAMA" = "true"}
+Set-Variable -Name processAndDependenciesPublicSettingsRegexPattern -Option Constant -Value '"enableAMA"\s*:\s*"(\w+)"'
 
 # Script Exception counters
 Set-Variable -Name networkIssueToleranceLimit -Option Constant -Value 3
 Set-Variable -Name serverIssueToleranceLimit -Option Constant -Value 3
+
+# Script Util Constants
+Set-Variable -Name UNAVAILABLE -Option Constant -Value 0
 
 class InputParameterObsolete : System.Exception {
     [String]$errorMessage
@@ -262,14 +266,14 @@ function Get-VMssOsType {
     } catch [Microsoft.Azure.Commands.Compute.Common.ComputeCloudException] {
         $exceptionInfo = Parse-CloudExceptionMessage($_.Exception.Message)
         if (!$exceptionInfo) {
-            throw [FatalException]::new("$VmssName ($VmssResourceGroupName) : Failed to lookup VM instances in VMSS : $extensionType", $_.Exception)
+            throw [FatalException]::new("$VmssName ($VmssResourceGroupName) : Failed to lookup VM instances in VMSS : $extensionType", $_)
         } else {
             if ($exceptionInfo["errorCode"].contains("ParentResourceNotFound")) {
-                throw [InputParameterObsolete]::new("$VmssName ($VmssResourceGroupName) : Failed to lookup VMSS",$_.Exception,"VirtualMachine")
+                throw [InputParameterObsolete]::new("$VmssName ($VmssResourceGroupName) : Failed to lookup VMSS",$_,"VirtualMachine")
             } elseif($exceptionInfo["errorCode"].contains("ResourceGroupNotFound")) {
-                throw [InputParameterObsolete]::new("$VmssResourceGroupName : Failed to lookup resource group",$_.Exception,"ResourceGroup")       
+                throw [InputParameterObsolete]::new("$VmssResourceGroupName : Failed to lookup resource group",$_,"ResourceGroup")       
             } else {
-                throw [FatalException]::new("$VmssName : Failed to lookup VM instances in VMSS", $_.Exception)
+                throw [FatalException]::new("$VmssName : Failed to lookup VM instances in VMSS", $_)
             }
         }
     }
@@ -320,20 +324,20 @@ function Get-VMExtension {
     } catch [Microsoft.Azure.Commands.Compute.Common.ComputeCloudException] {
         $exceptionInfo = Parse-CloudExceptionMessage($_.Exception.Message)
         if (!$exceptionInfo) {
-            throw [FatalException]::new("$vmName ($vmResourceGroupName) : Failed to lookup extensions", $_.Exception)
+            throw [FatalException]::new("$vmName ($vmResourceGroupName) : Failed to lookup extensions", $_)
         } else {
             if ($exceptionInfo["errorCode"].contains("ParentResourceNotFound")) {
-                throw [InputParameterObsolete]::new("$vmName ($vmResourceGroupName) : Failed to lookup VM",$_.Exception,"VirtualMachine")
+                throw [InputParameterObsolete]::new("$vmName ($vmResourceGroupName) : Failed to lookup VM",$_,"VirtualMachine")
             } elseif($exceptionInfo["errorCode"].contains("ResourceGroupNotFound")) {
-                throw [InputParameterObsolete]::new("Failed to lookup resource group in $vmResourceGroupName",$_.Exception,"ResourceGroup")       
+                throw [InputParameterObsolete]::new("Failed to lookup resource group in $vmResourceGroupName",$_,"ResourceGroup")       
             } else {
-                throw [FatalException]::new("$vmName ($vmResourceGroupName) : Failed to lookup extensions", $_.Exception)
+                throw [FatalException]::new("$vmName ($vmResourceGroupName) : Failed to lookup extensions", $_)
             }
         }
     }
 
     foreach ($extension in $extensions) {
-        if ($ExtensionType -eq $extension.VirtualMachineExtensionType) {
+        if ($ExtensionType -eq $extension.ExtensionType) {
             Write-Verbose("$vmName : Extension : $ExtensionType found")
             $extension
             return
@@ -389,10 +393,10 @@ function Remove-VMExtension {
     try {
         $removeResult = Remove-AzVMExtension -ResourceGroupName $vmResourceGroupName -VMName $vmName -Name $extensionName -Force -ErrorAction "Stop"
     } catch [System.Management.Automation.ParameterBindingException] {
-        if ($_.Exception.ErrorId -eq "NamedParameterNotFound") {
-            throw [InputParameterObsolete]::new("$vmResourceGroupName : Failed to lookup resource-group",$_.Exception,"ResourceGroup")
+        if ($_.ErrorId -eq "NamedParameterNotFound") {
+            throw [InputParameterObsolete]::new("$vmResourceGroupName : Failed to lookup resource-group",$_,"ResourceGroup")
         } else {
-            throw [FatalException]::new("$vmName ($vmResourceGroupName) : Failed to remove extension $extensionName", $_.Exception)
+            throw [FatalException]::new("$vmName ($vmResourceGroupName) : Failed to remove extension $extensionName", $_)
         }
     }
     
@@ -425,7 +429,7 @@ function New-DCRAssociation {
         # A VM may have zero or more Data Collection Rule Associations
         $dcrAssociationList = Get-AzDataCollectionRuleAssociation -TargetResourceId $vmId -ErrorAction "Stop"
     } catch [System.Management.Automation.ParameterBindingException] {
-        throw [InputParameterObsolete]::new("$vmName ($vmResourceGroupName) : Failed to lookup VM",$_.Exception,"VirtualMachine")
+        throw [InputParameterObsolete]::new("$vmName ($vmResourceGroupName) : Failed to lookup VM",$_,"VirtualMachine")
     }
 
     # A VM may have zero or more Data Collection Rule Associations
@@ -446,18 +450,18 @@ function New-DCRAssociation {
     try {
         $dcrassociation = New-AzDataCollectionRuleAssociation -TargetResourceId $vmId -AssociationName $dcrassociationName -RuleId $DcrResourceId -ErrorAction "Stop"
     } catch [System.Management.Automation.PSInvalidOperationException] {
-        $innerException = $_.Exception.InnerException.Message
+        $innerException = $_.InnerException.Message
         if ($innerException -contains 'BadRequest') {
-            throw [InputParameterObsolete]::new("$dcrName : Failed to lookup dataCollectionRule",$_.Exception,"DataCollectionRule")
+            throw [InputParameterObsolete]::new("$dcrName : Failed to lookup dataCollectionRule",$_,"DataCollectionRule")
         } elseif($innerException -contains 'NotFound') {
-            throw [InputParameterObsolete]::new("$vmName ($vmResourceGroupName) : Failed to lookup VM",$_.Exception,"VirtualMachine")
+            throw [InputParameterObsolete]::new("$vmName ($vmResourceGroupName) : Failed to lookup VM",$_,"VirtualMachine")
         } else {
-            throw [FatalException]::new("$vmName ($vmResourceGroupName) : Failed to create data collection rule association for $dcrName", $_.Exception)
+            throw [FatalException]::new("$vmName ($vmResourceGroupName) : Failed to create data collection rule association for $dcrName", $_)
         }
     }
     #Tmp fix task:- 21191002
     if (!$dcrassociation -or $dcrassociation -is [ErrorResponseCommonV2Exception]) {
-        throw [FatalException]::new("$vmName ($vmResourceGroupName) : Failed to create data collection rule association for $dcrName", $_.Exception)
+        throw [FatalException]::new("$vmName ($vmResourceGroupName) : Failed to create data collection rule association for $dcrName", $_)
     }
 }
 
@@ -656,10 +660,12 @@ function Install-DaVm {
         if (!$IsAmaOnboarded) {
             return
         } else {
-            if ($extension.PublicSettings."enableAMA" -eq "true") {
-                Write-Output "$vmName : Extension $extensionType already configured with AMA enabled. Provisioning State: $($extension.ProvisioningState) `n $($extension.PublicSettings)"
-                return
-            }
+            if ($extension.PublicSettings) {
+                if ($extension.PublicSettings -match $processAndDependenciesPublicSettingsRegexPattern -and $matches[1] -eq "true") {
+                    Write-Output "$vmName ($vmResourceGroupName) : Extension $extensionType already configured with AMA enabled. Provisioning State: $($extension.ProvisioningState) `n $($extension.PublicSettings)"
+                    return
+                }
+            }   
         }
     }
     
@@ -714,9 +720,11 @@ function Install-DaVmss {
         if (!$IsAmaOnboarded) {
             return
         } else {
-            if ($extension.PublicSettings -and $extension.PublicSettings.Contains($processAndDependenciesPublicSettings.ToString())) {
-                Write-Output "$vmssName ($vmssResourceGroupName) : Extension $extensionType already configured with AMA enabled. Provisioning State: $($extension.ProvisioningState) `n $($extension.PublicSettings)"
-                return
+            if ($extension.PublicSettings) {
+                if ($extension.PublicSettings -match $processAndDependenciesPublicSettingsRegexPattern -and $matches[1] -eq "true") {
+                    Write-Output "$vmssName ($vmssResourceGroupName) : Extension $extensionType already configured with AMA enabled. Provisioning State: $($extension.ProvisioningState) `n $($extension.PublicSettings)"
+                    return
+                }
             }
         }
     }
@@ -767,10 +775,10 @@ function Install-AmaVm {
     
     if ($extension) {
         $extensionName = $extension.Name
-        Write-Verbose "$vmName ($vmssResourceGroupName) : Extension $extensionType with name $extensionName already installed. Provisioning State: $($extension.ProvisioningState) `n $($extension.PublicSettings)"
+        Write-Verbose "$vmName ($vmResourceGroupName) : Extension $extensionType with name $extensionName already installed. Provisioning State: $($extension.ProvisioningState) `n $($extension.PublicSettings)"
         if ($extension.PublicSettings) {
-            if ($extension.PublicSettings.ToString().Contains($AmaPublicSettings.ToString())) {
-                Write-Output "$vmName ($vmssResourceGroupName) : Extension $extensionType already configured with this user assigned managed identity. Provisioning State: $($extension.ProvisioningState) `n $($extension.PublicSettings)"
+            if ($extension.PublicSettings.Contains($AmaPublicSettings.authentication.managedIdentity.'identifier-value')) {
+                Write-Output "$vmName ($vmResourceGroupName) : Extension $extensionType already configured with this user assigned managed identity. Provisioning State: $($extension.ProvisioningState) `n $($extension.PublicSettings)"
                 return
             }
         }
@@ -823,14 +831,14 @@ function Install-MmaVm {
 
     if ($extension) {
         $extensionName = $extension.Name
-        Write-Verbose "$vmName ($vmssResourceGroupName) : Extension $extensionType with name $extensionName already installed. Provisioning State: $($extension.ProvisioningState)"
+        Write-Verbose "$vmName ($vmResourceGroupName) : Extension $extensionType with name $extensionName already installed. Provisioning State: $($extension.ProvisioningState)"
         if ($extension.PublicSettings) {
-            if ($extension.PublicSettings.ToString().Contains($MmaPublicSettings.ToString())) {
-                Write-Output "$vmName ($vmssResourceGroupName) : Extension $extensionType already configured for this workspace. Provisioning State: $($extension.ProvisioningState) `n $($extension.PublicSettings)"
+            if ($extension.PublicSettings.Contains($MmaPublicSettings.workspaceId)) {
+                Write-Output "$vmName ($vmResourceGroupName) : Extension $extensionType already configured for this workspace. Provisioning State: $($extension.ProvisioningState) `n $($extension.PublicSettings)"
                 return
             } else {
                 if (!$ReInstall) {
-                    Write-Output "$vmName ($vmssResourceGroupName) : Extension $extensionType present, run with -ReInstall again to move to new workspace. Provisioning State: $($extension.ProvisioningState) `n $($extension.PublicSettings)"
+                    Write-Output "$vmName ($vmResourceGroupName) : Extension $extensionType present, run with -ReInstall again to move to new workspace. Provisioning State: $($extension.ProvisioningState) `n $($extension.PublicSettings)"
                     return
                 }
             }
@@ -891,8 +899,15 @@ function Install-AmaVMss {
     
     if ($extension) {
         $extensionName = $extension.Name
-        Write-Verbose "$vmssName ($vmssResourceGroupName) : $extensionType extension with name $extensionName already installed. Provisioning State: $($extension.ProvisioningState)  $($extension.Settings)"
+        Write-Verbose "$vmssName ($vmssResourceGroupName) : Extension $extensionType with name $extensionName already installed. Provisioning State: $($extension.ProvisioningState) `n $($extension.PublicSettings)"
+        if ($extension.PublicSettings) {
+            if ($extension.PublicSettings.Contains($AmaPublicSettings.authentication.managedIdentity.'identifier-value')) {
+                Write-Output "$vmName ($vmssResourceGroupName) : Extension $extensionType already configured with this user assigned managed identity. Provisioning State: $($extension.ProvisioningState) `n $($extension.PublicSettings)"
+                return
+            }
+        }
     }
+    
 
     if (!($PSCmdlet.ShouldProcess($vmssName, "install extension $extensionType"))) {
         return
@@ -940,7 +955,18 @@ function Install-MmaVMss {
     
     if ($extension) {
         $extensionName = $extension.Name
-        Write-Verbose "$vmssName ($vmssResourceGroupName) : $extensionType extension with name $extensionName already installed. Provisioning State: $($extension.ProvisioningState)  $($extension.Settings)"
+        Write-Verbose "$vmssName ($vmssResourceGroupName) : Extension $extensionType with name $extensionName already installed. Provisioning State: $($extension.ProvisioningState)"
+        if ($extension.PublicSettings) {
+            if ($extension.PublicSettings.Contains($MmaPublicSettings.workspaceId)) {
+                Write-Output "$vmssName ($vmssResourceGroupName) : Extension $extensionType already configured for this workspace. Provisioning State: $($extension.ProvisioningState) `n $($extension.PublicSettings)"
+                return
+            } else {
+                if (!$ReInstall) {
+                    Write-Output "$vmssName ($vmssResourceGroupName) : Extension $extensionType present, run with -ReInstall again to move to new workspace. Provisioning State: $($extension.ProvisioningState) `n $($extension.PublicSettings)"
+                    return
+                }
+            }
+        }
     }
 
     if (!($PSCmdlet.ShouldProcess($vmssName, "install extension $extensionType"))) {
@@ -992,15 +1018,15 @@ function Set-ManagedIdentityRoles {
                 Write-Verbose "Scope $targetScope : role assignment for $userAssignedManagedIdentityName with $role succeeded"
             }
             catch [ErrorResponseException] {
-                $excepMessage = $_.Exception.Message
+                $excepMessage = $_.Message
                 if ($excepMessage -contains 'Conflict') {
                     Write-Verbose ("$userAssignedManagedIdentityName : $role has been assigned already")
                 } elseif ($excepMessage -contains 'BadRequest') {
-                    throw [InputParameterObsolete]::new("$userAssignedManagedIdentityName : Failed to lookup managed identity",$_.Exception,"UserAssignedManagedIdentity") 
+                    throw [InputParameterObsolete]::new("$userAssignedManagedIdentityName : Failed to lookup managed identity",$_,"UserAssignedManagedIdentity") 
                 } elseif ($excepMessage -contains 'NotFound') {
-                    throw [InputParameterObsolete]::new("$userAssignedManagedIdentityName : Failed to lookup $TargetScope",$_.Exception,"ResourceGroup") 
+                    throw [InputParameterObsolete]::new("$userAssignedManagedIdentityName : Failed to lookup $TargetScope",$_,"ResourceGroup") 
                 } else {
-                    throw [FatalException]::new("$TargetScope : Failed to assign managed identity to targetScope", $_.Exception)
+                    throw [FatalException]::new("$TargetScope : Failed to assign managed identity to targetScope", $_)
                 }
             }
         }
@@ -1026,23 +1052,23 @@ function Install-VMExtension {
     try {
         $result = Set-AzVMExtension @InstallParameters -ErrorAction "Stop"
     } catch [Microsoft.Azure.Commands.Compute.Common.ComputeCloudException] {
-        $exceptionInfo = Parse-CloudExceptionMessage($_.Exception.Message)
+        $exceptionInfo = Parse-CloudExceptionMessage($_.Message)
         if (!$exceptionInfo) {
-            throw [FatalException]::new("$vmName ($vmResourceGroupName) : Failed to update/install extension : $extensionType", $_.Exception)
+            throw [FatalException]::new("$vmName ($vmResourceGroupName) : Failed to update/install extension : $extensionType", $_)
         } else {
             if ($exceptionInfo["errorCode"].contains("ParentResourceNotFound")) {
-                throw [InputParameterObsolete]::new("$vmName ($vmResourceGroupName) : Failed to lookup VM",$_.Exception,"VirtualMachine")
+                throw [InputParameterObsolete]::new("$vmName ($vmResourceGroupName) : Failed to lookup VM",$_,"VirtualMachine")
             } elseif($exceptionInfo["errorCode"].contains("ResourceGroupNotFound")) {
-                throw [InputParameterObsolete]::new("$vmResourceGroupName : Failed to lookup resource group",$_.Exception,"ResourceGroup")       
+                throw [InputParameterObsolete]::new("$vmResourceGroupName : Failed to lookup resource group",$_,"ResourceGroup")       
             } else {
                 $extensionType = $InstallParameters.ExtensionType
-                throw [FatalException]::new("$vmName ($vmResourceGroupName) : Failed to update/install extension : $extensionType", $_.Exception)
+                throw [FatalException]::new("$vmName ($vmResourceGroupName) : Failed to update/install extension : $extensionType", $_)
             }
         }
     }
     
     if ($result.IsSuccessStatusCode) {
-        Write-Output "vmName ($vmResourceGroupName) : Successfully deployed/updated $extensionType"
+        Write-Output "$vmName ($vmResourceGroupName) : Successfully deployed/updated $extensionType"
         return
     }
 
@@ -1074,7 +1100,7 @@ function Install-VMssExtension {
                                     -VirtualMachineScaleSet $VMssObject `
                                     -ErrorAction "Stop"
     } catch [Microsoft.Azure.Commands.Compute.Common.ComputeCloudException] {
-        $exceptionInfo = Parse-CloudExceptionMessage($_.Exception.Message)
+        $exceptionInfo = Parse-CloudExceptionMessage($_.Message)
         if (!$exceptionInfo) {
             throw [FatalException]::new("$vmssName ($vmssResourceGroupName) : Failed to update/install extension $extensionType", $_)
         } else {
@@ -1146,7 +1172,7 @@ function Assign-VmssManagedIdentity {
                                     -IdentityID $userAssignedManagedIdentityId `
                                     -ErrorAction "Stop"
         } catch [Microsoft.Azure.Commands.Compute.Common.ComputeCloudException] {
-            $exceptionInfo = Parse-CloudExceptionMessage($_.Exception.Message)
+            $exceptionInfo = Parse-CloudExceptionMessage($_.Message)
             if (!$exceptionInfo) {
                 throw [FatalException]::new("$vmssName ($vmssResourceGroup) : Failed to assign user managed identity", $_)
             } else {
@@ -1207,7 +1233,7 @@ function Assign-VmUserManagedIdentity {
                                   -IdentityID $userAssignedManagedIdentityId `
                                   -ErrorAction "Stop"                              
         } catch [Microsoft.Azure.Commands.Compute.Common.ComputeCloudException] {
-            $exceptionInfo = Parse-CloudExceptionMessage($_.Exception.Message)
+            $exceptionInfo = Parse-CloudExceptionMessage($_.Message)
             if (!$exceptionInfo) {
                 throw [FatalException]::new("$vmName : Failed to assign user managed identity", $_)
             } else {
@@ -1243,11 +1269,11 @@ function Display-Exception {
     [Parameter(Mandatory = $true)][Object]$ExcepObj
     )
     try {
-        try { "ExceptionClass = $($ExcepObj.GetType().Name)" | Write-Output } catch { }
-        try { "ExceptionMessage:`r`n$($ExcepObj.Message)`r`n" | Write-Output } catch { }
-        try { "StackTrace:`r`n$($ExcepObj.StackTrace)`r`n" | Write-Output } catch { }
+        try { "ExceptionClass = $($ExcepObj.Exception.GetType().Name)" | Write-Output } catch { }
+        try { "ExceptionMessage:`r`n$($ExcepObj.Exception.Message)`r`n" | Write-Output } catch { }
+        try { "StackTrace:`r`n$($ExcepObj.Exception.StackTrace)`r`n" | Write-Output } catch { }
         try { "ScriptStackTrace:`r`n$($ExcepObj.ScriptStackTrace)`r`n" | Write-Output } catch { }
-        try { "Exception.HResult = 0x{0,0:x8}" -f $ExcepObj.HResult | Write-Output } catch { }
+        try { "Exception.HResult = 0x{0,0:x8}" -f $ExcepObj.Exception.HResult | Write-Output } catch { }
     }
     catch {
         #silently ignore
@@ -1453,9 +1479,9 @@ try {
                 Write-Output "Continuing..."
             }
         } catch [OperationFailed] {
-            $errorMessage = $_.errorMessage
-            $statusCode = $_.statusCode
-            $reasonPhrase = $_.reasonPhrase
+            $errorMessage = $_.Exception.errorMessage
+            $statusCode = $_Exception.statusCode
+            $reasonPhrase = $_Exception.reasonPhrase
             $possibleNetworkIssue = @(502,408,409,504,505,508,511,426,406)
             $possibleIssueWithApi = @(400,417,424,403,411,510,501,412,414,415,428,413,431,422)
             $serverUnavailable = @(507,503,500,421,451,429)
@@ -1502,7 +1528,7 @@ try {
 }
 catch {
     Write-Output "UnknownException :`n`rCustomer Action : Please consider raising support ticket with below details"
-    Display-Exception -ExcepObj $_.Exception
+    Display-Exception -ExcepObj $_
     Write-Output "Exiting..."
     exit
 }
