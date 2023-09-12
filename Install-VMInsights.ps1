@@ -446,10 +446,13 @@ function New-DCRAssociation {
     } catch [System.Management.Automation.PSInvalidOperationException] {
         $innerException = $_.InnerException.Message
         if ($innerException -contains 'BadRequest') {
-            throw [InputParameterObsolete]::new("$dcrName : Failed to lookup dataCollectionRule",$_,"DataCollectionRule")
-        } elseif($innerException -contains 'NotFound') {
+            throw [InputParameterObsolete]::new("$DcrResourceId : Failed to lookup dataCollectionRule",$_,"DataCollectionRule")
+        } elseif ($innerException -contains 'NotFound') {
             throw [InputParameterObsolete]::new("$vmName ($vmResourceGroupName) : Failed to lookup VM",$_,"VirtualMachine")
-        } else {
+        } elseif ($innerException -contains 'Forbidden') {
+            throw [InputParameterObsolete]::new("$DcrResourceId : Failed to access dataCollectionRule",$_,"DataCollectionRule")     
+        }
+        else {
             throw [FatalException]::new("$vmName ($vmResourceGroupName) : Failed to create data collection rule association for $DcrResourceId", $_)
         }
     }
