@@ -76,11 +76,8 @@ For Health supported is: "East US","eastus","West Central US","westcentralus", "
 .PARAMETER ProcessAndDependencies
 Determines whether to onboard Dependency Agent with Azure Monitoring Agent (AMA)
 
-.PARAMETER DcrResourceGroupName
-Resource Group of Data Collection Rule (DCR)
-
-.PARAMETER DcrRuleName
-Name of Data Collection Rule (DCR)
+.PARAMETER DcrResourceId
+ResourceId of Data Collection Rule (DCR)
 
 .PARAMETER UserAssignedManagedIdentityResourceGroup
 Resource Group of User Assigned Managed Identity (UAMI)
@@ -127,7 +124,7 @@ Specify to ReInstall extensions even if already installed, for example to update
 Specify to use a PolicyAssignmentName for source, and to ReInstall (move to a new workspace)
 
 .EXAMPLE
-.\Install-VMInsights.ps1 -SubscriptionId <SubscriptionId> -ResourceGroup <ResourceGroup>  -DcrResourceGroup <DataCollectionRuleResourceGroup> -DcrRuleName <DataCollectionRuleName> -UserAssignedManagedIdentityName <UserAssignedIdentityName> -ProcessAndDependencies -UserAssignedManagedIdentityResourceGroup <UserAssignedIdentityResourceGroup>
+.\Install-VMInsights.ps1 -SubscriptionId <SubscriptionId> -ResourceGroup <ResourceGroup>  -DcrResourceId <DataCollectionRuleResourceId> -UserAssignedManagedIdentityName <UserAssignedIdentityName> -ProcessAndDependencies -UserAssignedManagedIdentityResourceGroup <UserAssignedIdentityResourceGroup>
 (the above command will onboard Assign a UAMI to a VM/VMss for AMA, Onboard AMA, DA and Associate a DCR with the VM/Vmss)
 
 .LINK
@@ -415,15 +412,13 @@ function New-DCRAssociation {
     param
     (
         [Parameter(mandatory = $true)][Object]$VMObject,
-        [Parameter(mandatory = $true)][Object]$DcrObject,
+        [Parameter(mandatory = $true)][Object]$DcrResourceId,
         [Parameter(mandatory = $true)][hashtable]$OnboardingStatus
     )
 
     $vmName = $VMObject.Name
     $vmResourceGroupName = $VMObject.ResourceGroupName
     $vmId = $VMObject.Id
-    $dcrResourceId = $DcrObject.Id
-    $dcrName = $DcrObject.Name
     
     try {
         # A VM may have zero or more Data Collection Rule Associations
@@ -434,7 +429,7 @@ function New-DCRAssociation {
 
     # A VM may have zero or more Data Collection Rule Associations
     foreach ($dcrAssociation in $dcrAssociationList) {
-        if ($dcrAssociation.DataCollectionRuleId -eq $dcrResourceId) {
+        if ($dcrAssociation.DataCollectionRuleId -eq $DcrResourceId) {
             Write-Output "$vmName ($vmResourceGroupName) : Data Collection Rule already associated under $($dcrAssociation.Name)"
             return
         }
@@ -456,12 +451,12 @@ function New-DCRAssociation {
         } elseif($innerException -contains 'NotFound') {
             throw [InputParameterObsolete]::new("$vmName ($vmResourceGroupName) : Failed to lookup VM",$_,"VirtualMachine")
         } else {
-            throw [FatalException]::new("$vmName ($vmResourceGroupName) : Failed to create data collection rule association for $dcrName", $_)
+            throw [FatalException]::new("$vmName ($vmResourceGroupName) : Failed to create data collection rule association for $DcrResourceId", $_)
         }
     }
     #Tmp fix task:- 21191002
     if (!$dcrassociation -or $dcrassociation -is [ErrorResponseCommonV2Exception]) {
-        throw [FatalException]::new("$vmName ($vmResourceGroupName) : Failed to create data collection rule association for $dcrName", $_)
+        throw [FatalException]::new("$vmName ($vmResourceGroupName) : Failed to create data collection rule association for $DcrResourceId", $_)
     }
 }
 
@@ -549,7 +544,7 @@ function Onboard-VmiWithAmaVm {
         }
       }
     }
-    $dcrObject = $OnboardParameters.DcrObject
+    $dcrResourceId = $OnboardParameters.DcrResourceId
     $userAssignedManagedIdentityObject = $OnboardParameters.UserAssignedIdentityObject
     $processAndDependencies = $OnboardParameters.ProcessAndDependencies
     $vmName = $VMObject.Name
@@ -572,7 +567,7 @@ function Onboard-VmiWithAmaVm {
 
     New-DCRAssociation `
                   -VMObject $VMObject `
-                  -DcrObject $dcrObject `
+                  -DcrResourceId $dcrResourceId `
                   -OnboardingStatus $OnboardingStatus
 
     #reached this point - indicates all previous deployments succeeded
@@ -600,7 +595,7 @@ function Onboard-VmiWithAmaVmss {
         }
       }
     }
-    $dcrObject = $OnboardParameters.DcrObject
+    $dcrResourceId = $OnboardParameters.DcrResourceId
     $userAssignedManagedIdentityObject = $OnboardParameters.UserAssignedIdentityObject
     $processAndDependencies = $OnboardParameters.ProcessAndDependencies
     $vmssName = $VMssObject.Name
@@ -623,7 +618,7 @@ function Onboard-VmiWithAmaVmss {
 
     New-DCRAssociation `
                   -VMObject $VMssObject `
-                  -DcrObject $dcrObject `
+                  -DcrResourceId $dcrResourceId `
                   -OnboardingStatus $OnboardingStatus
 
     #reached this point - indicates all previous deployments succeeded
@@ -1114,7 +1109,7 @@ function Install-VMssExtension {
         }
     }
     
-    if ($result -and $result.ProvisioningState -eq "Succeeded") {
+    if ($VMssObject-and $VMssObject.ProvisioningState -eq "Succeeded") {
         Write-Output "$vmssName ($vmssResourceGroupName) : Successfully updated scale set with extension $extensionType"
         return
     }
@@ -1306,15 +1301,9 @@ try {
     }
 
     #Script Parameter Validation
-    if ($DcrRuleName) {
-        try { 
-            $dcrObject = Get-AzDataCollectionRule -ResourceGroupName $DcrResourceGroupName `
-                                            -RuleName $DcrRuleName -ErrorAction "Stop"
-        } catch [System.Management.Automation.PSInvalidOperationException] {
-            Write-Output ("$DcrRuleName ($DcrResourceGroupName) : Cannot lookup the input data collection rule. Exiting....")  
-            exit
-        }
-        
+    if ($DcrResourceId) {
+        #VMI supports Customers onboarding DCR from different subscription
+        #Cannot validate DCRResourceId as parameter set ByResourceId will be deprecated for - Get-AzDataCollectionRule
         try {
             $userAssignedIdentityObject = Get-AzUserAssignedIdentity -Name $UserAssignedManagedIdentityName `
                                     -ResourceGroupName $UserAssignedManagedIdentityResourceGroup `
@@ -1323,7 +1312,7 @@ try {
             Write-Output ("$UserAssignedManagedIdentityName ($UserAssignedManagedIdentityResourceGroup) : Cannot lookup the input user managed assigned identity. Exiting....")
             exit
         }
-        $OnboardParameters = @{ "DcrObject" = $dcrObject ; "UserAssignedIdentityObject" =  $userAssignedIdentityObject; "ProcessAndDependencies" = $ProcessAndDependencies}
+        $OnboardParameters = @{ "DcrResourceId" = $DcrResourceId ; "UserAssignedIdentityObject" =  $userAssignedIdentityObject; "ProcessAndDependencies" = $ProcessAndDependencies}
     } else {
         #Cannot validate WorkspaceId, WorkspaceKey with the below parameters
         #Verification requires name of workspacename and resourcegroup
