@@ -1409,7 +1409,7 @@ try {
     $sb_ama_vmss = { param($vmssObj); Onboard-VmiWithAmaVmss -VMssObject $vmssObj -OnboardingStatus $OnboardingStatus -OnboardParameters $OnboardParameters}
     $sb_mma_vmss =   { param($vmssObj);  Onboard-VmiWithMmaVmss -VMssObject $vmssObj -OnboardingStatus $OnboardingStatus -OnboardParameters $OnboardParameters}
 
-    if (!$DcrRuleName) {
+    if (!$DcrResourceId) {
         $sb_vmss = $sb_mma_vmss
         $sb_vm = $sb_mma_vm
     } else {
