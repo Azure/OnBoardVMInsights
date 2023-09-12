@@ -559,7 +559,7 @@ function Onboard-VmiWithAmaVm {
                              -UserAssignedManagedIdentityObject $userAssignedManagedIdentityObject `
                              -AmaPublicSettings $amaPublicSettings `
                              -OnboardingStatus $OnboardingStatus
-        
+    
     Install-AmaVm -VMObject $VMObject `
                   -AmaPublicSettings $amaPublicSettings `
                   -OnboardingStatus $OnboardingStatus
@@ -1508,7 +1508,7 @@ try {
                     Write-Output "Possible API Server/Infrastructure Issue : continuing for the time being"
                 } else {
                     Write-Output "Possible API Server/Infrastructure Issue : not resolving.`n`rExiting..."
-                    Write-Output "Customer Action : Please consider raising support ticket with below details"
+                    Write-Output "Customer Action : Please consider raising support ticket with below details against -> Owning Server : Service Map and VM Insights"
                     exit
                 }
             }
@@ -1527,7 +1527,7 @@ try {
     }
 }
 catch {
-    Write-Output "UnknownException :`n`rCustomer Action : Please consider raising support ticket with below details"
+    Write-Output "UnknownException :`n`rCustomer Action : Please consider raising support ticket with below details against -> Owning Server : Service Map and VM Insights"
     Display-Exception -ExcepObj $_
     Write-Output "Exiting..."
     exit
