@@ -79,7 +79,7 @@ Determines whether to onboard Dependency Agent with Azure Monitoring Agent (AMA)
 .PARAMETER DcrResourceGroupName
 Resource Group of Data Collection Rule (DCR)
 
-.PARANETER DcrRuleName
+.PARAMETER DcrRuleName
 Name of Data Collection Rule (DCR)
 
 .PARAMETER UserAssignedManagedIdentityResourceGroup
@@ -201,7 +201,7 @@ Set-Variable -Name mmaExtensionVersionMap -Option Constant -Value @{ "Windows" =
 Set-Variable -Name mmaExtensionPublisher -Option Constant -Value "Microsoft.EnterpriseCloud.Monitoring"
 Set-Variable -Name mmaExtensionName -Option Constant -Value "MMAExtension"
 
-# Azure Monitoring Agent Extension constants
+# Azure Monitoring Agent ExtFension constants
 Set-Variable -Name amaExtensionMap -Option Constant -Value @{ "Windows" = "AzureMonitorWindowsAgent"; "Linux" = "AzureMonitorLinuxAgent" }
 Set-Variable -Name amaExtensionVersionMap -Option Constant -Value @{ "Windows" = "1.16"; "Linux" = "1.16" }
 Set-Variable -Name amaExtensionPublisher -Option Constant -Value "Microsoft.Azure.Monitor"
@@ -212,17 +212,17 @@ Set-Variable -Name daExtensionMap -Option Constant -Value @{"Windows" = "Depende
 Set-Variable -Name daExtensionVersionMap -Option Constant -Value @{ "Windows" = "9.10"; "Linux" = "9.10" }
 Set-Variable -Name daExtensionPublisher -Option Constant -Value "Microsoft.Azure.Monitoring.DependencyAgent"
 Set-Variable -Name daExtensionName -Option Constant -Value "DA-Extension"
-Set-Varaible -Name processAndDependenciesPublicSettings -Option Constant -Value @{"enableAMA" = "true"}
+Set-Variable -Name processAndDependenciesPublicSettings -Option Constant -Value @{"enableAMA" = "true"}
 
 # Script Exception counters
-Set-Varaible -Name networkIssueToleranceLimit -Option Constant -Value 3
-Set-Varaible -Name serverIssueToleranceLimit -Option Constant -Value 3
+Set-Variable -Name networkIssueToleranceLimit -Option Constant -Value 3
+Set-Variable -Name serverIssueToleranceLimit -Option Constant -Value 3
 
 class InputParameterObsolete : System.Exception {
     [String]$errorMessage
     [Object]$innerExcepObj
     [String]$obsParamType
-    InputParameterObsolete($message, [Object] $excepObj, $obsParamType) {
+    InputParameterObsolete($message, $excepObj, $obsParamType) {
         $this.errorMessage = $message
         $this.innerExcepObj = $excepObj
         $this.obsParamType = $obsParamType
@@ -239,11 +239,11 @@ class OperationFailed : System.Exception {
     }
 }
 class FatalException : System.Exception {
-    [Object] $innerexcepObj
+    [Object]$innerExcepObj
     [string]$errorMessage
-    FatalException($message, [Object] $excepObj) {
-        $this.innerexcepObj = $excepObj
+    FatalException($message, $excepObj) {
         $this.errorMessage = $message
+        $this.innerExcepObj = $excepObj
     }
 }
 
@@ -260,16 +260,16 @@ function Get-VMssOsType {
     try {
         $scalesetVms = Get-AzVmssVM -ResourceGroupName $VmssResourceGroupName -VMScaleSetName $VmssName
     } catch [Microsoft.Azure.Commands.Compute.Common.ComputeCloudException] {
-        $exceptionInfo = Parse-CloudExceptionMessage($_.Exception)
+        $exceptionInfo = Parse-CloudExceptionMessage($_.Exception.Message)
         if (!$exceptionInfo) {
-            throw [FatalException]::new("$VmssName ($VmssResourceGroupName) : Failed to lookup VM instances in VMSS : $extensionType", $_)
+            throw [FatalException]::new("$VmssName ($VmssResourceGroupName) : Failed to lookup VM instances in VMSS : $extensionType", $_.Exception)
         } else {
             if ($exceptionInfo["errorCode"].contains("ParentResourceNotFound")) {
-                throw [InputParameterObsolete]::new("$VmssName ($VmssResourceGroupName) : Failed to lookup VMSS",$_,"VirtualMachine")
+                throw [InputParameterObsolete]::new("$VmssName ($VmssResourceGroupName) : Failed to lookup VMSS",$_.Exception,"VirtualMachine")
             } elseif($exceptionInfo["errorCode"].contains("ResourceGroupNotFound")) {
-                throw [InputParameterObsolete]::new("$VmssResourceGroupName : Failed to lookup resource group",$_,"ResourceGroup")       
+                throw [InputParameterObsolete]::new("$VmssResourceGroupName : Failed to lookup resource group",$_.Exception,"ResourceGroup")       
             } else {
-                throw [FatalException]::new("$VmssName : Failed to lookup VM instances in VMSS", $_)
+                throw [FatalException]::new("$VmssName : Failed to lookup VM instances in VMSS", $_.Exception)
             }
         }
     }
@@ -292,10 +292,10 @@ function Parse-CloudExceptionMessage {
     $exceptionInfo = @{}
     $excepMessage = $excepMessage | ConvertTo-Json
     if ($excepMessage -match $pattern) {
-        $exceptionInfo["errorCode"] = matches[1]
-        $exceptionInfo["errorMessage"] = matches[2]
-        $exceptionInfo["statusCode"] = matches[4]
-        $exceptionInfo["reasonPhrase"] = matches[5]
+        $exceptionInfo["errorCode"] = $matches[1]
+        $exceptionInfo["errorMessage"] = $matches[2]
+        $exceptionInfo["statusCode"] = $matches[4]
+        $exceptionInfo["reasonPhrase"] = $matches[5]
     }   
     return $exceptionInfo
 }
@@ -313,21 +313,21 @@ function Get-VMExtension {
     )
 
     $vmResourceGroupName = $VMObject.ResourceGroupName
-    $vmName = $VMObject.VMName
+    $vmName = $VMObject.Name
 
     try {
-        $extensions = Get-AzVMExtension -VMName $vmName -ResourceGroupName $vmResourceGroupName -ErrorAction "Stop"
+        $extensions = Get-AzVMExtension -ResourceGroupName $vmResourceGroupName -VMName $vmName -ErrorAction "Stop"
     } catch [Microsoft.Azure.Commands.Compute.Common.ComputeCloudException] {
-        $exceptionInfo = Parse-CloudExceptionMessage($_.Exception)
+        $exceptionInfo = Parse-CloudExceptionMessage($_.Exception.Message)
         if (!$exceptionInfo) {
-            throw [FatalException]::new("$vmName ($vmResourceGroupName) : Failed to lookup extensions", $_)
+            throw [FatalException]::new("$vmName ($vmResourceGroupName) : Failed to lookup extensions", $_.Exception)
         } else {
             if ($exceptionInfo["errorCode"].contains("ParentResourceNotFound")) {
-                throw [InputParameterObsolete]::new("$vmName ($vmResourceGroupName) : Failed to lookup VM",$_,"VirtualMachine")
+                throw [InputParameterObsolete]::new("$vmName ($vmResourceGroupName) : Failed to lookup VM",$_.Exception,"VirtualMachine")
             } elseif($exceptionInfo["errorCode"].contains("ResourceGroupNotFound")) {
-                throw [InputParameterObsolete]::new("Failed to lookup resource group in $vmResourceGroupName",$_,"ResourceGroup")       
+                throw [InputParameterObsolete]::new("Failed to lookup resource group in $vmResourceGroupName",$_.Exception,"ResourceGroup")       
             } else {
-                throw [FatalException]::new("$vmName ($vmResourceGroupName) : Failed to lookup extensions", $_)
+                throw [FatalException]::new("$vmName ($vmResourceGroupName) : Failed to lookup extensions", $_.Exception)
             }
         }
     }
@@ -390,9 +390,9 @@ function Remove-VMExtension {
         $removeResult = Remove-AzVMExtension -ResourceGroupName $vmResourceGroupName -VMName $vmName -Name $extensionName -Force -ErrorAction "Stop"
     } catch [System.Management.Automation.ParameterBindingException] {
         if ($_.Exception.ErrorId -eq "NamedParameterNotFound") {
-            throw [InputParameterObsolete]::new("$vmResourceGroupName : Failed to lookup resource-group",$_,"ResourceGroup")
+            throw [InputParameterObsolete]::new("$vmResourceGroupName : Failed to lookup resource-group",$_.Exception,"ResourceGroup")
         } else {
-            throw [FatalException]::new("$vmName ($vmResourceGroupName) : Failed to remove extension $extensionName", $_)
+            throw [FatalException]::new("$vmName ($vmResourceGroupName) : Failed to remove extension $extensionName", $_.Exception)
         }
     }
     
@@ -425,7 +425,7 @@ function New-DCRAssociation {
         # A VM may have zero or more Data Collection Rule Associations
         $dcrAssociationList = Get-AzDataCollectionRuleAssociation -TargetResourceId $vmId -ErrorAction "Stop"
     } catch [System.Management.Automation.ParameterBindingException] {
-        throw [InputParameterObsolete]::new("$vmName ($vmResourceGroupName) : Failed to lookup VM",$_,"VirtualMachine")
+        throw [InputParameterObsolete]::new("$vmName ($vmResourceGroupName) : Failed to lookup VM",$_.Exception,"VirtualMachine")
     }
 
     # A VM may have zero or more Data Collection Rule Associations
@@ -448,16 +448,16 @@ function New-DCRAssociation {
     } catch [System.Management.Automation.PSInvalidOperationException] {
         $innerException = $_.Exception.InnerException.Message
         if ($innerException -contains 'BadRequest') {
-            throw [InputParameterObsolete]::new("$dcrName : Failed to lookup dataCollectionRule",$_,"DataCollectionRule")
+            throw [InputParameterObsolete]::new("$dcrName : Failed to lookup dataCollectionRule",$_.Exception,"DataCollectionRule")
         } elseif($innerException -contains 'NotFound') {
-            throw [InputParameterObsolete]::new("$vmName ($vmResourceGroupName) : Failed to lookup VM",$_,"VirtualMachine")
+            throw [InputParameterObsolete]::new("$vmName ($vmResourceGroupName) : Failed to lookup VM",$_.Exception,"VirtualMachine")
         } else {
-            throw [FatalException]::new("$vmName ($vmResourceGroupName) : Failed to create data collection rule association for $dcrName", $_)
+            throw [FatalException]::new("$vmName ($vmResourceGroupName) : Failed to create data collection rule association for $dcrName", $_.Exception)
         }
     }
     #Tmp fix task:- 21191002
     if (!$dcrassociation -or $dcrassociation -is [ErrorResponseCommonV2Exception]) {
-        throw [FatalException]::new("$vmName ($vmResourceGroupName) : Failed to create data collection rule association for $dcrName", $_)
+        throw [FatalException]::new("$vmName ($vmResourceGroupName) : Failed to create data collection rule association for $dcrName", $_.Exception)
     }
 }
 
@@ -501,7 +501,7 @@ function Onboard-VmiWithMmaVmss {
 	#>
     param
     (
-        [Parameter(mandatory = $false)][Object]$VMssObject,
+        [Parameter(mandatory = $true)][Object]$VMssObject,
         [Parameter(mandatory = $true)][hashtable]$OnboardingStatus,
         [Parameter(mandatory = $true)][hashtable]$OnboardParameters    
     )
@@ -534,7 +534,7 @@ function Onboard-VmiWithAmaVm {
 	#>
     param
     (
-        [Parameter(mandatory = $false)][Object]$VMObject,
+        [Parameter(mandatory = $true)][Object]$VMObject,
         [Parameter(mandatory = $true)][hashtable]$OnboardingStatus,
         [Parameter(mandatory = $true)][hashtable]$OnboardParameters
     )
@@ -585,7 +585,7 @@ function Onboard-VmiWithAmaVmss {
     [CmdletBinding(SupportsShouldProcess = $true, ConfirmImpact = 'Medium')]
     param
     (
-        [Parameter(mandatory = $false)][Object]$VMssObject,
+        [Parameter(mandatory = $true)][Object]$VMssObject,
         [Parameter(mandatory = $true)][hashtable]$OnboardingStatus,
         [Parameter(mandatory = $true)][hashtable]$OnboardParameters
     )
@@ -656,7 +656,7 @@ function Install-DaVm {
         if (!$IsAmaOnboarded) {
             return
         } else {
-            if ($extension.PublicSettings -and $extension.PublicSettings.ToString().Contains($processAndDependenciesPublicSettings.ToString())) {
+            if ($extension.PublicSettings."enableAMA" -eq "true") {
                 Write-Output "$vmName : Extension $extensionType already configured with AMA enabled. Provisioning State: $($extension.ProvisioningState) `n $($extension.PublicSettings)"
                 return
             }
@@ -682,7 +682,7 @@ function Install-DaVm {
         $parameters.Add("Settings", $processAndDependenciesPublicSettings)
     }
 
-    Install-VMExtension @parameters -OnboardingStatus $OnboardingStatus
+    Install-VMExtension -InstallParameters $parameters -OnboardingStatus $OnboardingStatus
 }
 
 function Install-DaVmss {
@@ -740,7 +740,7 @@ function Install-DaVmss {
         $parameters.Add("Settings", $processAndDependenciesPublicSettings)
     }
 
-    Install-VMssExtension @parameters -OnboardingStatus $OnboardingStatus
+    Install-VMssExtension -InstallParameters $parameters -OnboardingStatus $OnboardingStatus
 }
 
 function Install-AmaVm {
@@ -752,7 +752,7 @@ function Install-AmaVm {
     param
     (
         [Parameter(mandatory = $true)][Object]$VMObject,
-        [Parameter(mandatory = $true)][String]$AmaPublicSettings,
+        [Parameter(mandatory = $true)][hashtable]$AmaPublicSettings,
         [Parameter(mandatory = $true)][hashtable]$OnboardingStatus
     )
 
@@ -792,7 +792,7 @@ function Install-AmaVm {
         Settings           = $AmaPublicSettings
     }
 
-    Install-VMExtension @parameters -OnboardingStatus $OnboardingStatus 
+    Install-VMExtension -InstallParameters $parameters -OnboardingStatus $OnboardingStatus 
 }
 
 function Install-MmaVm {
@@ -864,7 +864,7 @@ function Install-MmaVm {
                             -OnboardingStatus $OnboardingStatus
     }
 
-    Install-VMExtension @parameters -OnboardingStatus $OnboardingStatus 
+    Install-VMExtension -InstallParameters $parameters -OnboardingStatus $OnboardingStatus 
 }
 
 function Install-AmaVMss {
@@ -876,6 +876,7 @@ function Install-AmaVMss {
     param
     (
         [Parameter(Mandatory = $true)][Object]$VMssObject,
+        [Parameter(mandatory = $true)][hashtable]$AmaPublicSettings,
         [Parameter(mandatory = $true)][hashtable]$OnboardingStatus
     )
 
@@ -906,7 +907,7 @@ function Install-AmaVMss {
         ExtensionName      = $extensionName
         TypeHandlerVersion = $amaExtensionVersionMap.($osType.ToString())
         ForceRerun         = $True
-        Settings           = $amaPublicSettings
+        Settings           = $AmaPublicSettings
     }
 
     Install-VMssExtension -InstallParameters $parameters -OnboardingStatus $OnboardingStatus   
@@ -962,6 +963,50 @@ function Install-MmaVMss {
     Install-VMssExtension -InstallParameters $parameters -OnboardingStatus $OnboardingStatus
 }
 
+function Set-ManagedIdentityRoles {
+    
+    [CmdletBinding(SupportsShouldProcess = $true, ConfirmImpact = 'Medium')]
+    param
+    (
+        [Parameter(Mandatory = $true)][String]$TargetScope,
+        [Parameter(Mandatory = $true)][Object]$UserAssignedManagedIdentityObject
+    )
+
+    $userAssignedManagedIdentityName = $UserAssignedManagedIdentityObject.Name
+    $userAssignedManagedIdentityId = $UserAssignedManagedIdentityObject.principalId
+
+    $roleDefinitionList = @("Virtual Machine Contributor", "Azure Connected Machine Resource Administrator", "Log Analytics Contributor") 
+    
+    if (!($PSCmdlet.ShouldProcess($vmResourceGroupName, "assign roles : $roleDefinitionList to user assigned managed identity : $userAssignedManagedIdentityName"))) {
+        return
+    }
+
+    foreach ($role in $roleDefinitionList) {
+        $roleAssignmentFound = Get-AzRoleAssignment -ObjectId $userAssignedManagedIdentityId -RoleDefinitionName $role -Scope $TargetScope
+        if ($roleAssignmentFound) {
+            Write-Verbose "Scope $targetScope : role $role already set"
+        } else {
+            Write-Verbose("Scope $targetScope : assigning role $role")
+            try {
+                New-AzRoleAssignment  -ObjectId $userAssignedManagedIdentityId -RoleDefinitionName $role -Scope $targetScope
+                Write-Verbose "Scope $targetScope : role assignment for $userAssignedManagedIdentityName with $role succeeded"
+            }
+            catch [ErrorResponseException] {
+                $excepMessage = $_.Exception.Message
+                if ($excepMessage -contains 'Conflict') {
+                    Write-Verbose ("$userAssignedManagedIdentityName : $role has been assigned already")
+                } elseif ($excepMessage -contains 'BadRequest') {
+                    throw [InputParameterObsolete]::new("$userAssignedManagedIdentityName : Failed to lookup managed identity",$_.Exception,"UserAssignedManagedIdentity") 
+                } elseif ($excepMessage -contains 'NotFound') {
+                    throw [InputParameterObsolete]::new("$userAssignedManagedIdentityName : Failed to lookup $TargetScope",$_.Exception,"ResourceGroup") 
+                } else {
+                    throw [FatalException]::new("$TargetScope : Failed to assign managed identity to targetScope", $_.Exception)
+                }
+            }
+        }
+    }
+}
+
 function Install-VMExtension {
     <#
 	.SYNOPSIS
@@ -969,7 +1014,7 @@ function Install-VMExtension {
 	#>
     param
     (
-        [Parameter(mandatory = $false)][hashtable]$InstallParameters,
+        [Parameter(mandatory = $true)][hashtable]$InstallParameters,
         [Parameter(mandatory = $true)][hashtable]$OnboardingStatus
     )
 
@@ -981,28 +1026,29 @@ function Install-VMExtension {
     try {
         $result = Set-AzVMExtension @InstallParameters -ErrorAction "Stop"
     } catch [Microsoft.Azure.Commands.Compute.Common.ComputeCloudException] {
-        $exceptionInfo = Parse-CloudExceptionMessage($_.Exception)
+        $exceptionInfo = Parse-CloudExceptionMessage($_.Exception.Message)
         if (!$exceptionInfo) {
-            throw [FatalException]::new("$vmName ($vmResourceGroupName) : Failed to update/install extension : $extensionType", $_)
+            throw [FatalException]::new("$vmName ($vmResourceGroupName) : Failed to update/install extension : $extensionType", $_.Exception)
         } else {
             if ($exceptionInfo["errorCode"].contains("ParentResourceNotFound")) {
-                throw [InputParameterObsolete]::new("$vmName ($vmResourceGroupName) : Failed to lookup VM",$_,"VirtualMachine")
+                throw [InputParameterObsolete]::new("$vmName ($vmResourceGroupName) : Failed to lookup VM",$_.Exception,"VirtualMachine")
             } elseif($exceptionInfo["errorCode"].contains("ResourceGroupNotFound")) {
-                throw [InputParameterObsolete]::new("$vmResourceGroupName : Failed to lookup resource group",$_,"ResourceGroup")       
+                throw [InputParameterObsolete]::new("$vmResourceGroupName : Failed to lookup resource group",$_.Exception,"ResourceGroup")       
             } else {
-                throw [FatalException]::new("$vmName : Failed to update/install extension", $_)
+                $extensionType = $InstallParameters.ExtensionType
+                throw [FatalException]::new("$vmName ($vmResourceGroupName) : Failed to update/install extension : $extensionType", $_.Exception)
             }
         }
     }
     
     if ($result.IsSuccessStatusCode) {
-        Write-Output "$vmName : Successfully deployed/updated $extensionType"
+        Write-Output "vmName ($vmResourceGroupName) : Successfully deployed/updated $extensionType"
         return
     }
 
     $statusCode = $removeResult.StatusCode
     $reasonPhrase = $removeResult.ReasonPhrase
-    throw [OperationFailed]::new($statusCode, $reasonPhrase, "$vmName : Failed to update extension $extensionType")
+    throw [OperationFailed]::new($statusCode, $reasonPhrase, "$vmName ($vmResourceGroupName) : Failed to update extension $extensionType")
 }
 
 function Install-VMssExtension {
@@ -1012,7 +1058,7 @@ function Install-VMssExtension {
 	#>
     param
     (
-        [Parameter(mandatory = $false)][hashtable]$InstallParameters,
+        [Parameter(mandatory = $true)][hashtable]$InstallParameters,
         [Parameter(mandatory = $true)][hashtable]$OnboardingStatus
     )
 
@@ -1020,23 +1066,15 @@ function Install-VMssExtension {
                 $InstallParameters.VirtualMachineScaleSet.Name
     $extensionType = $InstallParameters.Type
     Write-Verbose("$vmssName : Adding $extensionType with name $extensionName")
-    try {
-        $VMssObject = Add-AzVmssExtension @InstallParameters
-    }
-    catch {
-        $OnboardingStatus.Failed += "$vmssName : Failed to install/update $extensionType"
-        throw $_
-    }
-    
+    $VMssObject = Add-AzVmssExtension @InstallParameters
     Write-Verbose("$vmssName : Updating scale set with $extensionType extension")
-    
     try {
         $VMssObject = Update-AzVmss -VMScaleSetName $vmssName `
                                     -ResourceGroupName $vmssResourceGroupName `
                                     -VirtualMachineScaleSet $VMssObject `
                                     -ErrorAction "Stop"
     } catch [Microsoft.Azure.Commands.Compute.Common.ComputeCloudException] {
-        $exceptionInfo = Parse-CloudExceptionMessage($_.Exception)
+        $exceptionInfo = Parse-CloudExceptionMessage($_.Exception.Message)
         if (!$exceptionInfo) {
             throw [FatalException]::new("$vmssName ($vmssResourceGroupName) : Failed to update/install extension $extensionType", $_)
         } else {
@@ -1078,54 +1116,12 @@ function Check-UserManagedIdentityAlreadyAssigned {
     return $False
 }
 
-function Assign-ManagedIdentityRoles {
-    [CmdletBinding(SupportsShouldProcess = $true, ConfirmImpact = 'Medium')]
-    param {
-        [Parameter(Mandatory = $true)][String]$TargetScope
-        [Parameter(Mandatory = $true)][IIdentity]$UserAssignedManagedIdentityObject
-    }
-
-    $userAssignedManagedIdentityName = $UserAssignedManagedIdentityObject.Name
-    $userAssignedManagedIdentityId = $UserAssignedManagedIdentityObject.principalId
-
-    $roleDefinitionList = @("Virtual Machine Contributor", "Azure Connected Machine Resource Administrator", "Log Analytics Contributor") 
-    
-    if (!($PSCmdlet.ShouldProcess($vmResourceGroupName, "assign roles : $roleDefinitionList to user assigned managed identity : $userAssignedManagedIdentityName"))) {
-        return
-    }
-
-    foreach ($role in $roleDefinitionList) {
-        $roleAssignmentFound = Get-AzRoleAssignment -ObjectId $userAssignedManagedIdentityId -RoleDefinitionName $role -Scope $TargetScope
-        if ($roleAssignmentFound) {
-            Write-Verbose "Scope $targetScope : role $role already set"
-        } else {
-            Write-Verbose("Scope $targetScope : assigning role $role")
-            try {
-                New-AzRoleAssignment  -ObjectId $userAssignedManagedIdentityId -RoleDefinitionName $role -Scope $targetScope
-                Write-Verbose "Scope $targetScope : role assignment for $userAssignedManagedIdentityName with $role succeeded"
-            }
-            catch [ErrorResponseException] {
-                $excepMessage = $_.Exception.Message
-                if ($excepMessage -contains 'Conflict') {
-                    Write-Verbose ("$userAssignedManagedIdentityName : $role has been assigned already")
-                } elseif ($excepMessage -contains 'BadRequest') {
-                    throw [InputParameterObsolete]::new("$userAssignedManagedIdentityName : Failed to lookup managed identity",$_,"UserAssignedManagedIdentity") 
-                } elseif ($excepMessage -contains 'NotFound') {
-                    throw [InputParameterObsolete]::new("$userAssignedManagedIdentityName : Failed to lookup $TargetScope",$_,"ResourceGroup") 
-                } else {
-                    throw [FatalException]::new("$TargetScope : Failed to assign managed identity to targetScope", $_)
-                }
-            }
-        }
-    }
-}
-
 function Assign-VmssManagedIdentity {
     [CmdletBinding(SupportsShouldProcess = $true, ConfirmImpact = 'Medium')]
     param
     (
         [Parameter(Mandatory = $true)][Object]$VMssObject,
-        [Parameter(Mandatory = $true)][IIdentity]$UserAssignedManagedIdentityObject,
+        [Parameter(Mandatory = $true)][Object]$UserAssignedManagedIdentityObject,
         [Parameter(mandatory = $true)][hashtable]$AmaPublicSettings,
         [Parameter(mandatory = $true)][hashtable]$OnboardingStatus
     )
@@ -1148,9 +1144,9 @@ function Assign-VmssManagedIdentity {
                                     -ResourceGroupName $vmssResourceGroup `
                                     -IdentityType "UserAssigned" `
                                     -IdentityID $userAssignedManagedIdentityId `
-                                    -ErrorAction Stop
+                                    -ErrorAction "Stop"
         } catch [Microsoft.Azure.Commands.Compute.Common.ComputeCloudException] {
-            $exceptionInfo = Parse-CloudExceptionMessage($_.Exception)
+            $exceptionInfo = Parse-CloudExceptionMessage($_.Exception.Message)
             if (!$exceptionInfo) {
                 throw [FatalException]::new("$vmssName ($vmssResourceGroup) : Failed to assign user managed identity", $_)
             } else {
@@ -1186,7 +1182,7 @@ function Assign-VmUserManagedIdentity {
     param
     (
         [Parameter(Mandatory = $true)][Object]$VMObject,
-        [Parameter(Mandatory = $true)][IIdentity]$UserAssignedManagedIdentityObject,
+        [Parameter(Mandatory = $true)][Object]$UserAssignedManagedIdentityObject,
         [Parameter(mandatory = $true)][hashtable]$AmaPublicSettings,
         [Parameter(mandatory = $true)][hashtable]$OnboardingStatus
     )
@@ -1208,10 +1204,10 @@ function Assign-VmUserManagedIdentity {
             $result = Update-AzVM -VM $VMObject `
                                   -ResourceGroupName $vmResourceGroup `
                                   -IdentityType "UserAssigned" `
-                                  -IdentityID $userAssignedManagedIdentityId
+                                  -IdentityID $userAssignedManagedIdentityId `
                                   -ErrorAction "Stop"                              
         } catch [Microsoft.Azure.Commands.Compute.Common.ComputeCloudException] {
-            $exceptionInfo = Parse-CloudExceptionMessage($_.Exception)
+            $exceptionInfo = Parse-CloudExceptionMessage($_.Exception.Message)
             if (!$exceptionInfo) {
                 throw [FatalException]::new("$vmName : Failed to assign user managed identity", $_)
             } else {
@@ -1243,12 +1239,15 @@ function Assign-VmUserManagedIdentity {
 }
 
 function Display-Exception {
+    param(
+    [Parameter(Mandatory = $true)][Object]$ExcepObj
+    )
     try {
-        try { "ExceptionClass = $($_.Exception.GetType().Name)" | Write-Output } catch { }
-        try { "ExceptionMessage:`r`n$($_.Exception.Message)`r`n" | Write-Output } catch { }
-        try { "StackTrace:`r`n$($_.Exception.StackTrace)`r`n" | Write-Output } catch { }
-        try { "ScriptStackTrace:`r`n$($_.ScriptStackTrace)`r`n" | Write-Output } catch { }
-        try { "Exception.HResult = 0x{0,0:x8}" -f $_.Exception.HResult | Write-Output } catch { }
+        try { "ExceptionClass = $($ExcepObj.GetType().Name)" | Write-Output } catch { }
+        try { "ExceptionMessage:`r`n$($ExcepObj.Message)`r`n" | Write-Output } catch { }
+        try { "StackTrace:`r`n$($ExcepObj.StackTrace)`r`n" | Write-Output } catch { }
+        try { "ScriptStackTrace:`r`n$($ExcepObj.ScriptStackTrace)`r`n" | Write-Output } catch { }
+        try { "Exception.HResult = 0x{0,0:x8}" -f $ExcepObj.HResult | Write-Output } catch { }
     }
     catch {
         #silently ignore
@@ -1276,7 +1275,7 @@ try {
             Write-Output "Current Subscription:"
             $account
             Write-Output "Changing to subscription: $SubscriptionId"
-            Select-AzureSubscription -SubscriptionId $SubscriptionId
+            Select-AzSubscription -SubscriptionId $SubscriptionId
         }
     }
 
@@ -1291,9 +1290,9 @@ try {
         }
         
         try {
-            $userAssignedIdentityObject = Get-AzUserAssignedIdentity 
+            $userAssignedIdentityObject = Get-AzUserAssignedIdentity -Name $UserAssignedManagedIdentityName `
                                     -ResourceGroupName $UserAssignedManagedIdentityResourceGroup `
-                                    -Name $UserAssignedManagedIdentityName -ErrorAction "Stop"
+                                    -ErrorAction "Stop"
         } catch [System.Management.Automation.PSInvalidOperationException]{
             Write-Output ("$UserAssignedManagedIdentityName ($UserAssignedManagedIdentityResourceGroup) : Cannot lookup the input user managed assigned identity. Exiting....")
             exit
@@ -1391,31 +1390,30 @@ try {
     $Vmss | ForEach-Object { Write-Output "$($_.Name) $($_.PowerState)" }
 
     #script blocks
-    sb_ama_vm = { param($vmObj); Onboard-VmiWithAmaVm -VMObjects $vmObj -OnboardingStatus $OnboardingStatus -OnboardParameters $OnboardParameters}
-    sb_mma_vm = { param($vmObj); Onboard-VmiWithMmaVm -VMObjects $vmObj -OnboardingStatus $OnboardingStatus -OnboardParameters $OnboardParameters}
-    sb_ama_vmss = { param($vmssObj); Onboard-VmiWithAmaVmss -VMssObjects $vmssObj -OnboardingStatus $OnboardingStatus -OnboardParameters $OnboardParameters}
-    sb_mma_vmss =   { param($vmssObj);  Onboard-VmiWithMmaVmss -VMssObjects $vmssObj -OnboardingStatus $OnboardingStatus -OnboardParameters $OnboardParameters}
+    $sb_ama_vm = { param($vmObj); Onboard-VmiWithAmaVm -VMObject $vmObj -OnboardingStatus $OnboardingStatus -OnboardParameters $OnboardParameters}
+    $sb_mma_vm = { param($vmObj); Onboard-VmiWithMmaVm -VMObject $vmObj -OnboardingStatus $OnboardingStatus -OnboardParameters $OnboardParameters}
+    $sb_ama_vmss = { param($vmssObj); Onboard-VmiWithAmaVmss -VMssObject $vmssObj -OnboardingStatus $OnboardingStatus -OnboardParameters $OnboardParameters}
+    $sb_mma_vmss =   { param($vmssObj);  Onboard-VmiWithMmaVmss -VMssObject $vmssObj -OnboardingStatus $OnboardingStatus -OnboardParameters $OnboardParameters}
 
     if (!$DcrRuleName) {
-        sb_vmss =  sb_mma_vmss
-        sb_vm = sb_mma_vm
+        $sb_vmss = $sb_mma_vmss
+        $sb_vm = $sb_mma_vm
     } else {
         #Assign roles to the user managed identity.     
         if ($ResourceGroup) {
-            $rg = Get-AzResourceGroup -SubscriptionId $SubscriptionId `
-                                        -Name $ResourceGroup
-            Assign-ManagedIdentityRoles -TargetScope $rg.ResourceId `
-                                        -UserAssignedIdentityObject $userAssignedIdentityObject
+            $rg = Get-AzResourceGroup -Name $ResourceGroup
+            Set-ManagedIdentityRoles -TargetScope $rg.ResourceId `
+                                     -UserAssignedManagedIdentityObject $userAssignedIdentityObject
         } else {
-            $Rgs = Get-AzResourceGroup -SubscriptionId $SubscriptionId
+            $Rgs = Get-AzResourceGroup
             ForEach ($rg in $Rgs) {
-                Assign-ManagedIdentityRoles -TargetScope $rg.ResourceId `
-                                            -UserAssignedIdentityObject $userAssignedIdentityObject
+                Set-ManagedIdentityRoles -TargetScope $rg.ResourceId `
+                                         -UserAssignedManagedIdentityObject $userAssignedIdentityObject
             }
         }
 
-        sb_vm = sb_ama_vm
-        sb_vmss = sb_ama_vmss
+        $sb_vm = $sb_ama_vm
+        $sb_vmss = $sb_ama_vmss
     }
 
     # Validate customer wants to continue
@@ -1431,23 +1429,23 @@ try {
     #
     # Loop through each VM/VM Scale set, as appropriate handle installing VM Extensions
     #
-    $Vms+=$Vmss
+    $Vms = @($VMs) + $Vmss
 
     Foreach ($vm in $Vms) {
         try {
             if ($vm.type -eq 'Microsoft.Compute/virtualMachineScaleSets') {
-                &$sb_vmss -vmssObjs $vmss
+                &$sb_vmss -vmssObj $vm
             } else {
-                &$sb_vm -vmObjs $vm
+                &$sb_vm -vmObj $vm
             }
         } catch [InputParameterObsolete] {
-            $errorMessage = $_.errorMessage
-            $innerExcepObj = $_.innerExcepObj
-            $obsParamType = $_.obsParamType
+            $errorMessage = $_.Exception.errorMessage
+            $innerExcepObj = $_.Exception.innerExcepObj
+            $obsParamType = $_.Exception.Exception.obsParamType
             $cannotContinue = @("DataCollectionRule", "ResourceGroup","UserAssignedManagedIdentity")
-            Write-Output "InputParameterObsolete :`n`rCustomer Action : Please check if $obsParamType exists or check access permissions"
+            Write-Output "InputParameterObsolete =>`n`rCustomer Action : Please check if $obsParamType exists or check access permissions"
             Write-Output $errorMessage
-            Display-Exception $innerExcepObj
+            Display-Exception -ExcepObj $innerExcepObj
             if ($cannotContinue.contains($obsParamType)) {
                 Write-Output "Exiting..."
                 exit
@@ -1462,7 +1460,7 @@ try {
             $possibleIssueWithApi = @(400,417,424,403,411,510,501,412,414,415,428,413,431,422)
             $serverUnavailable = @(507,503,500,421,451,429)
             $possibleResourceUnavailable = $(401,410,423,405,404,407,416)
-            Write-Output "OperationFailed : `n`rStatusCode=$statusCode ReasonPhrase=$reasonPhrase"    
+            Write-Output "OperationFailed => `n`rStatusCode=$statusCode ReasonPhrase=$reasonPhrase"    
             if ($possibleNetworkIssue.contains($statusCode)) {
                 $networkIssueCounter+=1
                 if ($networkIssueCounter -lt $networkIssueToleranceLimit) {
@@ -1492,11 +1490,11 @@ try {
                 Write-Output "Continuing to next VM/VMss..."
             }
         } catch [FatalException] {
-            $errorMessage = $_.errorMessage
-            $innerExcepObj = $_.innerExcepObj
-            Write-Output "FatalException :`n`rCustomer Action : Please consider raising support ticket with below details"
+            $errorMessage = $_.Exception.errorMessage
+            $innerExcepObj = $_.Exception.innerExcepObj
+            Write-Output "FatalException =>`n`rCustomer Action : Please consider raising support ticket with below details"
             Write-Output $errorMessage
-            Display-Exception $innerExcepObj
+            Display-Exception -ExcepObj $innerExcepObj
             Write-Output "Exiting..."
             exit
         }
@@ -1504,7 +1502,7 @@ try {
 }
 catch {
     Write-Output "UnknownException :`n`rCustomer Action : Please consider raising support ticket with below details"
-    Display-Exception $_
+    Display-Exception -ExcepObj $_.Exception
     Write-Output "Exiting..."
     exit
 }
