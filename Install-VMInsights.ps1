@@ -1191,7 +1191,7 @@ function Assign-VmssManagedIdentity {
         } catch [Microsoft.Azure.Commands.Compute.Common.ComputeCloudException] {
             $exceptionInfo = Parse-CloudExceptionMessage($_.Message)
             if (!$exceptionInfo) {
-                throw [FatalException]::new("$vmssName ($vmssResourceGroup) : Failed to assign user managed identity", $_)
+                throw [FatalException]::new("$vmssName ($vmssResourceGroup) : Failed to assign user managed identity : $userAssignedManagedIdentityName", $_)
             } else {
                 if ($exceptionInfo["errorCode"].contains("FailedIdentityOperation")) {
                     throw [InputParameterObsolete]::new("$userAssignedManagedIdentityName : Failed to lookup managed identity",$_,"UserAssignedManagedIdentity")
@@ -1201,7 +1201,7 @@ function Assign-VmssManagedIdentity {
                     throw [InputParameterObsolete]::new("$vmssName ($vmssResourceGroup)  : Failed to lookup VMSS",$_,"VirtualMachine") 
                 }
                 else {
-                    throw [FatalException]::new("$vmssName : Failed to assign managed identity : $userAssignedManagedIdentityName", $_)
+                    throw [FatalException]::new("vmssName ($vmssResourceGroup) : Failed to assign managed identity : $userAssignedManagedIdentityName. ExceptionInfo = $exceptionInfo", $_)
                 }
             }
         }
@@ -1252,7 +1252,7 @@ function Assign-VmUserManagedIdentity {
         } catch [Microsoft.Azure.Commands.Compute.Common.ComputeCloudException] {
             $exceptionInfo = Parse-CloudExceptionMessage($_.Message)
             if (!$exceptionInfo) {
-                throw [FatalException]::new("$vmName : Failed to assign user managed identity", $_)
+                throw [FatalException]::new("$vmName : Failed to assign user managed identity : $userAssignedManagedIdentityName.", $_)
             } else {
                 if ($exceptionInfo["errorCode"].contains("FailedIdentityOperation")) {
                     throw [InputParameterObsolete]::new("$userAssignedManagedIdentityName : Failed to lookup managed identity",$_,"UserAssignedManagedIdentity")
@@ -1262,7 +1262,7 @@ function Assign-VmUserManagedIdentity {
                     throw [InputParameterObsolete]::new("$vmName ($vmResourceGroup) : Failed to lookup VM",$_,"VirtualMachine") 
                 }
                 else {
-                    throw [FatalException]::new("$vmName : Failed to assign managed identity : $userAssignedManagedIdentityName", $_)
+                    throw [FatalException]::new("$vmName : Failed to assign managed identity : $userAssignedManagedIdentityName. Exception Info = $exceptionInfo", $_)
                 }
             }
         }
@@ -1311,7 +1311,7 @@ try {
     }
     else {
         if ($account.Subscription.Id -eq $SubscriptionId) {
-            Write-Verbose("Subscription: $SubscriptionId is already selected.")
+            Write-Verbose "Subscription: $SubscriptionId is already selected."
             $account
         }
         else {
@@ -1327,11 +1327,12 @@ try {
         #VMI supports Customers onboarding DCR from different subscription
         #Cannot validate DCRResourceId as parameter set ByResourceId will be deprecated for - Get-AzDataCollectionRule
         try {
+            Write-Output "Validating ($UserAssignedManagedIdentityName,$UserAssignedManagedIdentityResourceGroup)"
             $userAssignedIdentityObject = Get-AzUserAssignedIdentity -Name $UserAssignedManagedIdentityName `
                                     -ResourceGroupName $UserAssignedManagedIdentityResourceGroup `
                                     -ErrorAction "Stop"
-        } catch [System.Management.Automation.PSInvalidOperationException]{
-            Write-Output ("$UserAssignedManagedIdentityName ($UserAssignedManagedIdentityResourceGroup) : Cannot lookup the input user managed assigned identity. Exiting....")
+        } catch [Exception]{
+            Write-Output $_.Message
             exit
         }
         $OnboardParameters = @{ "DcrResourceId" = $DcrResourceId ; "UserAssignedIdentityObject" =  $userAssignedIdentityObject; "ProcessAndDependencies" = $ProcessAndDependencies}
