@@ -446,7 +446,10 @@ function New-DCRAssociation {
     } catch [System.Management.Automation.PSInvalidOperationException] {
         $exceptionMessage = $_.Exception.InnerException.Message
         
-        if (!($exceptionMessage -match $invalidOperationParserPattern)){
+        if ($exceptionMessage.Contains('Invalid format of the resource identifier')) {
+            throw "$DcrResourceId : DataCollectionRule is in wrong format"
+        }
+        elseif (!($exceptionMessage -match $invalidOperationParserPattern)){
             throw [FatalException]::new("$vmName ($vmResourceGroupName) : Failed to create data collection rule association for $DcrResourceId", $_)
         } else {
             $statusCode = $matches[1]
@@ -457,7 +460,7 @@ function New-DCRAssociation {
             } elseif ($statusCode.Contains('Forbidden')) {
                 throw [InputParameterObsolete]::new("$DcrResourceId : Failed to access dataCollectionRule",$_,"DataCollectionRule")     
             } else {
-                throw [FatalException]::new("$DcrResourceId : Failed to lookup dataCollectionRule. UnknownStatusCode = $statusCode", $_,"DataCollectionRule")
+                throw [FatalException]::new("$DcrResourceId : Failed to lookup dataCollectionRule. UnknownStatusCode = $statusCode", $_)
             }
         }
     }
@@ -1523,7 +1526,7 @@ try {
     }
 }
 catch {
-    Write-Output "UnknownException :`n`rCustomer Action : Please consider raising support ticket with below details against -> Owning Server : Service Map and VM Insights"
+    Write-Output "UnknownException :`n`rCustomer Action : Check Error Message, if issue persists. Please consider raising support ticket with below details against -> Owning Server : Service Map and VM Insights"
     Display-Exception -ExcepObj $_
     Write-Output "Exiting..."
     exit
