@@ -1534,11 +1534,11 @@ catch {
 }
 
 Write-Output "`nSummary:"
-Write-Output "`nSucceeded: (" + $OnboardingStatus.Succeeded.Count + ")"
+Write-Output "`nSucceeded: ($($OnboardingStatus.Succeeded.Count))"
 $OnboardingStatus.Succeeded | ForEach-Object { Write-Output $_ }
-Write-Output "`nNot running - start VM to configure: (" + $OnboardingStatus.NotRunning.Count + ")"
+Write-Output "`nNot running - start VM to configure: ($($OnboardingStatus.NotRunning.Count))"
 $OnboardingStatus.NotRunning  | ForEach-Object { Write-Output $_ }
-Write-Output("`nVM Scale Set needs update: (" + $OnboardingStatus.VMScaleSetNeedsUpdate.Count + ")")
+Write-Output "`nVM Scale Set needs update: ($($OnboardingStatus.VMScaleSetNeedsUpdate.Count))"
 $OnboardingStatus.VMScaleSetNeedsUpdate  | ForEach-Object { Write-Output $_ }
-Write-Output("`nFailed: (" + $OnboardingStatus.Failed.Count + ")")
+Write-Output "`nFailed: ($($OnboardingStatus.Failed.Count))"
 $OnboardingStatus.Failed | ForEach-Object { Write-Output $_ }
