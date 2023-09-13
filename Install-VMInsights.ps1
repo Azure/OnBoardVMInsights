@@ -1457,8 +1457,11 @@ try {
             $possibleIssueWithApi = @(400,417,424,403,411,510,501,412,414,415,428,413,431,422)
             $serverUnavailable = @(507,503,500,421,451,429)
             $possibleResourceUnavailable = $(401,410,423,405,404,407,416)
-            Write-Output "OperationFailed => `n`rStatusCode=$statusCode ReasonPhrase=$reasonPhrase"    
-            if ($possibleNetworkIssue.contains($statusCode)) {
+            Write-Output "OperationFailed => `n`rStatusCode = $statusCode ReasonPhrase = $reasonPhrase"
+            if ($statusCode -eq $UNAVAILABLE)  {
+                Write-Output $errorMessage
+                Write-Output "Continuing to next VM/VMss..."
+            }   elseif ($possibleNetworkIssue.contains($statusCode)) {
                 $networkIssueCounter+=1
                 if ($networkIssueCounter -lt $networkIssueToleranceLimit) {
                     Write-Output "Possible Network Issue : continuing for the time being"
@@ -1483,7 +1486,8 @@ try {
                     exit
                 }
             }
-            else {
+            else { 
+                Write-Output $errorMessage
                 Write-Output "Continuing to next VM/VMss..."
             }
         } catch [FatalException] {
