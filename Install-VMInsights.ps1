@@ -262,38 +262,6 @@ class FatalException : System.Exception {
 #
 # FUNCTIONS
 #
-function Get-VMssOsType {
-    param
-    (
-        [Parameter(mandatory = $true)][String]$VmssName,
-        [Parameter(mandatory = $true)][String]$VmssResourceGroupName
-    )
-
-    try {
-        $scalesetVms = Get-AzVmssVM -ResourceGroupName $VmssResourceGroupName -VMScaleSetName $VmssName
-    } catch [Microsoft.Azure.Commands.Compute.Common.ComputeCloudException] {
-        $exceptionInfo = Parse-CloudExceptionMessage($_.Exception.Message)
-        if (!$exceptionInfo) {
-            throw [FatalException]::new("$VmssName ($VmssResourceGroupName) : Failed to lookup VM instances in VMSS : $extensionType", $_)
-        } else {
-            if ($exceptionInfo["errorCode"].contains("ParentResourceNotFound")) {
-                throw [InputParameterObsolete]::new("$VmssName ($VmssResourceGroupName) : Failed to lookup VMSS",$_,"VirtualMachine")
-            } elseif($exceptionInfo["errorCode"].contains("ResourceGroupNotFound")) {
-                throw [InputParameterObsolete]::new("$VmssResourceGroupName : Failed to lookup resource group",$_,"ResourceGroup")       
-            } else {
-                throw [FatalException]::new("$VmssName ($VmssResourceGroupName) : Failed to lookup VM instances in VMSS", $_)
-            }
-        }
-    }
-
-    if ($scalesetVMs.length -gt 0) {
-        if ($scalesetVMs[0]) {
-            $osType = $scalesetVMs[0].storageprofile.osdisk.ostype
-        }
-    }
-
-    return $osType
-}
 
 function Parse-CloudExceptionMessage {
     param
@@ -722,12 +690,10 @@ function Install-DaVmss {
     )
     
     $vmssName = $VMssObject.Name
-    $vmssLocation = $VMssObject.Location
     $vmssResourceGroupName = $VMssObject.ResourceGroupName
     # Use supplied name unless already deployed, use same name
     $extensionName = $daExtensionName
-    
-    $osType = Get-VMssOsType -VmssName  $vmssName -VmssResourceGroupName $vmssResourceGroupName
+    $osType = $VMssObject.VirtualMachineProfile.StorageProfile.OsDisk.OsType
     $extensionType = $daExtensionMap.($osType.ToString())
     $extension = Get-VMssExtension -VMssObject $VMssObject -ExtensionType $extensionType -OnboardingStatus $OnboardingStatus
     
@@ -751,18 +717,17 @@ function Install-DaVmss {
     }
 
     $parameters = @{
-        ResourceGroupName  = $vmssResourceGroupName
-        VMssName           = $vmssName
-        Location           = $vmssLocation
-        Publisher          = $daExtensionPublisher
-        ExtensionType      = $extensionType
-        ExtensionName      = $extensionName
-        TypeHandlerVersion = $daExtensionVersionMap.($osType.ToString())
-        ForceRerun         = $True
+        VirtualMachineScaleSet = $VMssObject
+        Name                   = $vmssName
+        Publisher              = $daExtensionPublisher
+        Type                   = $extensionType
+        ExtensionName          = $extensionName
+        TypeHandlerVersion     = $daExtensionVersionMap.($osType.ToString())
+        AutoUpgradeMinorVersion = $True
     }
 
     if ($IsAmaOnboarded) {
-        $parameters.Add("Settings", $processAndDependenciesPublicSettings)
+        $parameters.Add("Setting", $processAndDependenciesPublicSettings)
     }
 
     Install-VMssExtension -InstallParameters $parameters -OnboardingStatus $OnboardingStatus
@@ -909,7 +874,7 @@ function Install-AmaVMss {
     $vmssResourceGroupName = $VMssObject.ResourceGroupName
     # Use supplied name unless already deployed, use same name
     $extensionName = $amaExtensionName
-    $osType = Get-VMssOsType -VmssName  $vmssName -VmssResourceGroupName $vmssResourceGroupName
+    $osType = $VMssObject.VirtualMachineProfile.StorageProfile.OsDisk.OsType
     $extensionType = $amaExtensionMap.($osType.ToString())
     # Use supplied name unless already deployed, use same name
     $extension = Get-VMssExtension -VMss $VMssObject -ExtensionType $extensionType
@@ -931,15 +896,14 @@ function Install-AmaVMss {
     }
 
     $parameters = @{
-        ResourceGroupName  = $vmssResourceGroupName
-        VMssName           = $vmssName
-        Location           = $vmssLocation
-        Publisher          = $amaExtensionPublisher
-        ExtensionType      = $extensionType
-        ExtensionName      = $extensionName
-        TypeHandlerVersion = $amaExtensionVersionMap.($osType.ToString())
-        ForceRerun         = $True
-        Settings           = $AmaPublicSettings
+        VirtualMachineScaleSet  = $VMssObject
+        Name                    = $vmssName
+        Publisher               = $amaExtensionPublisher
+        Type                    = $extensionType
+        ExtensionName           = $extensionName
+        TypeHandlerVersion      = $amaExtensionVersionMap.($osType.ToString())
+        Setting                 = $AmaPublicSettings
+        AutoUpgradeMinorVersion = $True
     }
 
     Install-VMssExtension -InstallParameters $parameters -OnboardingStatus $OnboardingStatus   
@@ -963,7 +927,7 @@ function Install-MmaVMss {
     $vmssResourceGroupName = $VMssObject.ResourceGroupName
     # Use supplied name unless already deployed, use same name
     $extensionName = $mmaExtensionName
-    $osType = Get-VMssOsType -VmssName  $vmssName -VmssResourceGroupName $vmssResourceGroupName
+    $osType = $VMssObject.VirtualMachineProfile.StorageProfile.OsDisk.OsType
     $extensionType = $amaExtensionMap.($osType.ToString())
     # Use supplied name unless already deployed, use same name
     $extension = Get-VMssExtension -VMss $VMssObject -ExtensionType $extensionType
@@ -991,16 +955,14 @@ function Install-MmaVMss {
     }
 
     $parameters = @{
-        ResourceGroupName  = $vmssResourceGroupName
-        VMssName           = $vmssName
-        Location           = $vmssLocation
-        Publisher          = $daExtensionPublisher
-        ExtensionType      = $extensionType
-        ExtensionName      = $extensionName
-        TypeHandlerVersion = $daExtensionVersionMap.($osType.ToString())
-        ForceRerun         = $True
-        Settings           = $mmaPublicSettings
-        ProtectedSettings  = $mmaProtectedSettings
+        VirtualMachineScaleSet  = $VMssObject
+        Name                    = $vmssName
+        Publisher               = $mmaExtensionPublisher
+        Type                    = $extensionType
+        ExtensionName           = $extensionName
+        TypeHandlerVersion      = $mmaExtensionVersionMap.($osType.ToString())
+        Setting                 = $mmaPublicSettings
+        ProtectedSetting       = $mmaProtectedSettings
     }
 
     Install-VMssExtension -InstallParameters $parameters -OnboardingStatus $OnboardingStatus
@@ -1105,9 +1067,9 @@ function Install-VMssExtension {
         [Parameter(mandatory = $true)][hashtable]$OnboardingStatus
     )
 
-    $vmssName = $InstallParameters.VirtualMachineScaleSet.Name
-                $InstallParameters.VirtualMachineScaleSet.Name
     $extensionType = $InstallParameters.Type
+    $vmssName = $InstallParameters.VirtualMachineScaleSet.Name
+    $vmssResourceGroupName = $InstallParameters.VirtualMachineScaleSet.ResourceGroupName
     Write-Verbose("$vmssName : Adding $extensionType with name $extensionName")
     $VMssObject = Add-AzVmssExtension @InstallParameters
     Write-Verbose("$vmssName : Updating scale set with $extensionType extension")
@@ -1131,7 +1093,7 @@ function Install-VMssExtension {
         }
     }
     
-    if ($VMssObject-and $VMssObject.ProvisioningState -eq "Succeeded") {
+    if ($VMssObject.ProvisioningState -eq "Succeeded") {
         Write-Output "$vmssName ($vmssResourceGroupName) : Successfully updated scale set with extension $extensionType"
         return
     }
@@ -1183,7 +1145,7 @@ function Assign-VmssManagedIdentity {
         }
 
         try {
-            $result = Update-AzVMss -VirtualMachineScaleSet $VMssObject `
+            $result = Update-AzVmss -VirtualMachineScaleSet $VMssObject `
                                     -ResourceGroupName $vmssResourceGroup `
                                     -IdentityType "UserAssigned" `
                                     -IdentityID $userAssignedManagedIdentityId `
@@ -1332,7 +1294,7 @@ try {
                                     -ResourceGroupName $UserAssignedManagedIdentityResourceGroup `
                                     -ErrorAction "Stop"
         } catch [Exception]{
-            Write-Output $_.Message
+            Write-Output $_.Exception.Message
             exit
         }
         $OnboardParameters = @{ "DcrResourceId" = $DcrResourceId ; "UserAssignedIdentityObject" =  $userAssignedIdentityObject; "ProcessAndDependencies" = $ProcessAndDependencies}
