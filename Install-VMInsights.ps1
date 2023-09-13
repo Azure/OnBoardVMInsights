@@ -710,26 +710,27 @@ function Install-DaVmss {
                 }
             }
         }
-    }
-    
-    if (!($PSCmdlet.ShouldProcess($vmssName, "install extension $extensionType"))) {
-        return
+    } else {
+        if (!($PSCmdlet.ShouldProcess($vmssName, "install extension $extensionType"))) {
+            return
+        }
+
+        $parameters = @{
+            VirtualMachineScaleSet = $VMssObject
+            Publisher              = $daExtensionPublisher
+            Type                   = $extensionType
+            Name                   = $extensionName
+            TypeHandlerVersion     = $daExtensionVersionMap.($osType.ToString())
+            AutoUpgradeMinorVersion = $True
+        }
+
+        if ($IsAmaOnboarded) {
+            $parameters.Add("Setting", $processAndDependenciesPublicSettings)
+        }
+        $VMssObject = Add-AzVmssExtension @InstallParameters
     }
 
-    $parameters = @{
-        VirtualMachineScaleSet = $VMssObject
-        Publisher              = $daExtensionPublisher
-        Type                   = $extensionType
-        Name                   = $extensionName
-        TypeHandlerVersion     = $daExtensionVersionMap.($osType.ToString())
-        AutoUpgradeMinorVersion = $True
-    }
-
-    if ($IsAmaOnboarded) {
-        $parameters.Add("Setting", $processAndDependenciesPublicSettings)
-    }
-
-    Install-VMssExtension -InstallParameters $parameters -OnboardingStatus $OnboardingStatus
+    Update-VMssExtension -VMssObject $VMssObject -OnboardingStatus $OnboardingStatus
 }
 
 function Install-AmaVm {
@@ -887,24 +888,24 @@ function Install-AmaVMss {
                 return
             }
         }
-    }
-    
+    } else {
+        if (!($PSCmdlet.ShouldProcess($vmssName, "install extension $extensionType"))) {
+            return
+        }
 
-    if (!($PSCmdlet.ShouldProcess($vmssName, "install extension $extensionType"))) {
-        return
+        $parameters = @{
+            VirtualMachineScaleSet  = $VMssObject
+            Name                    = $extensionName
+            Publisher               = $amaExtensionPublisher
+            Type                    = $extensionType 
+            TypeHandlerVersion      = $amaExtensionVersionMap.($osType.ToString())
+            Setting                 = $AmaPublicSettings
+            AutoUpgradeMinorVersion = $True
+        }
+        $VMssObject = Add-AzVmssExtension @parameters
     }
 
-    $parameters = @{
-        VirtualMachineScaleSet  = $VMssObject
-        Name                    = $extensionName
-        Publisher               = $amaExtensionPublisher
-        Type                    = $extensionType 
-        TypeHandlerVersion      = $amaExtensionVersionMap.($osType.ToString())
-        Setting                 = $AmaPublicSettings
-        AutoUpgradeMinorVersion = $True
-    }
-
-    Install-VMssExtension -InstallParameters $parameters -OnboardingStatus $OnboardingStatus   
+    Update-VMssExtension -VMssObject $VMssObject -OnboardingStatus $OnboardingStatus   
 }
 
 function Install-MmaVMss {
@@ -946,23 +947,24 @@ function Install-MmaVMss {
                 }
             }
         }
-    }
+    } else {
+        if (!($PSCmdlet.ShouldProcess($vmssName, "install extension $extensionType"))) {
+            return
+        }
 
-    if (!($PSCmdlet.ShouldProcess($vmssName, "install extension $extensionType"))) {
-        return
+        $parameters = @{
+            VirtualMachineScaleSet  = $VMssObject
+            Name                    = $extensionName
+            Publisher               = $mmaExtensionPublisher
+            Type                    = $extensionType
+            TypeHandlerVersion      = $mmaExtensionVersionMap.($osType.ToString())
+            Setting                 = $mmaPublicSettings
+            ProtectedSetting        = $mmaProtectedSettings
+        }
+        $VMssObject = Add-AzVmssExtension @parameters
     }
-
-    $parameters = @{
-        VirtualMachineScaleSet  = $VMssObject
-        Name                    = $extensionName
-        Publisher               = $mmaExtensionPublisher
-        Type                    = $extensionType
-        TypeHandlerVersion      = $mmaExtensionVersionMap.($osType.ToString())
-        Setting                 = $mmaPublicSettings
-        ProtectedSetting        = $mmaProtectedSettings
-    }
-
-    Install-VMssExtension -InstallParameters $parameters -OnboardingStatus $OnboardingStatus
+    
+    Update-VMssExtension -VMssObject $VMssObject -OnboardingStatus $OnboardingStatus
 }
 
 function Set-ManagedIdentityRoles {
@@ -1053,23 +1055,20 @@ function Install-VMExtension {
     throw [OperationFailed]::new($statusCode, $reasonPhrase, "$vmName ($vmResourceGroupName) : Failed to update extension $extensionType")
 }
 
-function Install-VMssExtension {
+function Update-VMssExtension {
     <#
 	.SYNOPSIS
 	Install VMss Extension, handling if already installed
 	#>
     param
     (
-        [Parameter(mandatory = $true)][hashtable]$InstallParameters,
+        [Parameter(mandatory = $true)][Object]$VMssObject,
         [Parameter(mandatory = $true)][hashtable]$OnboardingStatus
     )
 
-    $extensionType = $InstallParameters.Type
-    $vmssName = $InstallParameters.VirtualMachineScaleSet.Name
-    $vmssResourceGroupName = $InstallParameters.VirtualMachineScaleSet.ResourceGroupName
-    Write-Verbose("$vmssName : Adding $extensionType with name $extensionName")
-    $VMssObject = Add-AzVmssExtension @InstallParameters
-    Write-Verbose("$vmssName : Updating scale set with $extensionType extension")
+    $vmssName = $VMssObject.Name
+    $vmssResourceGroupName = $VMssObject.ResourceGroupName
+    Write-Verbose("$vmssName ($vmssResourceGroupName) : Updating virtual machine scale set")
     try {
         $VMssObject = Update-AzVmss -VMScaleSetName $vmssName `
                                     -ResourceGroupName $vmssResourceGroupName `
@@ -1078,14 +1077,14 @@ function Install-VMssExtension {
     } catch [Microsoft.Azure.Commands.Compute.Common.ComputeCloudException] {
         $exceptionInfo = Parse-CloudExceptionMessage($_.Exception.Message)
         if (!$exceptionInfo) {
-            throw [FatalException]::new("$vmssName ($vmssResourceGroupName) : Failed to update/install extension $extensionType", $_)
+            throw [FatalException]::new("$vmssName ($vmssResourceGroupName) : Failed to update virtual machine scale set", $_)
         } else {
             if ($exceptionInfo["errorCode"].contains("ParentResourceNotFound")) {
-                throw [InputParameterObsolete]::new("$vmssName ($vmssResourceGroupName) : Failed to lookup VMSS",$_,"VirtualMachineScaleSet")
+                throw [InputParameterObsolete]::new("$vmssName ($vmssResourceGroupName) : Failed to lookup virtual machine scale set",$_,"VirtualMachineScaleSet")
             } elseif($exceptionInfo["errorCode"].contains("ResourceGroupNotFound")) {
                 throw [InputParameterObsolete]::new("$vmssResourceGroupName : Failed to lookup resource group",$_,"ResourceGroup")       
             } else {
-                throw [FatalException]::new("$vmssName ($vmssResourceGroupName) : Failed to update/install extension", $_)
+                throw [FatalException]::new("$vmssName ($vmssResourceGroupName) : Failed to update virtual machine scale set", $_)
             }
         }
     }
@@ -1095,7 +1094,7 @@ function Install-VMssExtension {
         return
     }
 
-    throw [OperationFailed]::new($UNAVAILABLE,$UNAVAILABLE,"$vmssName ($vmssResourceGroupName) : Failed to update extension extension $extensionType")
+    throw [OperationFailed]::new($UNAVAILABLE,$UNAVAILABLE,"$vmssName ($vmssResourceGroupName) : Failed to update virtual machine scale set")
 }
 
 function Check-UserManagedIdentityAlreadyAssigned {
