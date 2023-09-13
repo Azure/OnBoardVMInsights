@@ -718,10 +718,9 @@ function Install-DaVmss {
 
     $parameters = @{
         VirtualMachineScaleSet = $VMssObject
-        Name                   = $vmssName
         Publisher              = $daExtensionPublisher
         Type                   = $extensionType
-        ExtensionName          = $extensionName
+        Name                   = $extensionName
         TypeHandlerVersion     = $daExtensionVersionMap.($osType.ToString())
         AutoUpgradeMinorVersion = $True
     }
@@ -897,10 +896,9 @@ function Install-AmaVMss {
 
     $parameters = @{
         VirtualMachineScaleSet  = $VMssObject
-        Name                    = $vmssName
+        Name                    = $extensionName
         Publisher               = $amaExtensionPublisher
-        Type                    = $extensionType
-        ExtensionName           = $extensionName
+        Type                    = $extensionType 
         TypeHandlerVersion      = $amaExtensionVersionMap.($osType.ToString())
         Setting                 = $AmaPublicSettings
         AutoUpgradeMinorVersion = $True
@@ -956,13 +954,12 @@ function Install-MmaVMss {
 
     $parameters = @{
         VirtualMachineScaleSet  = $VMssObject
-        Name                    = $vmssName
+        Name                    = $extensionName
         Publisher               = $mmaExtensionPublisher
         Type                    = $extensionType
-        ExtensionName           = $extensionName
         TypeHandlerVersion      = $mmaExtensionVersionMap.($osType.ToString())
         Setting                 = $mmaPublicSettings
-        ProtectedSetting       = $mmaProtectedSettings
+        ProtectedSetting        = $mmaProtectedSettings
     }
 
     Install-VMssExtension -InstallParameters $parameters -OnboardingStatus $OnboardingStatus
