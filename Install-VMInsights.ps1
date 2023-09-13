@@ -1099,7 +1099,6 @@ function Install-VMssExtension {
 }
 
 function Check-UserManagedIdentityAlreadyAssigned {
-    [CmdletBinding()]
     param
     (
         [Parameter(Mandatory = $true)][Object]$VMObject,
