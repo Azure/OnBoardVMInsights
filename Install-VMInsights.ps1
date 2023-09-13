@@ -1141,8 +1141,9 @@ function Assign-VmssManagedIdentity {
         }
 
         try {
-            $result = Update-AzVmss -VirtualMachineScaleSet $VMssObject `
-                                    -ResourceGroupName $vmssResourceGroup `
+            $VMssObject = Update-AzVmss -VMScaleSetName $vmssName `
+                                    -ResourceGroupName $vmssResourceGroupName `
+                                    -VirtualMachineScaleSet $VMssObject `
                                     -IdentityType "UserAssigned" `
                                     -IdentityID $userAssignedManagedIdentityId `
                                     -ErrorAction "Stop"
@@ -1152,26 +1153,24 @@ function Assign-VmssManagedIdentity {
                 throw [FatalException]::new("$vmssName ($vmssResourceGroup) : Failed to assign user managed identity : $userAssignedManagedIdentityName", $_)
             } else {
                 if ($exceptionInfo["errorCode"].contains("FailedIdentityOperation")) {
-                    throw [InputParameterObsolete]::new("$userAssignedManagedIdentityName : Failed to lookup managed identity",$_,"UserAssignedManagedIdentity")
+                    throw [InputParameterObsolete]::new("$userAssignedManagedIdentityName : Failed to lookup user managed identity",$_,"UserAssignedManagedIdentity")
                 } elseif($exceptionInfo["errorCode"].contains("ResourceGroupNotFound")) {
                     throw [InputParameterObsolete]::new("$vmssResourceGroup : Failed to lookup resource group",$_,"ResourceGroup")       
                 } elseif ($exceptionInfo["errorCode"].contains("InvalidParameter") -and $exceptionInfo["errorMessage"].contains("Parameter 'osDisk.managedDisk.id' is not allowed")) {
                     throw [InputParameterObsolete]::new("$vmssName ($vmssResourceGroup)  : Failed to lookup VMSS",$_,"VirtualMachine") 
                 }
                 else {
-                    throw [FatalException]::new("vmssName ($vmssResourceGroup) : Failed to assign managed identity : $userAssignedManagedIdentityName. ExceptionInfo = $exceptionInfo", $_)
+                    throw [FatalException]::new("vmssName ($vmssResourceGroup) : Failed to user assign managed identity : $userAssignedManagedIdentityName. ExceptionInfo = $exceptionInfo", $_)
                 }
             }
         }
 
-        if ($result -and $result.IsSuccessStatusCode) {
-            Write-Output "$vmScaleSetName : Successfully assigned user managed identity : $userAssignedManagedIdentityName"
+        if ($VMssObject.ProvisioningState -eq "Succeeded") {
+            Write-Output "$vmssName ($vmssResourceGroupName) : Successfully assigned user assign managed identity : $userAssignedManagedIdentityName"
             return
         }
 
-        $statusCode = $result.StatusCode
-        $reasonPhrase = $result.ReasonPhrase
-        throw [OperationFailed]::new($statusCode,$reasonPhrase,"$vmssName : Failed to assign user assigned managed identity $userAssignedManagedIdentityName")
+        throw [OperationFailed]::new($UNAVAILABLE,$UNAVAILABLE,"$vmssName ($vmssResourceGroupName) : Failed to assign user assigned managed identity $userAssignedManagedIdentityName")
     }
 
     ##Assign Managed identity to Azure Monitoring Agent
