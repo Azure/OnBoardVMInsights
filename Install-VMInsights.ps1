@@ -694,6 +694,7 @@ function Install-DaVmss {
             $parameters.Add("Setting", $processAndDependenciesPublicSettings)
         }
         $VMssObject = Add-AzVmssExtension @InstallParameters
+        Write-Output "$vmssName ($vmssResourceGroupName) : $extensionType added"
     }
 
     Update-VMssExtension -VMssObject $VMssObject 
@@ -866,6 +867,7 @@ function Install-AmaVMss {
             AutoUpgradeMinorVersion = $True
         }
         $VMssObject = Add-AzVmssExtension @parameters
+        Write-Output "$vmssName ($vmssResourceGroupName) : $extensionType added"
     }
 
     Update-VMssExtension -VMssObject $VMssObject   
@@ -924,6 +926,7 @@ function Install-MmaVMss {
             ProtectedSetting        = $mmaProtectedSettings
         }
         $VMssObject = Add-AzVmssExtension @parameters
+        Write-Output "$vmssName ($vmssResourceGroupName) : $extensionType added"
     }
     
     Update-VMssExtension -VMssObject $VMssObject
@@ -1050,7 +1053,7 @@ function Update-VMssExtension {
     }
     
     if ($VMssObject.ProvisioningState -eq "Succeeded") {
-        Write-Output "$vmssName ($vmssResourceGroupName) : Successfully updated scale set with extension $extensionType"
+        Write-Output "$vmssName ($vmssResourceGroupName) : Successfully updated scale set with extension"
         return
     }
 
@@ -1100,7 +1103,7 @@ function Assign-VmssManagedIdentity {
 
         try {
             $VMssObject = Update-AzVmss -VMScaleSetName $vmssName `
-                                    -ResourceGroupName $vmssResourceGroupName `
+                                    -ResourceGroupName $vmssResourceGroup `
                                     -VirtualMachineScaleSet $VMssObject `
                                     -IdentityType "UserAssigned" `
                                     -IdentityID $userAssignedManagedIdentityId `
@@ -1124,11 +1127,11 @@ function Assign-VmssManagedIdentity {
         }
 
         if ($VMssObject.ProvisioningState -eq "Succeeded") {
-            Write-Output "$vmssName ($vmssResourceGroupName) : Successfully assigned user assign managed identity : $userAssignedManagedIdentityName"
+            Write-Output "$vmssName ($vmssResourceGroup) : Successfully assigned user assign managed identity : $userAssignedManagedIdentityName"
             return
         }
 
-        throw [OperationFailed]::new($UNAVAILABLE,$UNAVAILABLE,"$vmssName ($vmssResourceGroupName) : Failed to assign user assigned managed identity $userAssignedManagedIdentityName")
+        throw [OperationFailed]::new($UNAVAILABLE,$UNAVAILABLE,"$vmssName ($vmssResourceGroup) : Failed to assign user assigned managed identity $userAssignedManagedIdentityName")
     }
 
     ##Assign Managed identity to Azure Monitoring Agent
@@ -1469,6 +1472,7 @@ try {
 }
 catch {
     Write-Output "UnknownException :`n`rCustomer Action : Check Error Message, if issue persists. Please consider raising support ticket with below details against -> Owning Server : Service Map and VM Insights"
+    $OnboardingStatus.Failed  += $_.Exception.Message
     Display-Exception -ExcepObj $_
     Write-Output "Exiting..."
     exit
