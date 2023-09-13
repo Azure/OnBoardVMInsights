@@ -994,7 +994,7 @@ function Set-ManagedIdentityRoles {
                 Write-Verbose "Scope $targetScope : role assignment for $userAssignedManagedIdentityName with $role succeeded"
             }
             catch [ErrorResponseException] {
-                $excepMessage = $_.Message
+                $excepMessage = $_.Exception.Message
                 if ($excepMessage -contains 'Conflict') {
                     Write-Verbose ("$userAssignedManagedIdentityName : $role has been assigned already")
                 } elseif ($excepMessage -contains 'BadRequest') {
@@ -1028,7 +1028,7 @@ function Install-VMExtension {
     try {
         $result = Set-AzVMExtension @InstallParameters -ErrorAction "Stop"
     } catch [Microsoft.Azure.Commands.Compute.Common.ComputeCloudException] {
-        $exceptionInfo = Parse-CloudExceptionMessage($_.Message)
+        $exceptionInfo = Parse-CloudExceptionMessage($_.Exception.Message)
         if (!$exceptionInfo) {
             throw [FatalException]::new("$vmName ($vmResourceGroupName) : Failed to update/install extension : $extensionType", $_)
         } else {
@@ -1076,7 +1076,7 @@ function Install-VMssExtension {
                                     -VirtualMachineScaleSet $VMssObject `
                                     -ErrorAction "Stop"
     } catch [Microsoft.Azure.Commands.Compute.Common.ComputeCloudException] {
-        $exceptionInfo = Parse-CloudExceptionMessage($_.Message)
+        $exceptionInfo = Parse-CloudExceptionMessage($_.Exception.Message)
         if (!$exceptionInfo) {
             throw [FatalException]::new("$vmssName ($vmssResourceGroupName) : Failed to update/install extension $extensionType", $_)
         } else {
@@ -1148,7 +1148,7 @@ function Assign-VmssManagedIdentity {
                                     -IdentityID $userAssignedManagedIdentityId `
                                     -ErrorAction "Stop"
         } catch [Microsoft.Azure.Commands.Compute.Common.ComputeCloudException] {
-            $exceptionInfo = Parse-CloudExceptionMessage($_.Message)
+            $exceptionInfo = Parse-CloudExceptionMessage($_.Exception.Message)
             if (!$exceptionInfo) {
                 throw [FatalException]::new("$vmssName ($vmssResourceGroup) : Failed to assign user managed identity : $userAssignedManagedIdentityName", $_)
             } else {
@@ -1207,7 +1207,7 @@ function Assign-VmUserManagedIdentity {
                                   -IdentityID $userAssignedManagedIdentityId `
                                   -ErrorAction "Stop"                              
         } catch [Microsoft.Azure.Commands.Compute.Common.ComputeCloudException] {
-            $exceptionInfo = Parse-CloudExceptionMessage($_.Message)
+            $exceptionInfo = Parse-CloudExceptionMessage($_.Exception.Message)
             if (!$exceptionInfo) {
                 throw [FatalException]::new("$vmName : Failed to assign user managed identity : $userAssignedManagedIdentityName.", $_)
             } else {
