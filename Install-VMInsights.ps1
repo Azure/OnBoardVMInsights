@@ -262,7 +262,22 @@ class FatalException : System.Exception {
 #
 # FUNCTIONS
 #
-
+function Print-SummaryMessage {
+    param (
+        [Parameter(mandatory = $true)][hashtable]$OnboardingStatus
+    )
+    Write-Output "`n`nSummary:"
+    Write-Output "`nSucceeded: ($($OnboardingStatus.Succeeded.Count))"
+    $OnboardingStatus.Succeeded | ForEach-Object { Write-Output $_ }
+    Write-Output "`nNot running - start VM to configure: ($($OnboardingStatus.NotRunning.Count))"
+    $OnboardingStatus.NotRunning  | ForEach-Object { Write-Output $_ }
+    Write-Output "`nVM Scale Set needs update: ($($OnboardingStatus.VMScaleSetNeedsUpdate.Count))"
+    $OnboardingStatus.VMScaleSetNeedsUpdate  | ForEach-Object { Write-Output $_ }
+    Write-Output "`nFailed: ($($OnboardingStatus.Failed.Count))"
+    $OnboardingStatus.Failed | ForEach-Object { Write-Output $_ }
+    #Script Exit
+    exit
+}
 function Parse-CloudExceptionMessage {
     param
     (
@@ -288,8 +303,7 @@ function Get-VMExtension {
     param
     (
         [Parameter(mandatory = $true)][Object]$VMObject,
-        [Parameter(mandatory = $true)][string]$ExtensionType,	
-	    [Parameter(mandatory = $true)][hashtable]$OnboardingStatus
+        [Parameter(mandatory = $true)][string]$ExtensionType
     )
 
     $vmResourceGroupName = $VMObject.ResourceGroupName
@@ -349,13 +363,12 @@ function Remove-VMExtension {
     param
     (
         [Parameter(mandatory = $true)][Object]$VMObject,
-        [Parameter(mandatory = $true)][string]$ExtensionType,
-        [Parameter(mandatory = $true)][hashtable]$OnboardingStatus
+        [Parameter(mandatory = $true)][string]$ExtensionType
     )
 
     $vmResourceGroupName = $VMObject.ResourceGroupName
     $vmName = $VMObject.VMName
-    $extension = Get-VMExtension -VMObject $VMObject -ExtensionType $ExtensionType -OnboardingStatus $OnboardingStatus
+    $extension = Get-VMExtension -VMObject $VMObject -ExtensionType $ExtensionType 
     if (!$extension) {
         Write-Verbose "$vmName ($vmResourceGroupName) : Failed to lookup $ExtensionType"
         return
@@ -391,8 +404,7 @@ function New-DCRAssociation {
     param
     (
         [Parameter(mandatory = $true)][Object]$VMObject,
-        [Parameter(mandatory = $true)][Object]$DcrResourceId,
-        [Parameter(mandatory = $true)][hashtable]$OnboardingStatus
+        [Parameter(mandatory = $true)][Object]$DcrResourceId
     )
 
     $vmName = $VMObject.Name
@@ -458,12 +470,9 @@ function Onboard-VmiWithMmaVm {
     param
     (
         [Parameter(mandatory = $true)][Object]$VMObject,
-        [Parameter(mandatory = $true)][hashtable]$OnboardingStatus,
         [Parameter(mandatory = $true)][hashtable]$OnboardParameters    
     )
 
-    $vmName = $VMObject.Name
-    $vmResourceGroupName = $VMObject.ResourceGroupName
     $workspaceId = $OnboardParameters.WorkspaceID
     $workspacekey = $OnboardParameters.WorkspaceKey
     $reInstall = $OnboardParameters.ReInstall
@@ -471,16 +480,9 @@ function Onboard-VmiWithMmaVm {
     Install-MmaVm -VMObject $VMObject `
                   -WorkspaceId $workspaceId `
                   -WorkspaceKey $workspacekey `
-                  -ReInstall $reInstall `
-                  -OnboardingStatus $OnboardingStatus
+                  -ReInstall $reInstall
 
-    Install-DaVm -VMObject $VMObject `
-                 -OnboardingStatus $OnboardingStatus
-
-    #reached this point - indicates all previous deployments succeeded
-    $message = "$vmName ($vmResourceGroupName) : Successfully onboarded VMInsights"
-    Write-Output $message
-    $OnboardingStatus.Succeeded += $message
+    Install-DaVm -VMObject $VMObject
 }
 
 function Onboard-VmiWithMmaVmss {
@@ -491,12 +493,9 @@ function Onboard-VmiWithMmaVmss {
     param
     (
         [Parameter(mandatory = $true)][Object]$VMssObject,
-        [Parameter(mandatory = $true)][hashtable]$OnboardingStatus,
         [Parameter(mandatory = $true)][hashtable]$OnboardParameters    
     )
 
-    $vmssName = $VMssObject.Name
-    $vmssResourceGroupName = $VMssObject.ResourceGroupName
     $workspaceId = $OnboardParameters.WorkspaceID
     $workspacekey = $OnboardParameters.WorkspaceKey
     $reInstall = $OnboardParameters.ReInstall
@@ -504,16 +503,9 @@ function Onboard-VmiWithMmaVmss {
     Install-MmaVmss -VMssObject $VMssObject `
                     -WorkspaceId $workspaceId `
                     -WorkspaceKey $workspacekey `
-                    -ReInstall $reInstall `
-                    -OnboardingStatus $OnboardingStatus
+                    -ReInstall $reInstall
 
-    Install-DaVmss -VMssObject $VMssObject `
-                   -OnboardingStatus $OnboardingStatus
-
-    #reached this point - indicates all previous deployments succeeded
-    $message = "$vmssName ($vmssResourceGroupName) : Successfully onboarded VMInsights"
-    Write-Output $message
-    $OnboardingStatus.Succeeded += $message
+    Install-DaVmss -VMssObject $VMssObject
 }
 
 function Onboard-VmiWithAmaVm {
@@ -524,7 +516,6 @@ function Onboard-VmiWithAmaVm {
     param
     (
         [Parameter(mandatory = $true)][Object]$VMObject,
-        [Parameter(mandatory = $true)][hashtable]$OnboardingStatus,
         [Parameter(mandatory = $true)][hashtable]$OnboardParameters
     )
     
@@ -537,33 +528,22 @@ function Onboard-VmiWithAmaVm {
     $dcrResourceId = $OnboardParameters.DcrResourceId
     $userAssignedManagedIdentityObject = $OnboardParameters.UserAssignedIdentityObject
     $processAndDependencies = $OnboardParameters.ProcessAndDependencies
-    $vmName = $VMObject.Name
-    $vmResourceGroupName = $VMObject.ResourceGroupName
 
     Assign-VmUserManagedIdentity -VMObject $VMObject `
                              -UserAssignedManagedIdentityObject $userAssignedManagedIdentityObject `
-                             -AmaPublicSettings $amaPublicSettings `
-                             -OnboardingStatus $OnboardingStatus
+                             -AmaPublicSettings $amaPublicSettings
     
     Install-AmaVm -VMObject $VMObject `
-                  -AmaPublicSettings $amaPublicSettings `
-                  -OnboardingStatus $OnboardingStatus
+                  -AmaPublicSettings $amaPublicSettings
 
     if ($processAndDependencies) {
         Install-DaVm -VMObject $VMObject `
-                    -IsAmaOnboarded `
-                    -OnboardingStatus $OnboardingStatus                
+                    -IsAmaOnboarded                 
     }
 
     New-DCRAssociation `
                   -VMObject $VMObject `
-                  -DcrResourceId $dcrResourceId `
-                  -OnboardingStatus $OnboardingStatus
-
-    #reached this point - indicates all previous deployments succeeded
-    $message = "$vmName ($vmResourceGroupName) : Successfully onboarded VMInsights"
-    Write-Output $message
-    $OnboardingStatus.Succeeded += $message
+                  -DcrResourceId $dcrResourceId
 }
 
 function Onboard-VmiWithAmaVmss {
@@ -575,7 +555,6 @@ function Onboard-VmiWithAmaVmss {
     param
     (
         [Parameter(mandatory = $true)][Object]$VMssObject,
-        [Parameter(mandatory = $true)][hashtable]$OnboardingStatus,
         [Parameter(mandatory = $true)][hashtable]$OnboardParameters
     )
 
@@ -588,33 +567,22 @@ function Onboard-VmiWithAmaVmss {
     $dcrResourceId = $OnboardParameters.DcrResourceId
     $userAssignedManagedIdentityObject = $OnboardParameters.UserAssignedIdentityObject
     $processAndDependencies = $OnboardParameters.ProcessAndDependencies
-    $vmssName = $VMssObject.Name
-    $vmssResourceGroupName = $VMssObject.ResourceGroupName
             
     Assign-VmssManagedIdentity -VMssObject $VMssObject `
                                -UserAssignedManagedIdentityObject $userAssignedManagedIdentityObject `
-                               -AmaPublicSettings $amaPublicSettings `
-                               -OnboardingStatus $OnboardingStatus
-        
+                               -AmaPublicSettings $amaPublicSettings
+                               
     Install-AmaVmss -VMssObject $VMssObject `
-                    -AmaPublicSettings $amaPublicSettings `
-                    -OnboardingStatus $OnboardingStatus
-
+                    -AmaPublicSettings $amaPublicSettings
+                    
     if ($ProcessAndDependencies) {
         Install-DaVmss -VMssObject $VMssObject `
-                       -IsAmaOnboarded `
-                       -OnboardingStatus $OnboardingStatus                
+                       -IsAmaOnboarded                          
     }
 
     New-DCRAssociation `
                   -VMObject $VMssObject `
-                  -DcrResourceId $dcrResourceId `
-                  -OnboardingStatus $OnboardingStatus
-
-    #reached this point - indicates all previous deployments succeeded
-    $message = "$vmssName ($vmssResourceGroupName) : Successfully onboarded VMInsights"
-    Write-Output $message
-    $OnboardingStatus.Succeeded += $message
+                  -DcrResourceId $dcrResourceId
 }
 
 function Install-DaVm {
@@ -626,8 +594,7 @@ function Install-DaVm {
     param
     (
         [Parameter(mandatory = $true)][Object]$VMObject,
-        [Parameter(mandatory = $true)][Switch]$IsAmaOnboarded,
-        [Parameter(mandatory = $true)][hashtable]$OnboardingStatus
+        [Parameter(mandatory = $true)][Switch]$IsAmaOnboarded
     )
 
     $vmName = $VMObject.Name
@@ -637,7 +604,7 @@ function Install-DaVm {
     $extensionName = $daExtensionName
     $osType = $VMObject.StorageProfile.OsDisk.OsType
     $extensionType = $daExtensionMap.($osType.ToString())
-    $extension = Get-VMExtension -VMObject $VMObject -ExtensionType $extensionType -OnboardingStatus $OnboardingStatus
+    $extension = Get-VMExtension -VMObject $VMObject -ExtensionType $extensionType 
     
     if ($extension) {
         $extensionName = $extension.Name
@@ -673,7 +640,7 @@ function Install-DaVm {
         $parameters.Add("Settings", $processAndDependenciesPublicSettings)
     }
 
-    Install-VMExtension -InstallParameters $parameters -OnboardingStatus $OnboardingStatus
+    Install-VMExtension -InstallParameters $parameters 
 }
 
 function Install-DaVmss {
@@ -685,8 +652,7 @@ function Install-DaVmss {
     param
     (
         [Parameter(mandatory = $true)][Object]$VMssObject,
-        [Parameter(mandatory = $true)][Switch]$IsAmaOnboarded,
-        [Parameter(mandatory = $true)][hashtable]$OnboardingStatus
+        [Parameter(mandatory = $true)][Switch]$IsAmaOnboarded
     )
     
     $vmssName = $VMssObject.Name
@@ -695,7 +661,7 @@ function Install-DaVmss {
     $extensionName = $daExtensionName
     $osType = $VMssObject.VirtualMachineProfile.StorageProfile.OsDisk.OsType
     $extensionType = $daExtensionMap.($osType.ToString())
-    $extension = Get-VMssExtension -VMssObject $VMssObject -ExtensionType $extensionType -OnboardingStatus $OnboardingStatus
+    $extension = Get-VMssExtension -VMssObject $VMssObject -ExtensionType $extensionType 
     
     if ($extension) {
         $extensionName = $extension.Name
@@ -730,7 +696,7 @@ function Install-DaVmss {
         $VMssObject = Add-AzVmssExtension @InstallParameters
     }
 
-    Update-VMssExtension -VMssObject $VMssObject -OnboardingStatus $OnboardingStatus
+    Update-VMssExtension -VMssObject $VMssObject 
 }
 
 function Install-AmaVm {
@@ -742,8 +708,7 @@ function Install-AmaVm {
     param
     (
         [Parameter(mandatory = $true)][Object]$VMObject,
-        [Parameter(mandatory = $true)][hashtable]$AmaPublicSettings,
-        [Parameter(mandatory = $true)][hashtable]$OnboardingStatus
+        [Parameter(mandatory = $true)][hashtable]$AmaPublicSettings
     )
 
     $vmName = $VMObject.Name
@@ -753,7 +718,7 @@ function Install-AmaVm {
     $extensionName = $amaExtensionName
     $osType = $VMObject.StorageProfile.OsDisk.OsType
     $extensionType = $amaExtensionMap.($osType.ToString())
-    $extension = Get-VMExtension -VMObject $VMObject -ExtensionType $extensionType -OnboardingStatus $OnboardingStatus
+    $extension = Get-VMExtension -VMObject $VMObject -ExtensionType $extensionType 
     
     if ($extension) {
         $extensionName = $extension.Name
@@ -782,7 +747,7 @@ function Install-AmaVm {
         Settings           = $AmaPublicSettings
     }
 
-    Install-VMExtension -InstallParameters $parameters -OnboardingStatus $OnboardingStatus 
+    Install-VMExtension -InstallParameters $parameters 
 }
 
 function Install-MmaVm {
@@ -796,8 +761,7 @@ function Install-MmaVm {
         [Parameter(mandatory = $true)][Object]$VMObject,
         [Parameter(mandatory = $true)][String]$WorkspaceId,
         [Parameter(mandatory = $true)][String]$WorkspaceKey,
-        [Parameter(mandatory = $false)][Switch]$ReInstall,
-        [Parameter(mandatory = $true)][hashtable]$OnboardingStatus
+        [Parameter(mandatory = $false)][Switch]$ReInstall
     )
 
     $vmName = $VMObject.Name
@@ -806,7 +770,7 @@ function Install-MmaVm {
     # Use supplied name unless already deployed, use same name
     $extensionName = $mmaExtensionName
     $extensionType = $mmaExtensionMap.($osType.ToString())
-    $extension = Get-VMExtension -VMObject $VMObject -ExtensionType $extensionType -OnboardingStatus $OnboardingStatus
+    $extension = Get-VMExtension -VMObject $VMObject -ExtensionType $extensionType
     $mmaPublicSettings = @{"workspaceId" = $WorkspaceId; "stopOnMultipleConnections" = "true"}
     $mmaProtectedSettings = @{"workspaceKey" = $WorkspaceKey}
     $osType = $VMObject.StorageProfile.OsDisk.OsType
@@ -851,10 +815,10 @@ function Install-MmaVm {
     if ($ExtensionType -eq "OmsAgentForLinux") {
         Remove-VMExtension -VMObject $VMObject `
                             -ExtensionType $extensionType `
-                            -OnboardingStatus $OnboardingStatus
+                           
     }
 
-    Install-VMExtension -InstallParameters $parameters -OnboardingStatus $OnboardingStatus 
+    Install-VMExtension -InstallParameters $parameters 
 }
 
 function Install-AmaVMss {
@@ -866,8 +830,7 @@ function Install-AmaVMss {
     param
     (
         [Parameter(Mandatory = $true)][Object]$VMssObject,
-        [Parameter(mandatory = $true)][hashtable]$AmaPublicSettings,
-        [Parameter(mandatory = $true)][hashtable]$OnboardingStatus
+        [Parameter(mandatory = $true)][hashtable]$AmaPublicSettings
     )
 
     $vmssName = $VMssObject.Name
@@ -905,7 +868,7 @@ function Install-AmaVMss {
         $VMssObject = Add-AzVmssExtension @parameters
     }
 
-    Update-VMssExtension -VMssObject $VMssObject -OnboardingStatus $OnboardingStatus   
+    Update-VMssExtension -VMssObject $VMssObject   
 }
 
 function Install-MmaVMss {
@@ -918,8 +881,7 @@ function Install-MmaVMss {
     (
         [Parameter(Mandatory = $true)][Object]$VMssObject,
         [Parameter(Mandatory = $true)][String]$WorkspaceId,
-        [Parameter(Mandatory = $true)][String]$WorkspaceKey,
-        [Parameter(mandatory = $true)][hashtable]$OnboardingStatus
+        [Parameter(Mandatory = $true)][String]$WorkspaceKey
     )
 
     $vmssName = $VMssObject.Name
@@ -964,7 +926,7 @@ function Install-MmaVMss {
         $VMssObject = Add-AzVmssExtension @parameters
     }
     
-    Update-VMssExtension -VMssObject $VMssObject -OnboardingStatus $OnboardingStatus
+    Update-VMssExtension -VMssObject $VMssObject
 }
 
 function Set-ManagedIdentityRoles {
@@ -1018,8 +980,7 @@ function Install-VMExtension {
 	#>
     param
     (
-        [Parameter(mandatory = $true)][hashtable]$InstallParameters,
-        [Parameter(mandatory = $true)][hashtable]$OnboardingStatus
+        [Parameter(mandatory = $true)][hashtable]$InstallParameters
     )
 
     $vmName = $InstallParameters.VMName
@@ -1062,8 +1023,7 @@ function Update-VMssExtension {
 	#>
     param
     (
-        [Parameter(mandatory = $true)][Object]$VMssObject,
-        [Parameter(mandatory = $true)][hashtable]$OnboardingStatus
+        [Parameter(mandatory = $true)][Object]$VMssObject
     )
 
     $vmssName = $VMssObject.Name
@@ -1122,8 +1082,7 @@ function Assign-VmssManagedIdentity {
     (
         [Parameter(Mandatory = $true)][Object]$VMssObject,
         [Parameter(Mandatory = $true)][Object]$UserAssignedManagedIdentityObject,
-        [Parameter(mandatory = $true)][hashtable]$AmaPublicSettings,
-        [Parameter(mandatory = $true)][hashtable]$OnboardingStatus
+        [Parameter(mandatory = $true)][hashtable]$AmaPublicSettings
     )
 
     $vmssName = $VMssObject.Name
@@ -1182,8 +1141,7 @@ function Assign-VmUserManagedIdentity {
     (
         [Parameter(Mandatory = $true)][Object]$VMObject,
         [Parameter(Mandatory = $true)][Object]$UserAssignedManagedIdentityObject,
-        [Parameter(mandatory = $true)][hashtable]$AmaPublicSettings,
-        [Parameter(mandatory = $true)][hashtable]$OnboardingStatus
+        [Parameter(mandatory = $true)][hashtable]$AmaPublicSettings
     )
 
     $vmName = $VMObject.Name
@@ -1384,10 +1342,10 @@ try {
     $Vmss | ForEach-Object { Write-Output "$($_.Name) $($_.PowerState)" }
 
     #script blocks
-    $sb_ama_vm = { param($vmObj); Onboard-VmiWithAmaVm -VMObject $vmObj -OnboardingStatus $OnboardingStatus -OnboardParameters $OnboardParameters}
-    $sb_mma_vm = { param($vmObj); Onboard-VmiWithMmaVm -VMObject $vmObj -OnboardingStatus $OnboardingStatus -OnboardParameters $OnboardParameters}
-    $sb_ama_vmss = { param($vmssObj); Onboard-VmiWithAmaVmss -VMssObject $vmssObj -OnboardingStatus $OnboardingStatus -OnboardParameters $OnboardParameters}
-    $sb_mma_vmss =   { param($vmssObj);  Onboard-VmiWithMmaVmss -VMssObject $vmssObj -OnboardingStatus $OnboardingStatus -OnboardParameters $OnboardParameters}
+    $sb_ama_vm = { param($vmObj); Onboard-VmiWithAmaVm -VMObject $vmObj -OnboardParameters $OnboardParameters}
+    $sb_mma_vm = { param($vmObj); Onboard-VmiWithMmaVm -VMObject $vmObj -OnboardParameters $OnboardParameters}
+    $sb_ama_vmss = { param($vmssObj); Onboard-VmiWithAmaVmss -VMssObject $vmssObj -OnboardParameters $OnboardParameters}
+    $sb_mma_vmss =   { param($vmssObj);  Onboard-VmiWithMmaVmss -VMssObject $vmssObj -OnboardParameters $OnboardParameters}
 
     if (!$DcrResourceId) {
         $sb_vmss = $sb_mma_vmss
@@ -1432,6 +1390,13 @@ try {
             } else {
                 &$sb_vm -vmObj $vm
             }
+
+            #reached this point - indicates all previous deployments succeeded
+            $vmName = $vm.Name
+            $vmResourceGroupName = $vm.ResourceGroupName
+            $message = "$vmName ($vmResourceGroupName) : Successfully onboarded VMInsights"
+            Write-Output $message
+            $OnboardingStatus.Succeeded += $message
         } catch [InputParameterObsolete] {
             $errorMessage = $_.Exception.errorMessage
             $innerExcepObj = $_.Exception.innerExcepObj
@@ -1442,7 +1407,8 @@ try {
             Display-Exception -ExcepObj $innerExcepObj
             if ($cannotContinue.contains($obsParamType)) {
                 Write-Output "Exiting..."
-                exit
+                $OnboardingStatus.Failed  += $errorMessage
+                Print-SummaryMessage $OnboardingStatus
             } else {
                 Write-Output "Continuing..."
             }
@@ -1464,7 +1430,8 @@ try {
                     Write-Output "Possible Network Issue : continuing for the time being"
                 } else {
                     Write-Output "Possible Network Issue : not resolving.`n`rExiting..."
-                    exit
+                    $OnboardingStatus.Failed  += $errorMessage
+                    Print-SummaryMessage $OnboardingStatus
                 }
             } elseif ($possibleIssueWithApi.contains($statusCode)) {
                 Write-Output "Customer Action : Please consider raising support ticket."
@@ -1480,7 +1447,8 @@ try {
                 } else {
                     Write-Output "Possible API Server/Infrastructure Issue : not resolving.`n`rExiting..."
                     Write-Output "Customer Action : Please consider raising support ticket with below details against -> Owning Server : Service Map and VM Insights"
-                    exit
+                    $OnboardingStatus.Failed  += $errorMessage
+                    Print-SummaryMessage $OnboardingStatus
                 }
             }
             else { 
@@ -1494,7 +1462,8 @@ try {
             Write-Output $errorMessage
             Display-Exception -ExcepObj $innerExcepObj
             Write-Output "Exiting..."
-            exit
+            $OnboardingStatus.Failed  += $errorMessage
+            Print-SummaryMessage $OnboardingStatus
         }
     }
 }
@@ -1503,14 +1472,6 @@ catch {
     Display-Exception -ExcepObj $_
     Write-Output "Exiting..."
     exit
+} finally {
+    Print-SummaryMessage $OnboardingStatus
 }
-
-Write-Output "`nSummary:"
-Write-Output "`nSucceeded: ($($OnboardingStatus.Succeeded.Count))"
-$OnboardingStatus.Succeeded | ForEach-Object { Write-Output $_ }
-Write-Output "`nNot running - start VM to configure: ($($OnboardingStatus.NotRunning.Count))"
-$OnboardingStatus.NotRunning  | ForEach-Object { Write-Output $_ }
-Write-Output "`nVM Scale Set needs update: ($($OnboardingStatus.VMScaleSetNeedsUpdate.Count))"
-$OnboardingStatus.VMScaleSetNeedsUpdate  | ForEach-Object { Write-Output $_ }
-Write-Output "`nFailed: ($($OnboardingStatus.Failed.Count))"
-$OnboardingStatus.Failed | ForEach-Object { Write-Output $_ }
