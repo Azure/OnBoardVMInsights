@@ -269,10 +269,6 @@ function Print-SummaryMessage {
     Write-Output "`n`nSummary:"
     Write-Output "`nSucceeded: ($($OnboardingStatus.Succeeded.Count))"
     $OnboardingStatus.Succeeded | ForEach-Object { Write-Output $_ }
-    Write-Output "`nNot running - start VM to configure: ($($OnboardingStatus.NotRunning.Count))"
-    $OnboardingStatus.NotRunning  | ForEach-Object { Write-Output $_ }
-    Write-Output "`nVM Scale Set needs update: ($($OnboardingStatus.VMScaleSetNeedsUpdate.Count))"
-    $OnboardingStatus.VMScaleSetNeedsUpdate  | ForEach-Object { Write-Output $_ }
     Write-Output "`nFailed: ($($OnboardingStatus.Failed.Count))"
     $OnboardingStatus.Failed | ForEach-Object { Write-Output $_ }
     #Script Exit
@@ -594,7 +590,7 @@ function Install-DaVm {
     param
     (
         [Parameter(mandatory = $true)][Object]$VMObject,
-        [Parameter(mandatory = $true)][Switch]$IsAmaOnboarded
+        [Parameter(mandatory = $false)][Switch]$IsAmaOnboarded
     )
 
     $vmName = $VMObject.Name
@@ -652,7 +648,7 @@ function Install-DaVmss {
     param
     (
         [Parameter(mandatory = $true)][Object]$VMssObject,
-        [Parameter(mandatory = $true)][Switch]$IsAmaOnboarded
+        [Parameter(mandatory = $false)][Switch]$IsAmaOnboarded
     )
     
     $vmssName = $VMssObject.Name
@@ -696,7 +692,8 @@ function Install-DaVmss {
         Write-Output "$vmssName ($vmssResourceGroupName) : $extensionType added"
     }
 
-    Update-VMssExtension -VMssObject $VMssObject 
+    Update-VMssExtension -VMssObject $VMssObject
+    Upgrade-VmssExtension -VMssObject $VMssObject
 }
 
 function Install-AmaVm {
@@ -761,7 +758,7 @@ function Install-MmaVm {
         [Parameter(mandatory = $true)][Object]$VMObject,
         [Parameter(mandatory = $true)][String]$WorkspaceId,
         [Parameter(mandatory = $true)][String]$WorkspaceKey,
-        [Parameter(mandatory = $false)][Switch]$ReInstall
+        [Parameter(mandatory = $false)][Bool]$ReInstall
     )
 
     $vmName = $VMObject.Name
@@ -769,6 +766,7 @@ function Install-MmaVm {
     $vmResourceGroupName = $VMObject.ResourceGroupName
     # Use supplied name unless already deployed, use same name
     $extensionName = $mmaExtensionName
+    $osType = $VMObject.StorageProfile.OsDisk.OsType
     $extensionType = $mmaExtensionMap.($osType.ToString())
     $extension = Get-VMExtension -VMObject $VMObject -ExtensionType $extensionType
     $mmaPublicSettings = @{"workspaceId" = $WorkspaceId; "stopOnMultipleConnections" = "true"}
@@ -792,7 +790,7 @@ function Install-MmaVm {
     }
 
     if ($extensionType -eq "OmsAgentForLinux") {
-        Write-Output "$vmName ($vmssResourceGroupName) : ExtensionType $extensionType does not support updating workspace. An uninstall followed by re-install is required"
+        Write-Output "$vmName ($vmResourceGroupName) : ExtensionType $extensionType does not support updating workspace. An uninstall followed by re-install is required"
     }
 
     if (!($PSCmdlet.ShouldProcess($VMName, "install extension $extensionType"))) {
@@ -873,7 +871,7 @@ function Install-AmaVMss {
     Update-VMssExtension -VMssObject $VMssObject   
 }
 
-function Install-MmaVMss {
+function Install-MmaVmss {
     <#
 	.SYNOPSIS
 	Install AMA (VMSS), handling if already installed
@@ -1020,11 +1018,70 @@ function Install-VMExtension {
     $reasonPhrase = $removeResult.ReasonPhrase
     throw [OperationFailed]::new($statusCode, $reasonPhrase, "$vmName ($vmResourceGroupName) : Failed to update extension $extensionType")
 }
+function Upgrade-VmssExtension {
+    <#
+	.SYNOPSIS
+	Upgrade VMss Extension
+	#>
+    param
+    (
+        [Parameter(mandatory = $true)][Object]$VMssObject
+    )
 
+    $vmssName = $VMssObject.Name
+    $vmssResourceGroupName = $VMssObject.ResourceGroupName
+    
+    if ($VMssObject.UpgradePolicy.Mode == 'Manual') {
+        if (!$TriggerVmssManualVMUpdate) {
+            Write-Output "$vmssName : has UpgradePolicy of Manual. Please trigger upgrade of VM Scale Set or call with -TriggerVmssManualVMUpdate"
+        } else {
+            try {
+                $scaleSetInstances = Get-AzVmssVm -ResourceGroupName $vmssResourceGroupName -VMScaleSetName $vmssName -ErrorAction "Stop"
+            } catch [Microsoft.Azure.Commands.Compute.Common.ComputeCloudException] {
+                $exceptionInfo = Parse-CloudExceptionMessage($_.Exception.Message)
+                if (!$exceptionInfo) {
+                    throw [FatalException]::new("$vmssName ($vmssResourceGroupName) : Failed to upgrade virtual machine scale set", $_)
+                } else {
+                    if ($exceptionInfo["errorCode"].Contains("ParentResourceNotFound")) {
+                        throw [InputParameterObsolete]::new("$vmssName ($vmssResourceGroupName) : Failed to lookup virtual machine scale set",$_,"VirtualMachineScaleSet")
+                    } elseif($exceptionInfo["errorCode"].Contains("ResourceGroupNotFound")) {
+                        throw [InputParameterObsolete]::new("$vmssResourceGroupName : Failed to lookup resource group",$_,"ResourceGroup")       
+                    } else {
+                        throw [FatalException]::new("$vmssName ($vmssResourceGroupName) : Failed to upgrade virtual machine scale set", $_)
+                    }
+                }
+            }
+
+            $i = 0
+            $instanceCount = $scaleSetInstances.Length
+            Foreach ($scaleSetInstance in $scaleSetInstances) {
+                $i++
+                Write-Output "$vmssName : Updating instance $($scaleSetInstance.Name) $i of $instanceCount"
+                try {
+                    Update-AzVmssInstance -ResourceGroupName $vmssResourceGroupName -VMScaleSetName $vmssName -InstanceId $scaleSetInstance.InstanceId -ErrorAction "Stop"
+                } catch [Microsoft.Azure.Commands.Compute.Common.ComputeCloudException] {
+                    $exceptionInfo = Parse-CloudExceptionMessage($_.Exception.Message)
+                    if (!$exceptionInfo) {
+                        throw [FatalException]::new("$vmssName ($vmssResourceGroupName) : Failed to up upgrade virtual machine scale set instance : $($scaleSetInstance.Name)", $_)
+                    } else {
+                        if ($exceptionInfo["errorCode"].Contains("ParentResourceNotFound")) {
+                            throw [InputParameterObsolete]::new("$vmssName ($vmssResourceGroupName) : Failed to lookup virtual machine scale set",$_,"VirtualMachineScaleSet")
+                        } elseif($exceptionInfo["errorCode"].Contains("ResourceGroupNotFound")) {
+                            throw [InputParameterObsolete]::new("$vmssResourceGroupName : Failed to lookup resource group",$_,"ResourceGroup")       
+                        } else {
+                            throw [FatalException]::new("$vmssName ($vmssResourceGroupName) : Failed to upgrade virtual machine scale set instance : $($scaleSetInstance.Name)", $_)
+                        }
+                    }
+                }
+            }
+            Write-Output("$vmName All scale set instances upgraded")
+        }
+    }
+}
 function Update-VMssExtension {
     <#
 	.SYNOPSIS
-	Install VMss Extension, handling if already installed
+	Update VMss Extension
 	#>
     param
     (
@@ -1097,7 +1154,7 @@ function Assign-VmssManagedIdentity {
 
     if (Check-UserManagedIdentityAlreadyAssigned -VMObject $VMssObject `
                                                  -UserAssignedManagedIdentyId $userAssignedManagedIdentityId) {
-        Write-Verbose "$vmssName ($vmssResourceGroup) : Already assigned with user managed identity : $userAssignedManagedIdentityName"
+        Write-Output "$vmssName ($vmssResourceGroup) : Already assigned with user managed identity : $userAssignedManagedIdentityName"
     } else {
         if (!($PSCmdlet.ShouldProcess($vmssName, "assign managed identity $userAssignedManagedIdentityName"))) {
             return
@@ -1156,7 +1213,7 @@ function Assign-VmUserManagedIdentity {
 
     if (Check-UserManagedIdentityAlreadyAssigned -VMObject $VMObject `
                                                  -UserAssignedManagedIdentyId $userAssignedManagedIdentityId) {
-        Write-Verbose "$vmName ($vmResourceGroup) : Already assigned with managed identity : $userAssignedManagedIdentityName"
+        Write-Output "$vmName ($vmResourceGroup) : Already assigned with managed identity : $userAssignedManagedIdentityName"
     } else {
         if (!($PSCmdlet.ShouldProcess($vmName, "assign managed identity $userAssignedManagedIdentityName"))) {
             return
