@@ -692,7 +692,7 @@ function Install-DaVmss {
         if ($IsAmaOnboarded) {
             $parameters.Add("Setting", $processAndDependenciesPublicSettings)
         }
-        $VMssObject = Add-AzVmssExtension @InstallParameters
+        $VMssObject = Add-AzVmssExtension @parameters
         Write-Output "$vmssName ($vmssResourceGroupName) : $extensionType added"
     }
 
