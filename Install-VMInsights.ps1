@@ -1072,6 +1072,9 @@ function Upgrade-VmssExtension {
                 Write-Verbose "$vmssName : Updating instance $($scaleSetInstance.Name) $i of $instanceCount"
                 try {
                     $result = Update-AzVmssInstance -ResourceGroupName $vmssResourceGroupName -VMScaleSetName $vmssName -InstanceId $scaleSetInstance.InstanceId -ErrorAction "Stop"
+                    if ($result.Status -ne "Succeeded") {
+                        throw [OperationFailed]::new($UNAVAILABLE,$UNAVAILABLE,"$vmssName ($vmssResourceGroupName) : Failed to upgrade virtual machine scale set isntance : $($scaleSetInstance.Name)")
+                    }
                 } catch [Microsoft.Azure.Commands.Compute.Common.ComputeCloudException] {
                     $exceptionInfo = Parse-CloudExceptionMessage($_.Exception.Message)
                     if (!$exceptionInfo) {
