@@ -492,13 +492,15 @@ function Onboard-VmiWithMmaVmss {
     $workspaceId = $OnboardParameters.WorkspaceID
     $workspacekey = $OnboardParameters.WorkspaceKey
     $reInstall = $OnboardParameters.ReInstall
+    $triggerVmssManualVMUpdate = $OnboardParameters.TriggerVmssManualVMUpdate
 
     Install-MmaVmss -VMssObject $VMssObject `
                     -WorkspaceId $workspaceId `
                     -WorkspaceKey $workspacekey `
-                    -ReInstall $reInstall
+                    -ReInstall $reInstall `
+                    -TriggerVmssManualVMUpdate $triggerVmssManualVMUpdate
 
-    Install-DaVmss -VMssObject $VMssObject
+    Install-DaVmss -VMssObject $VMssObject -TriggerVmssManualVMUpdate $triggerVmssManualVMUpdate
 }
 
 function Onboard-VmiWithAmaVm {
@@ -560,16 +562,19 @@ function Onboard-VmiWithAmaVmss {
     $dcrResourceId = $OnboardParameters.DcrResourceId
     $userAssignedManagedIdentityObject = $OnboardParameters.UserAssignedIdentityObject
     $processAndDependencies = $OnboardParameters.ProcessAndDependencies
+    $triggerVmssManualVMUpdate = $OnboardParameters.TriggerVmssManualVMUpdate
             
     Assign-VmssManagedIdentity -VMssObject $VMssObject `
                                -UserAssignedManagedIdentityObject $userAssignedManagedIdentityObject `
                                -AmaPublicSettings $amaPublicSettings
                                
     Install-AmaVmss -VMssObject $VMssObject `
-                    -AmaPublicSettings $amaPublicSettings
+                    -AmaPublicSettings $amaPublicSettings `
+                    -TriggerVmssManualVMUpdate $triggerVmssManualVMUpdate
                     
     if ($ProcessAndDependencies) {
         Install-DaVmss -VMssObject $VMssObject `
+                       -TriggerVmssManualVMUpdate $triggerVmssManualVMUpdate `
                        -IsAmaOnboarded                          
     }
 
@@ -645,7 +650,8 @@ function Install-DaVmss {
     param
     (
         [Parameter(mandatory = $true)][Object]$VMssObject,
-        [Parameter(mandatory = $false)][Switch]$IsAmaOnboarded
+        [Parameter(mandatory = $false)][Switch]$IsAmaOnboarded,
+        [Parameter(mandatory = $true)][bool]$TriggerVmssManualVMUpdate
     )
     
     $vmssName = $VMssObject.Name
@@ -664,9 +670,10 @@ function Install-DaVmss {
         } else {
             if ($extension.Settings.ToString() -match $processAndDependenciesPublicSettingsRegexPattern -and $matches[1] -eq "true") {
                 Write-Output "$vmssName ($vmssResourceGroupName) : Extension $extensionType already configured with AMA enabled.`n $($extension.PublicSettings)"
-                return
+            } else {
+                $extension.Settings = $processAndDependenciesPublicSettings
+                $VMssObject = Update-VMssExtension -VMssObject $VMssObject
             }
-            $extension.Settings = $processAndDependenciesPublicSettings
         }
     } else {
         if (!($PSCmdlet.ShouldProcess($vmssName, "install extension $extensionType"))) {
@@ -687,10 +694,10 @@ function Install-DaVmss {
         }
         $VMssObject = Add-AzVmssExtension @parameters
         Write-Output "$vmssName ($vmssResourceGroupName) : $extensionType added"
+        $VMssObject = Update-VMssExtension -VMssObject $VMssObject
     }
 
-    Update-VMssExtension -VMssObject $VMssObject
-    Upgrade-VmssExtension -VMssObject $VMssObject
+    Upgrade-VmssExtension -VMssObject $VMssObject -TriggerVmssManualVMUpdate $TriggerVmssManualVMUpdate
 }
 
 function Install-AmaVm {
@@ -825,7 +832,8 @@ function Install-AmaVMss {
     param
     (
         [Parameter(Mandatory = $true)][Object]$VMssObject,
-        [Parameter(mandatory = $true)][hashtable]$AmaPublicSettings
+        [Parameter(mandatory = $true)][hashtable]$AmaPublicSettings,
+        [Parameter(mandatory = $true)][bool]$TriggerVmssManualVMUpdate
     )
 
     $vmssName = $VMssObject.Name
@@ -840,13 +848,12 @@ function Install-AmaVMss {
     if ($extension) {
         $extensionName = $extension.Name
         Write-Verbose "$vmssName ($vmssResourceGroupName) : Extension $extensionType with name $extensionName already installed."
-        if ($extension.Settings) {
-            if ($extension.Settings.ToString().Contains($AmaPublicSettings.authentication.managedIdentity.'identifier-value')) {
-                Write-Output "$vmssName ($vmssResourceGroupName) : Extension $extensionType already configured with this user assigned managed identity.`n $($extension.Settings.ToString())"
-                return
-            }
+        if ($extension.Settings -and $extension.Settings.ToString().Contains($AmaPublicSettings.authentication.managedIdentity.'identifier-value')) {
+            Write-Output "$vmssName ($vmssResourceGroupName) : Extension $extensionType already configured with this user assigned managed identity.`n $($extension.Settings.ToString())"
+        } else {
+            $extension.Settings = $AmaPublicSettings
+            Update-VMssExtension -VMssObject $VMssObject
         }
-        $extension.Settings = $AmaPublicSettings
     } else {
         if (!($PSCmdlet.ShouldProcess($vmssName, "install extension $extensionType"))) {
             return
@@ -863,9 +870,10 @@ function Install-AmaVMss {
         }
         $VMssObject = Add-AzVmssExtension @parameters
         Write-Output "$vmssName ($vmssResourceGroupName) : $extensionType added"
+        Update-VMssExtension -VMssObject $VMssObject
     }
 
-    Update-VMssExtension -VMssObject $VMssObject   
+    Upgrade-VmssExtension -VMssObject $VMssObject -TriggerVmssManualVMUpdate $TriggerVmssManualVMUpdate
 }
 
 function Install-MmaVmss {
@@ -878,7 +886,9 @@ function Install-MmaVmss {
     (
         [Parameter(Mandatory = $true)][Object]$VMssObject,
         [Parameter(Mandatory = $true)][String]$WorkspaceId,
-        [Parameter(Mandatory = $true)][String]$WorkspaceKey
+        [Parameter(Mandatory = $true)][String]$WorkspaceKey,
+        [Parameter(Mandatory = $true)][Boolean]$ReInstall,
+        [Parameter(Mandatory = $true)][Boolean]$TriggerVmssManualVMUpdate
     )
 
     $vmssName = $VMssObject.Name
@@ -896,7 +906,7 @@ function Install-MmaVmss {
         $extensionName = $extension.Name
         Write-Verbose "$vmssName ($vmssResourceGroupName) : Extension $extensionType with name $extensionName already installed."
         if ($extension.Settings) {
-            if (($extension.Settings.ToString().Contains($MmaPublicSettings.workspaceId)) -and ($extension.Settings.ToString().Contains($MmaPublicSettings.workspaceKey))) {
+            if ($extension.Settings -and ($extension.Settings.ToString().Contains($MmaPublicSettings.workspaceId)) -and ($extension.Settings.ToString().Contains($MmaPublicSettings.workspaceKey))) {
                 Write-Output "$vmssName ($vmssResourceGroupName) : Extension $extensionType already configured for this workspace.`n $($extension.Settings)"
                 return
             } else {
@@ -906,6 +916,7 @@ function Install-MmaVmss {
                 }
                 $extension.Settings = $mmaPublicSettings
                 $extension.ProtectedSetting = $mmaProtectedSettings
+                $VMssObject = Update-VMssExtension -VMssObject $VMssObject
             }
         }
     } else {
@@ -924,9 +935,10 @@ function Install-MmaVmss {
         }
         $VMssObject = Add-AzVmssExtension @parameters
         Write-Output "$vmssName ($vmssResourceGroupName) : $extensionType added"
+        $VMssObject = Update-VMssExtension -VMssObject $VMssObject
     }
     
-    Update-VMssExtension -VMssObject $VMssObject
+    Upgrade-VmssExtension -VMssObject $VMssObject -TriggerVmssManualVMUpdate $TriggerVmssManualVMUpdate
 }
 
 function Set-ManagedIdentityRoles {
@@ -1018,20 +1030,25 @@ function Upgrade-VmssExtension {
 	.SYNOPSIS
 	Upgrade VMss Extension
 	#>
+    [CmdletBinding(SupportsShouldProcess = $true, ConfirmImpact = 'Medium')]
     param
     (
-        [Parameter(mandatory = $true)][Object]$VMssObject
+        [Parameter(mandatory = $true)][Object]$VMssObject,
+        [Parameter(mandatory = $true)][bool]$TriggerVmssManualVMUpdate
     )
-
     $vmssName = $VMssObject.Name
     $vmssResourceGroupName = $VMssObject.ResourceGroupName
     
-    if ($VMssObject.UpgradePolicy.Mode == 'Manual') {
+    if (!($PSCmdlet.ShouldProcess($vmssName, "$vmssName ($vmssResourceGroupName) : Upgrading virtual machine scale set"))) {
+        return
+    }
+
+    if ($VMssObject.UpgradePolicy.Mode -eq 'Manual') {
         if (!$TriggerVmssManualVMUpdate) {
             Write-Output "$vmssName : has UpgradePolicy of Manual. Please trigger upgrade of VM Scale Set or call with -TriggerVmssManualVMUpdate"
         } else {
             try {
-                $scaleSetInstances = Get-AzVmssVm -ResourceGroupName $vmssResourceGroupName -VMScaleSetName $vmssName -ErrorAction "Stop"
+                $scaleSetInstances = Get-AzVmssVm -ResourceGroupName $vmssResourceGroupName -VMScaleSetName $vmssName -InstanceView -ErrorAction "Stop"
             } catch [Microsoft.Azure.Commands.Compute.Common.ComputeCloudException] {
                 $exceptionInfo = Parse-CloudExceptionMessage($_.Exception.Message)
                 if (!$exceptionInfo) {
@@ -1048,10 +1065,13 @@ function Upgrade-VmssExtension {
             $i = 0
             $instanceCount = $scaleSetInstances.Length
             Foreach ($scaleSetInstance in $scaleSetInstances) {
+                if ($scaleSetInstance.LatestModelApplied) {
+                    continue
+                }
                 $i++
-                Write-Output "$vmssName : Updating instance $($scaleSetInstance.Name) $i of $instanceCount"
+                Write-Verbose "$vmssName : Updating instance $($scaleSetInstance.Name) $i of $instanceCount"
                 try {
-                    Update-AzVmssInstance -ResourceGroupName $vmssResourceGroupName -VMScaleSetName $vmssName -InstanceId $scaleSetInstance.InstanceId -ErrorAction "Stop"
+                    $result = Update-AzVmssInstance -ResourceGroupName $vmssResourceGroupName -VMScaleSetName $vmssName -InstanceId $scaleSetInstance.InstanceId -ErrorAction "Stop"
                 } catch [Microsoft.Azure.Commands.Compute.Common.ComputeCloudException] {
                     $exceptionInfo = Parse-CloudExceptionMessage($_.Exception.Message)
                     if (!$exceptionInfo) {
@@ -1065,7 +1085,7 @@ function Upgrade-VmssExtension {
                     }
                 }
             }
-            Write-Output("$vmName All scale set instances upgraded")
+            Write-Output("vmssName ($vmssResourceGroupName) : All scale set instances upgraded")
         }
     }
 }
@@ -1074,13 +1094,20 @@ function Update-VMssExtension {
 	.SYNOPSIS
 	Update VMss Extension
 	#>
+    [CmdletBinding(SupportsShouldProcess = $true, ConfirmImpact = 'Medium')]
     param
     (
         [Parameter(mandatory = $true)][Object]$VMssObject
     )
 
+    
     $vmssName = $VMssObject.Name
     $vmssResourceGroupName = $VMssObject.ResourceGroupName
+    
+    if (!($PSCmdlet.ShouldProcess($vmssName, "$vmssName ($vmssResourceGroupName) : Updating virtual machine scale set"))) {
+        return
+    }
+
     Write-Verbose("$vmssName ($vmssResourceGroupName) : Updating virtual machine scale set")
     try {
         $VMssObject = Update-AzVmss -VMScaleSetName $vmssName `
@@ -1102,7 +1129,7 @@ function Update-VMssExtension {
     
     if ($VMssObject.ProvisioningState -eq "Succeeded") {
         Write-Output "$vmssName ($vmssResourceGroupName) : Successfully updated scale set with extension"
-        return
+        return $VMssObject
     }
 
     throw [OperationFailed]::new($UNAVAILABLE,$UNAVAILABLE,"$vmssName ($vmssResourceGroupName) : Failed to update virtual machine scale set")
@@ -1294,12 +1321,12 @@ try {
             Write-Output $_.Exception.Message
             exit
         }
-        $OnboardParameters = @{ "DcrResourceId" = $DcrResourceId ; "UserAssignedIdentityObject" =  $userAssignedIdentityObject; "ProcessAndDependencies" = $ProcessAndDependencies}
+        $OnboardParameters = @{ "DcrResourceId" = $DcrResourceId ; "UserAssignedIdentityObject" =  $userAssignedIdentityObject; "ProcessAndDependencies" = $ProcessAndDependencies; "TriggerVmssManualVMUpdate" = $TriggerVmssManualVMUpdate}
     } else {
         #Cannot validate WorkspaceId, WorkspaceKey with the below parameters
         #Verification requires name of workspacename and resourcegroup
         #MMA proceeding to Deprecate, not adding extra parameters for just verification.
-        $OnboardParameters = @{ "WorkspaceId" = $WorkspaceId ; "WorkspaceKey" =  $WorkspaceKey ; "ReInstall" = $ReInstall}
+        $OnboardParameters = @{ "WorkspaceId" = $WorkspaceId ; "WorkspaceKey" =  $WorkspaceKey ; "ReInstall" = $ReInstall ; "TriggerVmssManualVMUpdate" = $TriggerVmssManualVMUpdate}
     }
 
     $Vms = @()
@@ -1491,7 +1518,7 @@ try {
                     Write-Output "Possible API Server/Infrastructure Issue : continuing for the time being"
                 } else {
                     Write-Output "Possible API Server/Infrastructure Issue : not resolving.`n`rExiting..."
-                    Write-Output "Customer Action : Please consider raising support ticket with below details against -> Owning Server : Service Map and VM Insights"
+                    Write-Output "Customer Action : Please consider raising support ticket with below details against owning service : Service Map and VM Insights"
                     $OnboardingStatus.Failed  += $errorMessage
                     Print-SummaryMessage $OnboardingStatus
                 }
@@ -1513,7 +1540,7 @@ try {
     }
 }
 catch {
-    Write-Output "UnknownException :`n`rCustomer Action : Check Error Message, if issue persists. Please consider raising support ticket with below details against -> Owning Server : Service Map and VM Insights"
+    Write-Output "UnknownException :`n`rCustomer Action : Check Error Message, if issue persists. Please consider raising support ticket with below details against owning service : Service Map and VM Insights"
     $OnboardingStatus.Failed  += $_.Exception.Message
     Display-Exception -ExcepObj $_
     Write-Output "Exiting..."
