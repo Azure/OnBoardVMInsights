@@ -310,17 +310,15 @@ function Get-VMExtension {
         $exceptionInfo = Parse-CloudExceptionMessage($_.Exception.Message)
         if (!$exceptionInfo) {
             throw [FatalException]::new("$vmName ($vmResourceGroupName) : Failed to lookup extensions", $_)
+        } elseif ($exceptionInfo["errorCode"].Contains("ParentResourceNotFound")) {
+            throw [InputParameterObsolete]::new("$vmName ($vmResourceGroupName) : Failed to lookup VM",$_,"VirtualMachine")
+        } elseif($exceptionInfo["errorCode"].Contains("ResourceGroupNotFound")) {
+            throw [InputParameterObsolete]::new("Failed to lookup resource group in $vmResourceGroupName",$_,"ResourceGroup")       
         } else {
-            if ($exceptionInfo["errorCode"].Contains("ParentResourceNotFound")) {
-                throw [InputParameterObsolete]::new("$vmName ($vmResourceGroupName) : Failed to lookup VM",$_,"VirtualMachine")
-            } elseif($exceptionInfo["errorCode"].Contains("ResourceGroupNotFound")) {
-                throw [InputParameterObsolete]::new("Failed to lookup resource group in $vmResourceGroupName",$_,"ResourceGroup")       
-            } else {
-                throw [FatalException]::new("$vmName ($vmResourceGroupName) : Failed to lookup extensions", $_)
-            }
+            throw [FatalException]::new("$vmName ($vmResourceGroupName) : Failed to lookup extensions", $_)
         }
     }
-
+    
     foreach ($extension in $extensions) {
         if ($ExtensionType -eq $extension.ExtensionType) {
             Write-Verbose("$vmName : Extension : $ExtensionType found")
@@ -996,18 +994,16 @@ function Install-VMExtension {
         $exceptionInfo = Parse-CloudExceptionMessage($_.Exception.Message)
         if (!$exceptionInfo) {
             throw [FatalException]::new("$vmName ($vmResourceGroupName) : Failed to update/install extension : $extensionType", $_)
+        } elseif ($exceptionInfo["errorCode"].Contains("ParentResourceNotFound")) {
+            throw [InputParameterObsolete]::new("$vmName ($vmResourceGroupName) : Failed to lookup VM",$_,"VirtualMachine")
+        } elseif($exceptionInfo["errorCode"].Contains("ResourceGroupNotFound")) {
+            throw [InputParameterObsolete]::new("$vmResourceGroupName : Failed to lookup resource group",$_,"ResourceGroup")       
         } else {
-            if ($exceptionInfo["errorCode"].Contains("ParentResourceNotFound")) {
-                throw [InputParameterObsolete]::new("$vmName ($vmResourceGroupName) : Failed to lookup VM",$_,"VirtualMachine")
-            } elseif($exceptionInfo["errorCode"].Contains("ResourceGroupNotFound")) {
-                throw [InputParameterObsolete]::new("$vmResourceGroupName : Failed to lookup resource group",$_,"ResourceGroup")       
-            } else {
-                $extensionType = $InstallParameters.ExtensionType
-                throw [FatalException]::new("$vmName ($vmResourceGroupName) : Failed to update/install extension : $extensionType", $_)
-            }
+            $extensionType = $InstallParameters.ExtensionType
+            throw [FatalException]::new("$vmName ($vmResourceGroupName) : Failed to update/install extension : $extensionType", $_)
         }
     }
-    
+
     if ($result.IsSuccessStatusCode) {
         Write-Output "$vmName ($vmResourceGroupName) : Successfully deployed/updated $extensionType"
         return
@@ -1040,14 +1036,12 @@ function Upgrade-VmssExtension {
                 $exceptionInfo = Parse-CloudExceptionMessage($_.Exception.Message)
                 if (!$exceptionInfo) {
                     throw [FatalException]::new("$vmssName ($vmssResourceGroupName) : Failed to upgrade virtual machine scale set", $_)
+                } elseif ($exceptionInfo["errorCode"].Contains("ParentResourceNotFound")) {
+                    throw [InputParameterObsolete]::new("$vmssName ($vmssResourceGroupName) : Failed to lookup virtual machine scale set",$_,"VirtualMachineScaleSet")
+                } elseif($exceptionInfo["errorCode"].Contains("ResourceGroupNotFound")) {
+                    throw [InputParameterObsolete]::new("$vmssResourceGroupName : Failed to lookup resource group",$_,"ResourceGroup")       
                 } else {
-                    if ($exceptionInfo["errorCode"].Contains("ParentResourceNotFound")) {
-                        throw [InputParameterObsolete]::new("$vmssName ($vmssResourceGroupName) : Failed to lookup virtual machine scale set",$_,"VirtualMachineScaleSet")
-                    } elseif($exceptionInfo["errorCode"].Contains("ResourceGroupNotFound")) {
-                        throw [InputParameterObsolete]::new("$vmssResourceGroupName : Failed to lookup resource group",$_,"ResourceGroup")       
-                    } else {
-                        throw [FatalException]::new("$vmssName ($vmssResourceGroupName) : Failed to upgrade virtual machine scale set", $_)
-                    }
+                    throw [FatalException]::new("$vmssName ($vmssResourceGroupName) : Failed to upgrade virtual machine scale set", $_)
                 }
             }
 
@@ -1062,14 +1056,12 @@ function Upgrade-VmssExtension {
                     $exceptionInfo = Parse-CloudExceptionMessage($_.Exception.Message)
                     if (!$exceptionInfo) {
                         throw [FatalException]::new("$vmssName ($vmssResourceGroupName) : Failed to up upgrade virtual machine scale set instance : $($scaleSetInstance.Name)", $_)
+                    } elseif ($exceptionInfo["errorCode"].Contains("ParentResourceNotFound")) {
+                        throw [InputParameterObsolete]::new("$vmssName ($vmssResourceGroupName) : Failed to lookup virtual machine scale set",$_,"VirtualMachineScaleSet")
+                    } elseif($exceptionInfo["errorCode"].Contains("ResourceGroupNotFound")) {
+                        throw [InputParameterObsolete]::new("$vmssResourceGroupName : Failed to lookup resource group",$_,"ResourceGroup")       
                     } else {
-                        if ($exceptionInfo["errorCode"].Contains("ParentResourceNotFound")) {
-                            throw [InputParameterObsolete]::new("$vmssName ($vmssResourceGroupName) : Failed to lookup virtual machine scale set",$_,"VirtualMachineScaleSet")
-                        } elseif($exceptionInfo["errorCode"].Contains("ResourceGroupNotFound")) {
-                            throw [InputParameterObsolete]::new("$vmssResourceGroupName : Failed to lookup resource group",$_,"ResourceGroup")       
-                        } else {
-                            throw [FatalException]::new("$vmssName ($vmssResourceGroupName) : Failed to upgrade virtual machine scale set instance : $($scaleSetInstance.Name)", $_)
-                        }
+                        throw [FatalException]::new("$vmssName ($vmssResourceGroupName) : Failed to upgrade virtual machine scale set instance : $($scaleSetInstance.Name)", $_)
                     }
                 }
             }
@@ -1099,14 +1091,12 @@ function Update-VMssExtension {
         $exceptionInfo = Parse-CloudExceptionMessage($_.Exception.Message)
         if (!$exceptionInfo) {
             throw [FatalException]::new("$vmssName ($vmssResourceGroupName) : Failed to update virtual machine scale set", $_)
+        } elseif ($exceptionInfo["errorCode"].Contains("ParentResourceNotFound")) {
+            throw [InputParameterObsolete]::new("$vmssName ($vmssResourceGroupName) : Failed to lookup virtual machine scale set",$_,"VirtualMachineScaleSet")
+        } elseif($exceptionInfo["errorCode"].Contains("ResourceGroupNotFound")) {
+            throw [InputParameterObsolete]::new("$vmssResourceGroupName : Failed to lookup resource group",$_,"ResourceGroup")       
         } else {
-            if ($exceptionInfo["errorCode"].Contains("ParentResourceNotFound")) {
-                throw [InputParameterObsolete]::new("$vmssName ($vmssResourceGroupName) : Failed to lookup virtual machine scale set",$_,"VirtualMachineScaleSet")
-            } elseif($exceptionInfo["errorCode"].Contains("ResourceGroupNotFound")) {
-                throw [InputParameterObsolete]::new("$vmssResourceGroupName : Failed to lookup resource group",$_,"ResourceGroup")       
-            } else {
-                throw [FatalException]::new("$vmssName ($vmssResourceGroupName) : Failed to update virtual machine scale set", $_)
-            }
+            throw [FatalException]::new("$vmssName ($vmssResourceGroupName) : Failed to update virtual machine scale set", $_)
         }
     }
     
@@ -1170,17 +1160,14 @@ function Assign-VmssManagedIdentity {
             $exceptionInfo = Parse-CloudExceptionMessage($_.Exception.Message)
             if (!$exceptionInfo) {
                 throw [FatalException]::new("$vmssName ($vmssResourceGroup) : Failed to assign user managed identity : $userAssignedManagedIdentityName", $_)
+            } elseif ($exceptionInfo["errorCode"].Contains("FailedIdentityOperation")) {
+                throw [InputParameterObsolete]::new("$userAssignedManagedIdentityName : Failed to lookup user managed identity",$_,"UserAssignedManagedIdentity")
+            } elseif($exceptionInfo["errorCode"].Contains("ResourceGroupNotFound")) {
+                throw [InputParameterObsolete]::new("$vmssResourceGroup : Failed to lookup resource group",$_,"ResourceGroup")       
+            } elseif (($exceptionInfo["errorCode"].Contains("InvalidParameter")) -and ($exceptionInfo["errorMessage"].Contains("Parameter 'osDisk.managedDisk.id' is not allowed"))) {
+                throw [InputParameterObsolete]::new("$vmssName ($vmssResourceGroup)  : Failed to lookup VMSS",$_,"VirtualMachine") 
             } else {
-                if ($exceptionInfo["errorCode"].Contains("FailedIdentityOperation")) {
-                    throw [InputParameterObsolete]::new("$userAssignedManagedIdentityName : Failed to lookup user managed identity",$_,"UserAssignedManagedIdentity")
-                } elseif($exceptionInfo["errorCode"].Contains("ResourceGroupNotFound")) {
-                    throw [InputParameterObsolete]::new("$vmssResourceGroup : Failed to lookup resource group",$_,"ResourceGroup")       
-                } elseif (($exceptionInfo["errorCode"].Contains("InvalidParameter")) -and ($exceptionInfo["errorMessage"].Contains("Parameter 'osDisk.managedDisk.id' is not allowed"))) {
-                    throw [InputParameterObsolete]::new("$vmssName ($vmssResourceGroup)  : Failed to lookup VMSS",$_,"VirtualMachine") 
-                }
-                else {
-                    throw [FatalException]::new("vmssName ($vmssResourceGroup) : Failed to user assign managed identity : $userAssignedManagedIdentityName. ExceptionInfo = $exceptionInfo", $_)
-                }
+                throw [FatalException]::new("vmssName ($vmssResourceGroup) : Failed to user assign managed identity : $userAssignedManagedIdentityName. ExceptionInfo = $exceptionInfo", $_)
             }
         }
 
@@ -1228,17 +1215,14 @@ function Assign-VmUserManagedIdentity {
             $exceptionInfo = Parse-CloudExceptionMessage($_.Exception.Message)
             if (!$exceptionInfo) {
                 throw [FatalException]::new("$vmName : Failed to assign user managed identity : $userAssignedManagedIdentityName.", $_)
+            } elseif ($exceptionInfo["errorCode"].Contains("FailedIdentityOperation")) {
+                throw [InputParameterObsolete]::new("$userAssignedManagedIdentityName : Failed to lookup managed identity",$_,"UserAssignedManagedIdentity")
+            } elseif($exceptionInfo["errorCode"].Contains("ResourceGroupNotFound")) {
+                throw [InputParameterObsolete]::new("$vmResourceGroupName : Failed to lookup resource group",$_,"ResourceGroup")       
+            } elseif (($exceptionInfo["errorCode"].Contains("InvalidParameter")) -and ($exceptionInfo["errorMessage"].Contains("Parameter 'osDisk.managedDisk.id' is not allowed"))) {
+                throw [InputParameterObsolete]::new("$vmName ($vmResourceGroup) : Failed to lookup VM",$_,"VirtualMachine") 
             } else {
-                if ($exceptionInfo["errorCode"].Contains("FailedIdentityOperation")) {
-                    throw [InputParameterObsolete]::new("$userAssignedManagedIdentityName : Failed to lookup managed identity",$_,"UserAssignedManagedIdentity")
-                } elseif($exceptionInfo["errorCode"].Contains("ResourceGroupNotFound")) {
-                    throw [InputParameterObsolete]::new("$vmResourceGroupName : Failed to lookup resource group",$_,"ResourceGroup")       
-                } elseif (($exceptionInfo["errorCode"].Contains("InvalidParameter")) -and ($exceptionInfo["errorMessage"].Contains("Parameter 'osDisk.managedDisk.id' is not allowed"))) {
-                    throw [InputParameterObsolete]::new("$vmName ($vmResourceGroup) : Failed to lookup VM",$_,"VirtualMachine") 
-                }
-                else {
-                    throw [FatalException]::new("$vmName : Failed to assign managed identity : $userAssignedManagedIdentityName. Exception Info = $exceptionInfo", $_)
-                }
+                throw [FatalException]::new("$vmName : Failed to assign managed identity : $userAssignedManagedIdentityName. Exception Info = $exceptionInfo", $_)
             }
         }
     
