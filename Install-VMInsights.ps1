@@ -608,13 +608,13 @@ function Install-DaVm {
     
     if ($extension) {
         $extensionName = $extension.Name
-        Write-Verbose "$vmName ($vmResourceGroupName) : Extension $extensionType with name $extensionName already installed. Provisioning State: $($extension.ProvisioningState)"
+        Write-Verbose "$vmName ($vmResourceGroupName) : Extension $extensionType with name $extensionName already installed."
         if (!$IsAmaOnboarded) {
             return
         } else {
             if ($extension.PublicSettings) {
                 if ($extension.PublicSettings -match $processAndDependenciesPublicSettingsRegexPattern -and $matches[1] -eq "true") {
-                    Write-Output "$vmName ($vmResourceGroupName) : Extension $extensionType already configured with AMA enabled. Provisioning State: $($extension.ProvisioningState) `n $($extension.PublicSettings)"
+                    Write-Output "$vmName ($vmResourceGroupName) : Extension $extensionType already configured with AMA enabled.`n $($extension.PublicSettings)"
                     return
                 }
             }   
@@ -665,12 +665,12 @@ function Install-DaVmss {
      
     if ($extension) {
         $extensionName = $extension.Name
-        Write-Verbose "$vmssName ($vmssResourceGroupName) : Extension $extensionType with name $extensionName already installed. Provisioning State: $($extension.ProvisioningState)"
+        Write-Verbose "$vmssName ($vmssResourceGroupName) : Extension $extensionType with name $extensionName already installed."
         if (!$IsAmaOnboarded) {
             return
         } else {
             if ($extension.Settings.ToString() -match $processAndDependenciesPublicSettingsRegexPattern -and $matches[1] -eq "true") {
-                Write-Output "$vmssName ($vmssResourceGroupName) : Extension $extensionType already configured with AMA enabled. Provisioning State: $($extension.ProvisioningState) `n $($extension.PublicSettings)"
+                Write-Output "$vmssName ($vmssResourceGroupName) : Extension $extensionType already configured with AMA enabled.`n $($extension.PublicSettings)"
                 return
             }
             $extension.Settings = $processAndDependenciesPublicSettings
@@ -844,10 +844,10 @@ function Install-AmaVMss {
     
     if ($extension) {
         $extensionName = $extension.Name
-        Write-Verbose "$vmssName ($vmssResourceGroupName) : Extension $extensionType with name $extensionName already installed. Provisioning State: $($extension.ProvisioningState)"
+        Write-Verbose "$vmssName ($vmssResourceGroupName) : Extension $extensionType with name $extensionName already installed."
         if ($extension.Settings) {
             if ($extension.Settings.ToString().Contains($AmaPublicSettings.authentication.managedIdentity.'identifier-value')) {
-                Write-Output "$vmssName ($vmssResourceGroupName) : Extension $extensionType already configured with this user assigned managed identity. Provisioning State: $($extension.ProvisioningState) `n $($extension.Settings.ToString())"
+                Write-Output "$vmssName ($vmssResourceGroupName) : Extension $extensionType already configured with this user assigned managed identity.`n $($extension.Settings.ToString())"
                 return
             }
         }
@@ -899,14 +899,14 @@ function Install-MmaVMss {
     
     if ($extension) {
         $extensionName = $extension.Name
-        Write-Verbose "$vmssName ($vmssResourceGroupName) : Extension $extensionType with name $extensionName already installed. Provisioning State: $($extension.ProvisioningState)"
+        Write-Verbose "$vmssName ($vmssResourceGroupName) : Extension $extensionType with name $extensionName already installed."
         if ($extension.Settings) {
             if (($extension.Settings.ToString().Contains($MmaPublicSettings.workspaceId)) -and ($extension.Settings.ToString().Contains($MmaPublicSettings.workspaceKey))) {
-                Write-Output "$vmssName ($vmssResourceGroupName) : Extension $extensionType already configured for this workspace. Provisioning State: $($extension.ProvisioningState) `n $($extension.Settings)"
+                Write-Output "$vmssName ($vmssResourceGroupName) : Extension $extensionType already configured for this workspace.`n $($extension.Settings)"
                 return
             } else {
                 if (!$ReInstall) {
-                    Write-Output "$vmssName ($vmssResourceGroupName) : Extension $extensionType present, run with -ReInstall again to move to new workspace. Provisioning State: $($extension.ProvisioningState) `n $($extension.Settings)"
+                    Write-Output "$vmssName ($vmssResourceGroupName) : Extension $extensionType present, run with -ReInstall again to move to new workspace.`n $($extension.Settings)"
                     return
                 }
                 $extension.Settings = $mmaPublicSettings
