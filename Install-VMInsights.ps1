@@ -50,9 +50,9 @@ Can be applied to:
 - Compliance results of a policy for a VM or VM Extension
 
 Script will show you list of VM's/VM Scale Sets that will apply to and let you confirm to continue.
-Use -Approve switch to run without prompting, if all required parameters are provided.
+Use -Approve Switch to run without prompting, if all required parameters are provided.
 
-If the Log Analyitcs Agent extension is already configured with a workspace, use -ReInstall switch to update the workspace.
+If the Log Analyitcs Agent extension is already configured with a workspace, use -ReInstall Switch to update the workspace.
 
 Use -WhatIf if you would like to see what would happen in terms of installs, what workspace configured to, and status of the extension.
 
@@ -142,18 +142,18 @@ This script is posted to and further documented at the following location:
 http://aka.ms/OnBoardVMInsights
 #>
 
-[CmdletBinding(SupportsShouldProcess = $true, ConfirmImpact = 'High')]
+[CmdletBinding(SupportsShouldProcess = $True, ConfirmImpact = 'High')]
 param(
-    [Parameter(mandatory = $true)][string]$SubscriptionId,
-    [Parameter(mandatory = $false)][string]$ResourceGroup,
-    [Parameter(mandatory = $false)][string]$Name,
-    [Parameter(mandatory = $false)][string]$PolicyAssignmentName,
-    [Parameter(mandatory = $false)][switch]$TriggerVmssManualVMUpdate,
-    [Parameter(mandatory = $false)][switch]$Approve,
-    [Parameter(mandatory = $true, ParameterSetName = 'LogAnalyticsAgent')][string]$WorkspaceId,
-    [Parameter(mandatory = $true, ParameterSetName = 'LogAnalyticsAgent')][string]$WorkspaceKey,
-    [Parameter(mandatory = $false, ParameterSetName = 'LogAnalyticsAgent')][switch]$ReInstall,
-    [Parameter(mandatory = $true, ParameterSetName = 'LogAnalyticsAgent')] `
+    [Parameter(mandatory = $True)][String]$SubscriptionId,
+    [Parameter(mandatory = $False)][String]$ResourceGroup,
+    [Parameter(mandatory = $False)][String]$Name,
+    [Parameter(mandatory = $False)][String]$PolicyAssignmentName,
+    [Parameter(mandatory = $False)][Switch]$TriggerVmssManualVMUpdate,
+    [Parameter(mandatory = $False)][Switch]$Approve,
+    [Parameter(mandatory = $True, ParameterSetName = 'LogAnalyticsAgent')][String]$WorkspaceId,
+    [Parameter(mandatory = $True, ParameterSetName = 'LogAnalyticsAgent')][String]$WorkspaceKey,
+    [Parameter(mandatory = $False, ParameterSetName = 'LogAnalyticsAgent')][Switch]$ReInstall,
+    [Parameter(mandatory = $True, ParameterSetName = 'LogAnalyticsAgent')] `
         [ValidateSet(
             "Australia East", "australiaeast",
             "Australia Central", "australiacentral",
@@ -194,11 +194,11 @@ param(
             "USGov Arizona", "usgovarizona",
             "USGov Virginia", "usgovvirginia"
         )]
-        [string]$WorkspaceRegion,
-    [Parameter(mandatory = $false, ParameterSetName = 'AzureMonitoringAgent')][switch]$ProcessAndDependencies,
-    [Parameter(mandatory = $true, ParameterSetName = 'AzureMonitoringAgent')][string]$DcrResourceId,
-    [Parameter(mandatory = $true, ParameterSetName = 'AzureMonitoringAgent')][string]$UserAssignedManagedIdentityResourceGroup,
-    [Parameter(mandatory = $true, ParameterSetName = 'AzureMonitoringAgent')][string]$UserAssignedManagedIdentityName
+        [String]$WorkspaceRegion,
+    [Parameter(mandatory = $False, ParameterSetName = 'AzureMonitoringAgent')][Switch]$ProcessAndDependencies,
+    [Parameter(mandatory = $True, ParameterSetName = 'AzureMonitoringAgent')][String]$DcrResourceId,
+    [Parameter(mandatory = $True, ParameterSetName = 'AzureMonitoringAgent')][String]$UserAssignedManagedIdentityResourceGroup,
+    [Parameter(mandatory = $True, ParameterSetName = 'AzureMonitoringAgent')][String]$UserAssignedManagedIdentityName
     )
 
 # Log Analytics Extension constants
@@ -251,7 +251,7 @@ class OperationFailed : System.Exception {
 }
 class FatalException : System.Exception {
     [Object]$innerExcepObj
-    [string]$errorMessage
+    [String]$errorMessage
     FatalException($message, $excepObj) {
         $this.errorMessage = $message
         $this.innerExcepObj = $excepObj
@@ -263,7 +263,7 @@ class FatalException : System.Exception {
 #
 function Print-SummaryMessage {
     param (
-        [Parameter(mandatory = $true)][hashtable]$OnboardingStatus
+        [Parameter(mandatory = $True)][hashtable]$OnboardingStatus
     )
     Write-Output "`n`nSummary:"
     Write-Output "`nSucceeded: ($($OnboardingStatus.Succeeded.Count))"
@@ -276,14 +276,15 @@ function Print-SummaryMessage {
 function Parse-CloudExceptionMessage {
     param
     (
-        [Parameter(mandatory = $true)][string]$excepMessage
+        [Parameter(mandatory = $True)][String]$exceptionMessage
     )
     $pattern = '^.*ErrorCode:\s+(.*)ErrorMessage:\s+(.*)ErrorTarget:\s+(.*)StatusCode:\s+(.*)ReasonPhrase:\s+(.*)OperationID\s+:(.*)$'
     $exceptionInfo = @{}
-    $excepMessage = $excepMessage | ConvertTo-Json
-    if ($excepMessage -match $pattern) {
+    $exceptionMessage = $exceptionMessage | ConvertTo-Json
+    if ($exceptionMessage -match $pattern) {
         $exceptionInfo["errorCode"] = $matches[1]
         $exceptionInfo["errorMessage"] = $matches[2]
+        $exceptionInfo["errorTarget"] = $matches[3]
         $exceptionInfo["statusCode"] = $matches[4]
         $exceptionInfo["reasonPhrase"] = $matches[5]
     }   
@@ -297,8 +298,8 @@ function Get-VMExtension {
 	#>
     param
     (
-        [Parameter(mandatory = $true)][Object]$VMObject,
-        [Parameter(mandatory = $true)][string]$ExtensionType
+        [Parameter(mandatory = $True)][Object]$VMObject,
+        [Parameter(mandatory = $True)][String]$ExtensionType
     )
 
     $vmResourceGroupName = $VMObject.ResourceGroupName
@@ -337,7 +338,7 @@ function Get-VMssExtension {
     param
     (
         [Parameter(Mandatory = $True)][Object]$VMssObject,
-        [Parameter(mandatory = $true)][string]$ExtensionType
+        [Parameter(mandatory = $True)][String]$ExtensionType
     )
 
     $vmssName = $VMssObject.Name
@@ -352,11 +353,11 @@ function Get-VMssExtension {
 }
 
 function Remove-VMExtension {
-    [CmdletBinding(SupportsShouldProcess = $true, ConfirmImpact = 'High')]
+    [CmdletBinding(SupportsShouldProcess = $True, ConfirmImpact = 'High')]
     param
     (
-        [Parameter(mandatory = $true)][Object]$VMObject,
-        [Parameter(mandatory = $true)][string]$ExtensionType
+        [Parameter(mandatory = $True)][Object]$VMObject,
+        [Parameter(mandatory = $True)][String]$ExtensionType
     )
 
     $vmResourceGroupName = $VMObject.ResourceGroupName
@@ -393,11 +394,11 @@ function Remove-VMExtension {
 }
 
 function New-DCRAssociation {
-    [CmdletBinding(SupportsShouldProcess = $true, ConfirmImpact = 'High')]
+    [CmdletBinding(SupportsShouldProcess = $True, ConfirmImpact = 'High')]
     param
     (
-        [Parameter(mandatory = $true)][Object]$VMObject,
-        [Parameter(mandatory = $true)][Object]$DcrResourceId
+        [Parameter(mandatory = $True)][Object]$VMObject,
+        [Parameter(mandatory = $True)][Object]$DcrResourceId
     )
 
     $vmName = $VMObject.Name
@@ -462,8 +463,8 @@ function Onboard-VmiWithMmaVm {
 	#>
     param
     (
-        [Parameter(mandatory = $true)][Object]$VMObject,
-        [Parameter(mandatory = $true)][hashtable]$OnboardParameters    
+        [Parameter(mandatory = $True)][Object]$VMObject,
+        [Parameter(mandatory = $True)][hashtable]$OnboardParameters    
     )
 
     $workspaceId = $OnboardParameters.WorkspaceID
@@ -485,8 +486,8 @@ function Onboard-VmiWithMmaVmss {
 	#>
     param
     (
-        [Parameter(mandatory = $true)][Object]$VMssObject,
-        [Parameter(mandatory = $true)][hashtable]$OnboardParameters    
+        [Parameter(mandatory = $True)][Object]$VMssObject,
+        [Parameter(mandatory = $True)][hashtable]$OnboardParameters    
     )
 
     $workspaceId = $OnboardParameters.WorkspaceID
@@ -510,8 +511,8 @@ function Onboard-VmiWithAmaVm {
 	#>
     param
     (
-        [Parameter(mandatory = $true)][Object]$VMObject,
-        [Parameter(mandatory = $true)][hashtable]$OnboardParameters
+        [Parameter(mandatory = $True)][Object]$VMObject,
+        [Parameter(mandatory = $True)][hashtable]$OnboardParameters
     )
     
     $amaPublicSettings = @{'authentication' = @{
@@ -546,11 +547,11 @@ function Onboard-VmiWithAmaVmss {
 	.SYNOPSIS
 	Onboard VMI with AMA on VMSS
 	#>
-    [CmdletBinding(SupportsShouldProcess = $true, ConfirmImpact = 'Medium')]
+    [CmdletBinding(SupportsShouldProcess = $True, ConfirmImpact = 'Medium')]
     param
     (
-        [Parameter(mandatory = $true)][Object]$VMssObject,
-        [Parameter(mandatory = $true)][hashtable]$OnboardParameters
+        [Parameter(mandatory = $True)][Object]$VMssObject,
+        [Parameter(mandatory = $True)][hashtable]$OnboardParameters
     )
 
     $amaPublicSettings = @{'authentication' = @{
@@ -588,11 +589,11 @@ function Install-DaVm {
 	.SYNOPSIS
 	Install DA (VM), handling if already installed
 	#>
-    [CmdletBinding(SupportsShouldProcess = $true, ConfirmImpact = 'Medium')]
+    [CmdletBinding(SupportsShouldProcess = $True, ConfirmImpact = 'Medium')]
     param
     (
-        [Parameter(mandatory = $true)][Object]$VMObject,
-        [Parameter(mandatory = $false)][Switch]$IsAmaOnboarded
+        [Parameter(mandatory = $True)][Object]$VMObject,
+        [Parameter(mandatory = $False)][Switch]$IsAmaOnboarded
     )
 
     $vmName = $VMObject.Name
@@ -646,12 +647,12 @@ function Install-DaVmss {
 	.SYNOPSIS
 	Install DA (VM), handling if already installed
 	#>
-    [CmdletBinding(SupportsShouldProcess = $true, ConfirmImpact = 'Medium')]
+    [CmdletBinding(SupportsShouldProcess = $True, ConfirmImpact = 'Medium')]
     param
     (
-        [Parameter(mandatory = $true)][Object]$VMssObject,
-        [Parameter(mandatory = $false)][Switch]$IsAmaOnboarded,
-        [Parameter(mandatory = $true)][bool]$TriggerVmssManualVMUpdate
+        [Parameter(mandatory = $True)][Object]$VMssObject,
+        [Parameter(mandatory = $False)][Switch]$IsAmaOnboarded,
+        [Parameter(mandatory = $True)][bool]$TriggerVmssManualVMUpdate
     )
     
     $vmssName = $VMssObject.Name
@@ -705,11 +706,11 @@ function Install-AmaVm {
 	.SYNOPSIS
 	Install AMA (VMSS), handling if already installed
 	#>
-    [CmdletBinding(SupportsShouldProcess = $true, ConfirmImpact = 'Medium')]
+    [CmdletBinding(SupportsShouldProcess = $True, ConfirmImpact = 'Medium')]
     param
     (
-        [Parameter(mandatory = $true)][Object]$VMObject,
-        [Parameter(mandatory = $true)][hashtable]$AmaPublicSettings
+        [Parameter(mandatory = $True)][Object]$VMObject,
+        [Parameter(mandatory = $True)][hashtable]$AmaPublicSettings
     )
 
     $vmName = $VMObject.Name
@@ -756,13 +757,13 @@ function Install-MmaVm {
 	.SYNOPSIS
 	Install LA Extension on Virtual Machines, handling if already installed
 	#>
-    [CmdletBinding(SupportsShouldProcess = $true, ConfirmImpact = 'Medium')]
+    [CmdletBinding(SupportsShouldProcess = $True, ConfirmImpact = 'Medium')]
     param
     (
-        [Parameter(mandatory = $true)][Object]$VMObject,
-        [Parameter(mandatory = $true)][String]$WorkspaceId,
-        [Parameter(mandatory = $true)][String]$WorkspaceKey,
-        [Parameter(mandatory = $false)][Bool]$ReInstall
+        [Parameter(mandatory = $True)][Object]$VMObject,
+        [Parameter(mandatory = $True)][String]$WorkspaceId,
+        [Parameter(mandatory = $True)][String]$WorkspaceKey,
+        [Parameter(mandatory = $False)][Bool]$ReInstall
     )
 
     $vmName = $VMObject.Name
@@ -828,12 +829,12 @@ function Install-AmaVMss {
 	.SYNOPSIS
 	Install AMA (VMSS), handling if already installed
 	#>
-    [CmdletBinding(SupportsShouldProcess = $true, ConfirmImpact = 'Medium')]
+    [CmdletBinding(SupportsShouldProcess = $True, ConfirmImpact = 'Medium')]
     param
     (
-        [Parameter(Mandatory = $true)][Object]$VMssObject,
-        [Parameter(mandatory = $true)][hashtable]$AmaPublicSettings,
-        [Parameter(mandatory = $true)][bool]$TriggerVmssManualVMUpdate
+        [Parameter(Mandatory = $True)][Object]$VMssObject,
+        [Parameter(mandatory = $True)][hashtable]$AmaPublicSettings,
+        [Parameter(mandatory = $True)][bool]$TriggerVmssManualVMUpdate
     )
 
     $vmssName = $VMssObject.Name
@@ -881,14 +882,14 @@ function Install-MmaVmss {
 	.SYNOPSIS
 	Install AMA (VMSS), handling if already installed
 	#>
-    [CmdletBinding(SupportsShouldProcess = $true, ConfirmImpact = 'Medium')]
+    [CmdletBinding(SupportsShouldProcess = $True, ConfirmImpact = 'Medium')]
     param
     (
-        [Parameter(Mandatory = $true)][Object]$VMssObject,
-        [Parameter(Mandatory = $true)][String]$WorkspaceId,
-        [Parameter(Mandatory = $true)][String]$WorkspaceKey,
-        [Parameter(Mandatory = $true)][Boolean]$ReInstall,
-        [Parameter(Mandatory = $true)][Boolean]$TriggerVmssManualVMUpdate
+        [Parameter(Mandatory = $True)][Object]$VMssObject,
+        [Parameter(Mandatory = $True)][String]$WorkspaceId,
+        [Parameter(Mandatory = $True)][String]$WorkspaceKey,
+        [Parameter(Mandatory = $True)][Boolean]$ReInstall,
+        [Parameter(Mandatory = $True)][Boolean]$TriggerVmssManualVMUpdate
     )
 
     $vmssName = $VMssObject.Name
@@ -943,11 +944,11 @@ function Install-MmaVmss {
 
 function Set-ManagedIdentityRoles {
     
-    [CmdletBinding(SupportsShouldProcess = $true, ConfirmImpact = 'Medium')]
+    [CmdletBinding(SupportsShouldProcess = $True, ConfirmImpact = 'Medium')]
     param
     (
-        [Parameter(Mandatory = $true)][String]$TargetScope,
-        [Parameter(Mandatory = $true)][Object]$UserAssignedManagedIdentityObject
+        [Parameter(Mandatory = $True)][String]$TargetScope,
+        [Parameter(Mandatory = $True)][Object]$UserAssignedManagedIdentityObject
     )
 
     $userAssignedManagedIdentityName = $UserAssignedManagedIdentityObject.Name
@@ -992,7 +993,7 @@ function Install-VMExtension {
 	#>
     param
     (
-        [Parameter(mandatory = $true)][hashtable]$InstallParameters
+        [Parameter(mandatory = $True)][hashtable]$InstallParameters
     )
 
     $vmName = $InstallParameters.VMName
@@ -1030,11 +1031,11 @@ function Upgrade-VmssExtension {
 	.SYNOPSIS
 	Upgrade VMss Extension
 	#>
-    [CmdletBinding(SupportsShouldProcess = $true, ConfirmImpact = 'Medium')]
+    [CmdletBinding(SupportsShouldProcess = $True, ConfirmImpact = 'Medium')]
     param
     (
-        [Parameter(mandatory = $true)][Object]$VMssObject,
-        [Parameter(mandatory = $true)][bool]$TriggerVmssManualVMUpdate
+        [Parameter(mandatory = $True)][Object]$VMssObject,
+        [Parameter(mandatory = $True)][bool]$TriggerVmssManualVMUpdate
     )
     $vmssName = $VMssObject.Name
     $vmssResourceGroupName = $VMssObject.ResourceGroupName
@@ -1073,7 +1074,7 @@ function Upgrade-VmssExtension {
                 try {
                     $result = Update-AzVmssInstance -ResourceGroupName $vmssResourceGroupName -VMScaleSetName $vmssName -InstanceId $scaleSetInstance.InstanceId -ErrorAction "Stop"
                     if ($result.Status -ne "Succeeded") {
-                        throw [OperationFailed]::new($UNAVAILABLE,$UNAVAILABLE,"$vmssName ($vmssResourceGroupName) : Failed to upgrade virtual machine scale set isntance : $($scaleSetInstance.Name)")
+                        throw [OperationFailed]::new($UNAVAILABLE,$UNAVAILABLE,"$vmssName ($vmssResourceGroupName) : Failed to upgrade virtual machine scale set isntance : $($scaleSetInstance.Name). $($result.Status)")
                     }
                 } catch [Microsoft.Azure.Commands.Compute.Common.ComputeCloudException] {
                     $exceptionInfo = Parse-CloudExceptionMessage($_.Exception.Message)
@@ -1097,10 +1098,10 @@ function Update-VMssExtension {
 	.SYNOPSIS
 	Update VMss Extension
 	#>
-    [CmdletBinding(SupportsShouldProcess = $true, ConfirmImpact = 'Medium')]
+    [CmdletBinding(SupportsShouldProcess = $True, ConfirmImpact = 'Medium')]
     param
     (
-        [Parameter(mandatory = $true)][Object]$VMssObject
+        [Parameter(mandatory = $True)][Object]$VMssObject
     )
 
     
@@ -1141,8 +1142,8 @@ function Update-VMssExtension {
 function Check-UserManagedIdentityAlreadyAssigned {
     param
     (
-        [Parameter(Mandatory = $true)][Object]$VMObject,
-        [Parameter(Mandatory = $true)][string]$UserAssignedManagedIdentyId
+        [Parameter(Mandatory = $True)][Object]$VMObject,
+        [Parameter(Mandatory = $True)][String]$UserAssignedManagedIdentyId
     )
 
     if ($VMObject.Identity.Type -eq "UserAssigned") {
@@ -1158,12 +1159,12 @@ function Check-UserManagedIdentityAlreadyAssigned {
 }
 
 function Assign-VmssManagedIdentity {
-    [CmdletBinding(SupportsShouldProcess = $true, ConfirmImpact = 'Medium')]
+    [CmdletBinding(SupportsShouldProcess = $True, ConfirmImpact = 'Medium')]
     param
     (
-        [Parameter(Mandatory = $true)][Object]$VMssObject,
-        [Parameter(Mandatory = $true)][Object]$UserAssignedManagedIdentityObject,
-        [Parameter(mandatory = $true)][hashtable]$AmaPublicSettings
+        [Parameter(Mandatory = $True)][Object]$VMssObject,
+        [Parameter(Mandatory = $True)][Object]$UserAssignedManagedIdentityObject,
+        [Parameter(mandatory = $True)][hashtable]$AmaPublicSettings
     )
 
     $vmssName = $VMssObject.Name
@@ -1214,12 +1215,12 @@ function Assign-VmssManagedIdentity {
 }
 
 function Assign-VmUserManagedIdentity {
-    [CmdletBinding(SupportsShouldProcess = $true, ConfirmImpact = 'Medium')]
+    [CmdletBinding(SupportsShouldProcess = $True, ConfirmImpact = 'Medium')]
     param
     (
-        [Parameter(Mandatory = $true)][Object]$VMObject,
-        [Parameter(Mandatory = $true)][Object]$UserAssignedManagedIdentityObject,
-        [Parameter(mandatory = $true)][hashtable]$AmaPublicSettings
+        [Parameter(Mandatory = $True)][Object]$VMObject,
+        [Parameter(Mandatory = $True)][Object]$UserAssignedManagedIdentityObject,
+        [Parameter(mandatory = $True)][hashtable]$AmaPublicSettings
     )
 
     $vmName = $VMObject.Name
@@ -1272,7 +1273,7 @@ function Assign-VmUserManagedIdentity {
 
 function Display-Exception {
     param(
-    [Parameter(Mandatory = $true)][Object]$ExcepObj
+    [Parameter(Mandatory = $True)][Object]$ExcepObj
     )
     try {
         try { "ExceptionClass = $($ExcepObj.Exception.GetType().Name)" | Write-Output } catch { }
