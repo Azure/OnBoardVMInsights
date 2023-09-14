@@ -316,9 +316,9 @@ function Get-VMExtension {
         if (!$exceptionInfo) {
             throw [FatalException]::new("$vmName ($vmResourceGroupName) : Failed to lookup extensions", $_)
         } else {
-            if ($exceptionInfo["errorCode"].contains("ParentResourceNotFound")) {
+            if ($exceptionInfo["errorCode"].Contains("ParentResourceNotFound")) {
                 throw [InputParameterObsolete]::new("$vmName ($vmResourceGroupName) : Failed to lookup VM",$_,"VirtualMachine")
-            } elseif($exceptionInfo["errorCode"].contains("ResourceGroupNotFound")) {
+            } elseif($exceptionInfo["errorCode"].Contains("ResourceGroupNotFound")) {
                 throw [InputParameterObsolete]::new("Failed to lookup resource group in $vmResourceGroupName",$_,"ResourceGroup")       
             } else {
                 throw [FatalException]::new("$vmName ($vmResourceGroupName) : Failed to lookup extensions", $_)
@@ -662,19 +662,18 @@ function Install-DaVmss {
     $osType = $VMssObject.VirtualMachineProfile.StorageProfile.OsDisk.OsType
     $extensionType = $daExtensionMap.($osType.ToString())
     $extension = Get-VMssExtension -VMssObject $VMssObject -ExtensionType $extensionType 
-    
+     
     if ($extension) {
         $extensionName = $extension.Name
         Write-Verbose "$vmssName ($vmssResourceGroupName) : Extension $extensionType with name $extensionName already installed. Provisioning State: $($extension.ProvisioningState)"
         if (!$IsAmaOnboarded) {
             return
         } else {
-            if ($extension.PublicSettings) {
-                if ($extension.PublicSettings -match $processAndDependenciesPublicSettingsRegexPattern -and $matches[1] -eq "true") {
-                    Write-Output "$vmssName ($vmssResourceGroupName) : Extension $extensionType already configured with AMA enabled. Provisioning State: $($extension.ProvisioningState) `n $($extension.PublicSettings)"
-                    return
-                }
+            if ($extension.Settings.ToString() -match $processAndDependenciesPublicSettingsRegexPattern -and $matches[1] -eq "true") {
+                Write-Output "$vmssName ($vmssResourceGroupName) : Extension $extensionType already configured with AMA enabled. Provisioning State: $($extension.ProvisioningState) `n $($extension.PublicSettings)"
+                return
             }
+            $extension.Settings = $processAndDependenciesPublicSettings
         }
     } else {
         if (!($PSCmdlet.ShouldProcess($vmssName, "install extension $extensionType"))) {
@@ -845,18 +844,19 @@ function Install-AmaVMss {
     
     if ($extension) {
         $extensionName = $extension.Name
-        Write-Verbose "$vmssName ($vmssResourceGroupName) : Extension $extensionType with name $extensionName already installed. Provisioning State: $($extension.ProvisioningState) `n $($extension.PublicSettings)"
-        if ($extension.PublicSettings) {
-            if ($extension.PublicSettings.Contains($AmaPublicSettings.authentication.managedIdentity.'identifier-value')) {
-                Write-Output "$vmName ($vmssResourceGroupName) : Extension $extensionType already configured with this user assigned managed identity. Provisioning State: $($extension.ProvisioningState) `n $($extension.PublicSettings)"
+        Write-Verbose "$vmssName ($vmssResourceGroupName) : Extension $extensionType with name $extensionName already installed. Provisioning State: $($extension.ProvisioningState)"
+        if ($extension.Settings) {
+            if ($extension.Settings.ToString().Contains($AmaPublicSettings.authentication.managedIdentity.'identifier-value')) {
+                Write-Output "$vmssName ($vmssResourceGroupName) : Extension $extensionType already configured with this user assigned managed identity. Provisioning State: $($extension.ProvisioningState) `n $($extension.Settings.ToString())"
                 return
             }
         }
+        $extension.Settings = $AmaPublicSettings
     } else {
         if (!($PSCmdlet.ShouldProcess($vmssName, "install extension $extensionType"))) {
             return
         }
-
+        
         $parameters = @{
             VirtualMachineScaleSet  = $VMssObject
             Name                    = $extensionName
@@ -900,15 +900,17 @@ function Install-MmaVMss {
     if ($extension) {
         $extensionName = $extension.Name
         Write-Verbose "$vmssName ($vmssResourceGroupName) : Extension $extensionType with name $extensionName already installed. Provisioning State: $($extension.ProvisioningState)"
-        if ($extension.PublicSettings) {
-            if ($extension.PublicSettings.Contains($MmaPublicSettings.workspaceId)) {
-                Write-Output "$vmssName ($vmssResourceGroupName) : Extension $extensionType already configured for this workspace. Provisioning State: $($extension.ProvisioningState) `n $($extension.PublicSettings)"
+        if ($extension.Settings) {
+            if (($extension.Settings.ToString().Contains($MmaPublicSettings.workspaceId)) -and ($extension.Settings.ToString().Contains($MmaPublicSettings.workspaceKey))) {
+                Write-Output "$vmssName ($vmssResourceGroupName) : Extension $extensionType already configured for this workspace. Provisioning State: $($extension.ProvisioningState) `n $($extension.Settings)"
                 return
             } else {
                 if (!$ReInstall) {
-                    Write-Output "$vmssName ($vmssResourceGroupName) : Extension $extensionType present, run with -ReInstall again to move to new workspace. Provisioning State: $($extension.ProvisioningState) `n $($extension.PublicSettings)"
+                    Write-Output "$vmssName ($vmssResourceGroupName) : Extension $extensionType present, run with -ReInstall again to move to new workspace. Provisioning State: $($extension.ProvisioningState) `n $($extension.Settings)"
                     return
                 }
+                $extension.Settings = $mmaPublicSettings
+                $extension.ProtectedSetting = $mmaProtectedSettings
             }
         }
     } else {
@@ -962,11 +964,11 @@ function Set-ManagedIdentityRoles {
             }
             catch [ErrorResponseException] {
                 $excepMessage = $_.Exception.Message
-                if ($excepMessage -contains 'Conflict') {
+                if ($excepMessage.Contains('Conflict')) {
                     Write-Verbose ("$userAssignedManagedIdentityName : $role has been assigned already")
-                } elseif ($excepMessage -contains 'BadRequest') {
+                } elseif ($excepMessage.Contains('BadRequest')) {
                     throw [InputParameterObsolete]::new("$userAssignedManagedIdentityName : Failed to lookup managed identity",$_,"UserAssignedManagedIdentity") 
-                } elseif ($excepMessage -contains 'NotFound') {
+                } elseif ($excepMessage.Contains('NotFound')) {
                     throw [InputParameterObsolete]::new("$userAssignedManagedIdentityName : Failed to lookup $TargetScope",$_,"ResourceGroup") 
                 } else {
                     throw [FatalException]::new("$TargetScope : Failed to assign managed identity to targetScope", $_)
@@ -998,9 +1000,9 @@ function Install-VMExtension {
         if (!$exceptionInfo) {
             throw [FatalException]::new("$vmName ($vmResourceGroupName) : Failed to update/install extension : $extensionType", $_)
         } else {
-            if ($exceptionInfo["errorCode"].contains("ParentResourceNotFound")) {
+            if ($exceptionInfo["errorCode"].Contains("ParentResourceNotFound")) {
                 throw [InputParameterObsolete]::new("$vmName ($vmResourceGroupName) : Failed to lookup VM",$_,"VirtualMachine")
-            } elseif($exceptionInfo["errorCode"].contains("ResourceGroupNotFound")) {
+            } elseif($exceptionInfo["errorCode"].Contains("ResourceGroupNotFound")) {
                 throw [InputParameterObsolete]::new("$vmResourceGroupName : Failed to lookup resource group",$_,"ResourceGroup")       
             } else {
                 $extensionType = $InstallParameters.ExtensionType
@@ -1042,9 +1044,9 @@ function Update-VMssExtension {
         if (!$exceptionInfo) {
             throw [FatalException]::new("$vmssName ($vmssResourceGroupName) : Failed to update virtual machine scale set", $_)
         } else {
-            if ($exceptionInfo["errorCode"].contains("ParentResourceNotFound")) {
+            if ($exceptionInfo["errorCode"].Contains("ParentResourceNotFound")) {
                 throw [InputParameterObsolete]::new("$vmssName ($vmssResourceGroupName) : Failed to lookup virtual machine scale set",$_,"VirtualMachineScaleSet")
-            } elseif($exceptionInfo["errorCode"].contains("ResourceGroupNotFound")) {
+            } elseif($exceptionInfo["errorCode"].Contains("ResourceGroupNotFound")) {
                 throw [InputParameterObsolete]::new("$vmssResourceGroupName : Failed to lookup resource group",$_,"ResourceGroup")       
             } else {
                 throw [FatalException]::new("$vmssName ($vmssResourceGroupName) : Failed to update virtual machine scale set", $_)
@@ -1113,11 +1115,11 @@ function Assign-VmssManagedIdentity {
             if (!$exceptionInfo) {
                 throw [FatalException]::new("$vmssName ($vmssResourceGroup) : Failed to assign user managed identity : $userAssignedManagedIdentityName", $_)
             } else {
-                if ($exceptionInfo["errorCode"].contains("FailedIdentityOperation")) {
+                if ($exceptionInfo["errorCode"].Contains("FailedIdentityOperation")) {
                     throw [InputParameterObsolete]::new("$userAssignedManagedIdentityName : Failed to lookup user managed identity",$_,"UserAssignedManagedIdentity")
-                } elseif($exceptionInfo["errorCode"].contains("ResourceGroupNotFound")) {
+                } elseif($exceptionInfo["errorCode"].Contains("ResourceGroupNotFound")) {
                     throw [InputParameterObsolete]::new("$vmssResourceGroup : Failed to lookup resource group",$_,"ResourceGroup")       
-                } elseif ($exceptionInfo["errorCode"].contains("InvalidParameter") -and $exceptionInfo["errorMessage"].contains("Parameter 'osDisk.managedDisk.id' is not allowed")) {
+                } elseif (($exceptionInfo["errorCode"].Contains("InvalidParameter")) -and ($exceptionInfo["errorMessage"].Contains("Parameter 'osDisk.managedDisk.id' is not allowed"))) {
                     throw [InputParameterObsolete]::new("$vmssName ($vmssResourceGroup)  : Failed to lookup VMSS",$_,"VirtualMachine") 
                 }
                 else {
@@ -1171,11 +1173,11 @@ function Assign-VmUserManagedIdentity {
             if (!$exceptionInfo) {
                 throw [FatalException]::new("$vmName : Failed to assign user managed identity : $userAssignedManagedIdentityName.", $_)
             } else {
-                if ($exceptionInfo["errorCode"].contains("FailedIdentityOperation")) {
+                if ($exceptionInfo["errorCode"].Contains("FailedIdentityOperation")) {
                     throw [InputParameterObsolete]::new("$userAssignedManagedIdentityName : Failed to lookup managed identity",$_,"UserAssignedManagedIdentity")
-                } elseif($exceptionInfo["errorCode"].contains("ResourceGroupNotFound")) {
+                } elseif($exceptionInfo["errorCode"].Contains("ResourceGroupNotFound")) {
                     throw [InputParameterObsolete]::new("$vmResourceGroupName : Failed to lookup resource group",$_,"ResourceGroup")       
-                } elseif ($exceptionInfo["errorCode"].contains("InvalidParameter") -and $exceptionInfo["errorMessage"].contains("Parameter 'osDisk.managedDisk.id' is not allowed")) {
+                } elseif (($exceptionInfo["errorCode"].Contains("InvalidParameter")) -and ($exceptionInfo["errorMessage"].Contains("Parameter 'osDisk.managedDisk.id' is not allowed"))) {
                     throw [InputParameterObsolete]::new("$vmName ($vmResourceGroup) : Failed to lookup VM",$_,"VirtualMachine") 
                 }
                 else {
@@ -1408,7 +1410,7 @@ try {
             Write-Output "InputParameterObsolete =>`n`rCustomer Action : Please check if $obsParamType exists or check access permissions"
             Write-Output $errorMessage
             Display-Exception -ExcepObj $innerExcepObj
-            if ($cannotContinue.contains($obsParamType)) {
+            if ($cannotContinue.Contains($obsParamType)) {
                 Write-Output "Exiting..."
                 $OnboardingStatus.Failed  += $errorMessage
                 Print-SummaryMessage $OnboardingStatus
@@ -1427,7 +1429,7 @@ try {
             if ($statusCode -eq $UNAVAILABLE)  {
                 Write-Output $errorMessage
                 Write-Output "Continuing to next VM/VMss..."
-            }   elseif ($possibleNetworkIssue.contains($statusCode)) {
+            }   elseif ($possibleNetworkIssue.Contains($statusCode)) {
                 $networkIssueCounter+=1
                 if ($networkIssueCounter -lt $networkIssueToleranceLimit) {
                     Write-Output "Possible Network Issue : continuing for the time being"
@@ -1436,14 +1438,14 @@ try {
                     $OnboardingStatus.Failed  += $errorMessage
                     Print-SummaryMessage $OnboardingStatus
                 }
-            } elseif ($possibleIssueWithApi.contains($statusCode)) {
+            } elseif ($possibleIssueWithApi.Contains($statusCode)) {
                 Write-Output "Customer Action : Please consider raising support ticket."
                 Write-Output $errorMessage
-            } elseif ($possibleResourceUnavailable.contains($statusCode)) {
+            } elseif ($possibleResourceUnavailable.Contains($statusCode)) {
                 Write-Output "Customer Action : Please check if the resource is unavailable or access is denied"
                 Write-Output $errorMessage
                 Write-Output "Continuing to next VM/VNss..."
-            }  elseif ($serverUnavailable.contains($statusCode)) {
+            }  elseif ($serverUnavailable.Contains($statusCode)) {
                 $serverIssueCounter+=1
                 if ($serverIssueCounter -lt $serverIssueToleranceLimit) {
                     Write-Output "Possible API Server/Infrastructure Issue : continuing for the time being"
