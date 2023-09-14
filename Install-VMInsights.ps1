@@ -364,12 +364,12 @@ function Remove-VMExtension {
     $vmName = $VMObject.VMName
     $extension = Get-VMExtension -VMObject $VMObject -ExtensionType $ExtensionType 
     if (!$extension) {
-        Write-Verbose "$vmName ($vmResourceGroupName) : Failed to lookup $ExtensionType"
+        Write-Verbose "$vmName ($vmResourceGroupName) : Unable to lookup $ExtensionType"
         return
     }
     $extensionName = $extension.Name
 
-    if (!$PSCmdlet.ShouldProcess($vmName, "Remove OmsAgentForLinux")) {
+    if (!$PSCmdlet.ShouldProcess("$vmName ($vmResourceGroupName)", "Remove $extensionName")) {
         return
     }
 
@@ -421,7 +421,7 @@ function New-DCRAssociation {
     }
 
     #The Customer is responsible to uninstall the DCR Association themselves
-    if (!($PSCmdlet.ShouldProcess($vmName, "Install Data Collection Rule Association. (NOTE : Customer is responsible for uninstalling a data collection rule association)"))) {
+    if (!($PSCmdlet.ShouldProcess("$vmName ($vmResourceGroupName)", "Install Data Collection Rule Association. (NOTE : Customer is responsible for uninstalling a data collection rule association)"))) {
         return
     }
 
@@ -620,7 +620,7 @@ function Install-DaVm {
         }
     }
     
-    if (!($PSCmdlet.ShouldProcess($vmName, "install extension $extensionType"))) {
+    if (!($PSCmdlet.ShouldProcess("$vmName ($vmResourceGroupName)", "install extension $extensionType"))) {
         return
     }
 
@@ -677,7 +677,7 @@ function Install-DaVmss {
             }
         }
     } else {
-        if (!($PSCmdlet.ShouldProcess($vmssName, "install extension $extensionType"))) {
+        if (!($PSCmdlet.ShouldProcess("$vmssName ($vmssResourceGroupName)", "install extension $extensionType"))) {
             return
         }
 
@@ -733,7 +733,7 @@ function Install-AmaVm {
         }
     }
     
-    if (!($PSCmdlet.ShouldProcess($VMName, "install extension $ExtensionType"))) {
+    if (!($PSCmdlet.ShouldProcess("$vmName ($vmResourceGroupName)", "install extension $ExtensionType"))) {
         return
     }
 
@@ -798,7 +798,7 @@ function Install-MmaVm {
         Write-Output "$vmName ($vmResourceGroupName) : ExtensionType $extensionType does not support updating workspace. An uninstall followed by re-install is required"
     }
 
-    if (!($PSCmdlet.ShouldProcess($VMName, "install extension $extensionType"))) {
+    if (!($PSCmdlet.ShouldProcess("$vmName ($vmResourceGroupName)", "install extension $extensionType"))) {
         return
     }
 
@@ -856,7 +856,7 @@ function Install-AmaVMss {
             Update-VMssExtension -VMssObject $VMssObject
         }
     } else {
-        if (!($PSCmdlet.ShouldProcess($vmssName, "install extension $extensionType"))) {
+        if (!($PSCmdlet.ShouldProcess("$vmssName ($vmssResourceGroupName)", "install extension $extensionType"))) {
             return
         }
         
@@ -921,7 +921,7 @@ function Install-MmaVmss {
             }
         }
     } else {
-        if (!($PSCmdlet.ShouldProcess($vmssName, "install extension $extensionType"))) {
+        if (!($PSCmdlet.ShouldProcess("$vmssName ($vmssResourceGroupName)", "install extension $extensionType"))) {
             return
         }
 
@@ -1040,7 +1040,7 @@ function Upgrade-VmssExtension {
     $vmssName = $VMssObject.Name
     $vmssResourceGroupName = $VMssObject.ResourceGroupName
     
-    if (!($PSCmdlet.ShouldProcess($vmssName, "$vmssName ($vmssResourceGroupName) : Upgrading virtual machine scale set"))) {
+    if (!($PSCmdlet.ShouldProcess("$vmssName ($vmssResourceGroupName)", "Upgrading virtual machine scale set"))) {
         return
     }
 
@@ -1108,7 +1108,7 @@ function Update-VMssExtension {
     $vmssName = $VMssObject.Name
     $vmssResourceGroupName = $VMssObject.ResourceGroupName
     
-    if (!($PSCmdlet.ShouldProcess($vmssName, "$vmssName ($vmssResourceGroupName) : Updating virtual machine scale set"))) {
+    if (!($PSCmdlet.ShouldProcess("$vmssName ($vmssResourceGroupName)", "Updating virtual machine scale set"))) {
         return
     }
 
@@ -1176,7 +1176,7 @@ function Assign-VmssManagedIdentity {
                                                  -UserAssignedManagedIdentyId $userAssignedManagedIdentityId) {
         Write-Output "$vmssName ($vmssResourceGroup) : Already assigned with user managed identity : $userAssignedManagedIdentityName"
     } else {
-        if (!($PSCmdlet.ShouldProcess($vmssName, "assign managed identity $userAssignedManagedIdentityName"))) {
+        if (!($PSCmdlet.ShouldProcess("$vmssName ($vmssResourceGroup)", "assign managed identity $userAssignedManagedIdentityName"))) {
             return
         }
 
@@ -1232,7 +1232,7 @@ function Assign-VmUserManagedIdentity {
                                                  -UserAssignedManagedIdentyId $userAssignedManagedIdentityId) {
         Write-Output "$vmName ($vmResourceGroup) : Already assigned with managed identity : $userAssignedManagedIdentityName"
     } else {
-        if (!($PSCmdlet.ShouldProcess($vmName, "assign managed identity $userAssignedManagedIdentityName"))) {
+        if (!($PSCmdlet.ShouldProcess("$vmName ($vmResourceGroup)", "assign managed identity $userAssignedManagedIdentityName"))) {
             return
         }
 
