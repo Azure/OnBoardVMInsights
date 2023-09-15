@@ -430,7 +430,7 @@ function New-DCRAssociation {
         $exceptionMessage = $_.Exception.InnerException.Message
         
         if ($exceptionMessage.Contains('Invalid format of the resource identifier')) {
-            throw "$DcrResourceId : DataCollectionRule is in wrong format"
+            throw [FatalException]::new("$vmName ($vmResourceGroupName : data collection rule is in wrong format")
         }
         elseif (!($exceptionMessage -match $invalidOperationParserPattern)){
             throw [FatalException]::new("$vmName ($vmResourceGroupName) : Failed to create data collection rule association for $DcrResourceId", $_)
