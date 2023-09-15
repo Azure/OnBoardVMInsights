@@ -1482,7 +1482,7 @@ try {
         } catch [InputParameterObsolete] {
             $errorMessage = $_.Exception.errorMessage
             $innerExcepObj = $_.Exception.innerExcepObj
-            $obsParamType = $_.Exception.Exception.obsParamType
+            $obsParamType = $_.Exception.obsParamType
             $cannotContinue = @("DataCollectionRule", "ResourceGroup","UserAssignedManagedIdentity")
             Write-Output "InputParameterObsolete =>`n`rCustomer Action : Please check if $obsParamType exists or check access permissions"
             Write-Output $errorMessage
