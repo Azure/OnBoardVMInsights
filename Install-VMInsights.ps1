@@ -1528,7 +1528,7 @@ try {
         } catch [FatalException] {
             $errorMessage = $_.Exception.errorMessage
             $innerErrorRecord = $_.Exception.innerErrorRecord
-            Write-Output "FatalException =>`n`rCustomer Action : Please consider raising support ticket with below details"
+            Write-Output "FatalException =>`n`rCustomer Action : Please consider raising support ticket with below details if the issue persists"
             Write-Output $errorMessage
             Display-Exception -ErrorRecord $innerErrorRecord
             Write-Output "Exiting..."
