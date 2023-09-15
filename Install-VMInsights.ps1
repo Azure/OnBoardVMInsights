@@ -272,25 +272,16 @@ function Print-SummaryMessage {
     $OnboardingStatus.Succeeded | ForEach-Object { Write-Output $_ }
     Write-Output "`nFailed: ($($OnboardingStatus.Failed.Count))"
     $OnboardingStatus.Failed | ForEach-Object { Write-Output $_ }
-    #Script Exit
-    exit
 }
 function Parse-CloudExceptionMessage {
     param
     (
         [Parameter(mandatory = $True)][String]$exceptionMessage
     )
-    $pattern = '^.*ErrorCode:\s+(.*)ErrorMessage:\s+(.*)ErrorTarget:\s+(.*)StatusCode:\s+(.*)ReasonPhrase:\s+(.*)OperationID\s+:(.*)$'
-    $exceptionInfo = @{}
-    $exceptionMessage = $exceptionMessage | ConvertTo-Json
-    if ($exceptionMessage -match $pattern) {
-        $exceptionInfo["errorCode"] = $matches[1]
-        $exceptionInfo["errorMessage"] = $matches[2]
-        $exceptionInfo["errorTarget"] = $matches[3]
-        $exceptionInfo["statusCode"] = $matches[4]
-        $exceptionInfo["reasonPhrase"] = $matches[5]
-    }   
-    return $exceptionInfo
+    
+   if ($errorMessage -match 'ErrorCode:(.*)') {
+        return $matches[1]
+   }
 }
 
 function Get-VMExtension {
@@ -310,12 +301,12 @@ function Get-VMExtension {
     try {
         $extensions = Get-AzVMExtension -ResourceGroupName $vmResourceGroupName -VMName $vmName
     } catch [Microsoft.Azure.Commands.Compute.Common.ComputeCloudException] {
-        $exceptionInfo = Parse-CloudExceptionMessage($_.Exception.Message)
-        if (!$exceptionInfo) {
+        $errorCode = Parse-CloudExceptionMessage($_.Exception.Message)
+        if (!$errorCode) {
             throw [FatalException]::new("$vmName ($vmResourceGroupName) : Failed to lookup extensions", $_)
-        } elseif ($exceptionInfo["errorCode"].Contains("ParentResourceNotFound")) {
+        } elseif ($errorCode -eq "ParentResourceNotFound") {
             throw [InputParameterObsolete]::new("$vmName ($vmResourceGroupName) : Failed to lookup VM",$_,"VirtualMachine")
-        } elseif($exceptionInfo["errorCode"].Contains("ResourceGroupNotFound")) {
+        } elseif ($errorCode -eq "ResourceGroupNotFound") {
             throw [InputParameterObsolete]::new("Failed to lookup resource group in $vmResourceGroupName",$_,"ResourceGroup")       
         } else {
             throw [FatalException]::new("$vmName ($vmResourceGroupName) : Failed to lookup extensions", $_)
@@ -379,10 +370,10 @@ function Remove-VMExtension {
         #Remove operation on non existent VM, extension still return a success
         $removeResult = Remove-AzVMExtension -ResourceGroupName $vmResourceGroupName -VMName $vmName -Name $extensionName -Force
     } catch [Microsoft.Azure.Commands.Compute.Common.ComputeCloudException] {
-        $exceptionInfo = Parse-CloudExceptionMessage($_.Exception.Message)
-        if (!$exceptionInfo) {
+        $errorCode = Parse-CloudExceptionMessage($_.Exception.Message)
+        if (!$errorCode) {
             throw [FatalException]::new("$vmName ($vmResourceGroupName) : Failed to remove extension : $ExtensionType", $_)
-        } elseif($exceptionInfo["errorCode"].Contains("ResourceGroupNotFound")) {
+        } elseif($errorCode -eq "ResourceGroupNotFound") {
             throw [InputParameterObsolete]::new("$vmResourceGroupName : Failed to lookup resource group",$_,"ResourceGroup")       
         } else {
             throw [FatalException]::new("$vmName ($vmResourceGroupName) : Failed to remove extension : $ExtensionType", $_)
@@ -446,13 +437,13 @@ function New-DCRAssociation {
         } else {
             $statusCode = $matches[1]
             if ($statusCode.Contains('BadRequest')) {
-                throw [InputParameterObsolete]::new("$DcrResourceId : Failed to lookup dataCollectionRule",$_,"DataCollectionRule")
+                throw [InputParameterObsolete]::new("$DcrResourceId : Failed to lookup data collection rule",$_,"DataCollectionRule")
             } elseif ($statusCode.Contains('NotFound')) {
                 throw [InputParameterObsolete]::new("$vmName ($vmResourceGroupName) : Failed to lookup VM",$_,"VirtualMachine")
             } elseif ($statusCode.Contains('Forbidden')) {
-                throw [InputParameterObsolete]::new("$DcrResourceId : Failed to access dataCollectionRule",$_,"DataCollectionRule")     
+                throw [InputParameterObsolete]::new("$DcrResourceId : Failed to access data collection rule",$_,"DataCollectionRule")     
             } else {
-                throw [FatalException]::new("$DcrResourceId : Failed to lookup dataCollectionRule. UnknownStatusCode = $statusCode", $_)
+                throw [FatalException]::new("$DcrResourceId : Failed to lookup data collection rule. UnknownStatusCode = $statusCode", $_)
             }
         }
     }
@@ -1010,12 +1001,12 @@ function Install-VMExtension {
     try {
         $result = Set-AzVMExtension @InstallParameters
     } catch [Microsoft.Azure.Commands.Compute.Common.ComputeCloudException] {
-        $exceptionInfo = Parse-CloudExceptionMessage($_.Exception.Message)
-        if (!$exceptionInfo) {
+        $errorCode = Parse-CloudExceptionMessage($_.Exception.Message)
+        if (!$errorCode) {
             throw [FatalException]::new("$vmName ($vmResourceGroupName) : Failed to update/install extension : $extensionType", $_)
-        } elseif ($exceptionInfo["errorCode"].Contains("ParentResourceNotFound")) {
+        } elseif ($errorCode -eq "ParentResourceNotFound") {
             throw [InputParameterObsolete]::new("$vmName ($vmResourceGroupName) : Failed to lookup VM",$_,"VirtualMachine")
-        } elseif($exceptionInfo["errorCode"].Contains("ResourceGroupNotFound")) {
+        } elseif($errorCode -eq "ResourceGroupNotFound") {
             throw [InputParameterObsolete]::new("$vmResourceGroupName : Failed to lookup resource group",$_,"ResourceGroup")       
         } else {
             $extensionType = $InstallParameters.ExtensionType
@@ -1057,12 +1048,12 @@ function Upgrade-VmssExtension {
             try {
                 $scaleSetInstances = Get-AzVmssVm -ResourceGroupName $vmssResourceGroupName -VMScaleSetName $vmssName -InstanceView
             } catch [Microsoft.Azure.Commands.Compute.Common.ComputeCloudException] {
-                $exceptionInfo = Parse-CloudExceptionMessage($_.Exception.Message)
-                if (!$exceptionInfo) {
+                $errorCode = Parse-CloudExceptionMessage($_.Exception.Message)
+                if (!$errorCode) {
                     throw [FatalException]::new("$vmssName ($vmssResourceGroupName) : Failed to upgrade virtual machine scale set", $_)
-                } elseif ($exceptionInfo["errorCode"].Contains("ParentResourceNotFound")) {
+                } elseif ($errorCode -eq "ParentResourceNotFound") {
                     throw [InputParameterObsolete]::new("$vmssName ($vmssResourceGroupName) : Failed to lookup virtual machine scale set",$_,"VirtualMachineScaleSet")
-                } elseif($exceptionInfo["errorCode"].Contains("ResourceGroupNotFound")) {
+                } elseif ($errorCode -eq "ResourceGroupNotFound") {
                     throw [InputParameterObsolete]::new("$vmssResourceGroupName : Failed to lookup resource group",$_,"ResourceGroup")       
                 } else {
                     throw [FatalException]::new("$vmssName ($vmssResourceGroupName) : Failed to upgrade virtual machine scale set", $_)
@@ -1083,12 +1074,12 @@ function Upgrade-VmssExtension {
                         throw [OperationFailed]::new($UNAVAILABLE,$UNAVAILABLE,"$vmssName ($vmssResourceGroupName) : Failed to upgrade virtual machine scale set isntance : $($scaleSetInstance.Name). $($result.Status)")
                     }
                 } catch [Microsoft.Azure.Commands.Compute.Common.ComputeCloudException] {
-                    $exceptionInfo = Parse-CloudExceptionMessage($_.Exception.Message)
-                    if (!$exceptionInfo) {
+                    $errorCode = Parse-CloudExceptionMessage($_.Exception.Message)
+                    if (!$errorCode) {
                         throw [FatalException]::new("$vmssName ($vmssResourceGroupName) : Failed to up upgrade virtual machine scale set instance : $($scaleSetInstance.Name)", $_)
-                    } elseif ($exceptionInfo["errorCode"].Contains("ParentResourceNotFound")) {
+                    } elseif ($errorCode -eq "ParentResourceNotFound") {
                         throw [InputParameterObsolete]::new("$vmssName ($vmssResourceGroupName) : Failed to lookup virtual machine scale set",$_,"VirtualMachineScaleSet")
-                    } elseif($exceptionInfo["errorCode"].Contains("ResourceGroupNotFound")) {
+                    } elseif($errorCode -eq "ResourceGroupNotFound") {
                         throw [InputParameterObsolete]::new("$vmssResourceGroupName : Failed to lookup resource group",$_,"ResourceGroup")       
                     } else {
                         throw [FatalException]::new("$vmssName ($vmssResourceGroupName) : Failed to upgrade virtual machine scale set instance : $($scaleSetInstance.Name)", $_)
@@ -1125,12 +1116,12 @@ function Update-VMssExtension {
                                     -VirtualMachineScaleSet $VMssObject `
                                    
     } catch [Microsoft.Azure.Commands.Compute.Common.ComputeCloudException] {
-        $exceptionInfo = Parse-CloudExceptionMessage($_.Exception.Message)
-        if (!$exceptionInfo) {
+        $errorCode = Parse-CloudExceptionMessage($_.Exception.Message)
+        if (!$errorCode) {
             throw [FatalException]::new("$vmssName ($vmssResourceGroupName) : Failed to update virtual machine scale set", $_)
-        } elseif ($exceptionInfo["errorCode"].Contains("ParentResourceNotFound")) {
+        } elseif ($errorCode -eq "ParentResourceNotFound") {
             throw [InputParameterObsolete]::new("$vmssName ($vmssResourceGroupName) : Failed to lookup virtual machine scale set",$_,"VirtualMachineScaleSet")
-        } elseif($exceptionInfo["errorCode"].Contains("ResourceGroupNotFound")) {
+        } elseif($errorCode -eq "ResourceGroupNotFound") {
             throw [InputParameterObsolete]::new("$vmssResourceGroupName : Failed to lookup resource group",$_,"ResourceGroup")       
         } else {
             throw [FatalException]::new("$vmssName ($vmssResourceGroupName) : Failed to update virtual machine scale set", $_)
@@ -1194,14 +1185,14 @@ function Assign-VmssManagedIdentity {
                                     -IdentityID $userAssignedManagedIdentityId `
                                    
         } catch [Microsoft.Azure.Commands.Compute.Common.ComputeCloudException] {
-            $exceptionInfo = Parse-CloudExceptionMessage($_.Exception.Message)
-            if (!$exceptionInfo) {
+            $errorCode = Parse-CloudExceptionMessage($_.Exception.Message)
+            if (!$errorCode) {
                 throw [FatalException]::new("$vmssName ($vmssResourceGroup) : Failed to assign user managed identity : $userAssignedManagedIdentityName", $_)
-            } elseif ($exceptionInfo["errorCode"].Contains("FailedIdentityOperation")) {
+            } elseif ($errorCode -eq "FailedIdentityOperation") {
                 throw [InputParameterObsolete]::new("$userAssignedManagedIdentityName : Failed to lookup user managed identity",$_,"UserAssignedManagedIdentity")
-            } elseif($exceptionInfo["errorCode"].Contains("ResourceGroupNotFound")) {
+            } elseif($errorCode -eq "ResourceGroupNotFound") {
                 throw [InputParameterObsolete]::new("$vmssResourceGroup : Failed to lookup resource group",$_,"ResourceGroup")       
-            } elseif (($exceptionInfo["errorCode"].Contains("InvalidParameter")) -and ($exceptionInfo["errorMessage"].Contains("Parameter 'osDisk.managedDisk.id' is not allowed"))) {
+            } elseif ($errorCode -eq "InvalidParameter") {
                 throw [InputParameterObsolete]::new("$vmssName ($vmssResourceGroup)  : Failed to lookup VMSS",$_,"VirtualMachine") 
             } else {
                 throw [FatalException]::new("vmssName ($vmssResourceGroup) : Failed to user assign managed identity : $userAssignedManagedIdentityName. ExceptionInfo = $exceptionInfo", $_)
@@ -1249,14 +1240,14 @@ function Assign-VmUserManagedIdentity {
                                   -IdentityID $userAssignedManagedIdentityId `
                                                                
         } catch [Microsoft.Azure.Commands.Compute.Common.ComputeCloudException] {
-            $exceptionInfo = Parse-CloudExceptionMessage($_.Exception.Message)
-            if (!$exceptionInfo) {
+            $errorCode = Parse-CloudExceptionMessage($_.Exception.Message)
+            if (!$errorCode) {
                 throw [FatalException]::new("$vmName : Failed to assign user managed identity : $userAssignedManagedIdentityName.", $_)
-            } elseif ($exceptionInfo["errorCode"].Contains("FailedIdentityOperation")) {
+            } elseif ($errorCode -eq "FailedIdentityOperation") {
                 throw [InputParameterObsolete]::new("$userAssignedManagedIdentityName : Failed to lookup managed identity",$_,"UserAssignedManagedIdentity")
-            } elseif($exceptionInfo["errorCode"].Contains("ResourceGroupNotFound")) {
+            } elseif($errorCode -eq "ResourceGroupNotFound") {
                 throw [InputParameterObsolete]::new("$vmResourceGroupName : Failed to lookup resource group",$_,"ResourceGroup")       
-            } elseif (($exceptionInfo["errorCode"].Contains("InvalidParameter")) -and ($exceptionInfo["errorMessage"].Contains("Parameter 'osDisk.managedDisk.id' is not allowed"))) {
+            } elseif ($errorCode -eq "InvalidParameter") {
                 throw [InputParameterObsolete]::new("$vmName ($vmResourceGroup) : Failed to lookup VM",$_,"VirtualMachine") 
             } else {
                 throw [FatalException]::new("$vmName : Failed to assign managed identity : $userAssignedManagedIdentityName. Exception Info = $exceptionInfo", $_)
@@ -1490,7 +1481,7 @@ try {
             if ($cannotContinue.Contains($obsParamType)) {
                 Write-Output "Exiting..."
                 $OnboardingStatus.Failed  += $errorMessage
-                Print-SummaryMessage $OnboardingStatus
+                exit
             } else {
                 Write-Output "Continuing..."
             }
@@ -1513,7 +1504,7 @@ try {
                 } else {
                     Write-Output "Possible Network Issue : not resolving.`n`rExiting..."
                     $OnboardingStatus.Failed  += $errorMessage
-                    Print-SummaryMessage $OnboardingStatus
+                    exit
                 }
             } elseif ($possibleIssueWithApi.Contains($statusCode)) {
                 Write-Output "Customer Action : Please consider raising support ticket."
@@ -1530,7 +1521,7 @@ try {
                     Write-Output "Possible API Server/Infrastructure Issue : not resolving.`n`rExiting..."
                     Write-Output "Customer Action : Please consider raising support ticket with below details against owning service : Service Map and VM Insights"
                     $OnboardingStatus.Failed  += $errorMessage
-                    Print-SummaryMessage $OnboardingStatus
+                    exit
                 }
             }
             else { 
@@ -1545,7 +1536,7 @@ try {
             Display-Exception -ExcepObj $innerExcepObj
             Write-Output "Exiting..."
             $OnboardingStatus.Failed  += $errorMessage
-            Print-SummaryMessage $OnboardingStatus
+            exit
         }
     }
 }
@@ -1554,7 +1545,7 @@ catch {
     $OnboardingStatus.Failed  += $_.Exception.Message
     Display-Exception -ExcepObj $_
     Write-Output "Exiting..."
-    exit
-} finally {
+}
+finally {
     Print-SummaryMessage $OnboardingStatus
 }
