@@ -229,6 +229,8 @@ Set-Variable -Name serverIssueToleranceLimit -Option Constant -Value 3
 Set-Variable -Name UNAVAILABLE -Option Constant -Value 0
 Set-Variable -Name invalidOperationParserPattern -Option Constant -Value "^Operation returned an invalid status code (.*)"
 
+$ErrorActionPreference = 1 # Stop
+
 class InputParameterObsolete : System.Exception {
     [String]$errorMessage
     [Object]$innerExcepObj
@@ -306,7 +308,7 @@ function Get-VMExtension {
     $vmName = $VMObject.Name
 
     try {
-        $extensions = Get-AzVMExtension -ResourceGroupName $vmResourceGroupName -VMName $vmName -ErrorAction "Stop"
+        $extensions = Get-AzVMExtension -ResourceGroupName $vmResourceGroupName -VMName $vmName
     } catch [Microsoft.Azure.Commands.Compute.Common.ComputeCloudException] {
         $exceptionInfo = Parse-CloudExceptionMessage($_.Exception.Message)
         if (!$exceptionInfo) {
@@ -374,12 +376,16 @@ function Remove-VMExtension {
     }
 
     try {
-        $removeResult = Remove-AzVMExtension -ResourceGroupName $vmResourceGroupName -VMName $vmName -Name $extensionName -Force -ErrorAction "Stop"
-    } catch [System.Management.Automation.ParameterBindingException] {
-        if ($_.ErrorId -eq "NamedParameterNotFound") {
-            throw [InputParameterObsolete]::new("$vmResourceGroupName : Failed to lookup resource-group",$_,"ResourceGroup")
+        #Remove operation on non existent VM, extension still return a success
+        $removeResult = Remove-AzVMExtension -ResourceGroupName $vmResourceGroupName -VMName $vmName -Name $extensionName -Force
+    } catch [Microsoft.Azure.Commands.Compute.Common.ComputeCloudException] {
+        $exceptionInfo = Parse-CloudExceptionMessage($_.Exception.Message)
+        if (!$exceptionInfo) {
+            throw [FatalException]::new("$vmName ($vmResourceGroupName) : Failed to remove extension : $ExtensionType", $_)
+        } elseif($exceptionInfo["errorCode"].Contains("ResourceGroupNotFound")) {
+            throw [InputParameterObsolete]::new("$vmResourceGroupName : Failed to lookup resource group",$_,"ResourceGroup")       
         } else {
-            throw [FatalException]::new("$vmName ($vmResourceGroupName) : Failed to remove extension $extensionName", $_)
+            throw [FatalException]::new("$vmName ($vmResourceGroupName) : Failed to remove extension : $ExtensionType", $_)
         }
     }
     
@@ -407,7 +413,7 @@ function New-DCRAssociation {
     
     try {
         # A VM may have zero or more Data Collection Rule Associations
-        $dcrAssociationList = Get-AzDataCollectionRuleAssociation -TargetResourceId $vmId -ErrorAction "Stop"
+        $dcrAssociationList = Get-AzDataCollectionRuleAssociation -TargetResourceId $vmId
     } catch [System.Management.Automation.ParameterBindingException] {
         throw [InputParameterObsolete]::new("$vmName ($vmResourceGroupName) : Failed to lookup VM",$_,"VirtualMachine")
     }
@@ -428,7 +434,7 @@ function New-DCRAssociation {
     $dcrassociationName = "VM-Insights-$vmName-Association"
     Write-Verbose "$vmName ($vmResourceGroupName) : Deploying Data Collection Rule Association with name $dcrassociationName"
     try {
-        $dcrassociation = New-AzDataCollectionRuleAssociation -TargetResourceId $vmId -AssociationName $dcrassociationName -RuleId $DcrResourceId -ErrorAction "Stop"
+        $dcrassociation = New-AzDataCollectionRuleAssociation -TargetResourceId $vmId -AssociationName $dcrassociationName -RuleId $DcrResourceId
     } catch [System.Management.Automation.PSInvalidOperationException] {
         $exceptionMessage = $_.Exception.InnerException.Message
         
@@ -1002,7 +1008,7 @@ function Install-VMExtension {
     
     Write-Verbose("$vmName ($vmResourceGroupName) : Deploying/Updating $extensionType")
     try {
-        $result = Set-AzVMExtension @InstallParameters -ErrorAction "Stop"
+        $result = Set-AzVMExtension @InstallParameters
     } catch [Microsoft.Azure.Commands.Compute.Common.ComputeCloudException] {
         $exceptionInfo = Parse-CloudExceptionMessage($_.Exception.Message)
         if (!$exceptionInfo) {
@@ -1049,7 +1055,7 @@ function Upgrade-VmssExtension {
             Write-Output "$vmssName : has UpgradePolicy of Manual. Please trigger upgrade of VM Scale Set or call with -TriggerVmssManualVMUpdate"
         } else {
             try {
-                $scaleSetInstances = Get-AzVmssVm -ResourceGroupName $vmssResourceGroupName -VMScaleSetName $vmssName -InstanceView -ErrorAction "Stop"
+                $scaleSetInstances = Get-AzVmssVm -ResourceGroupName $vmssResourceGroupName -VMScaleSetName $vmssName -InstanceView
             } catch [Microsoft.Azure.Commands.Compute.Common.ComputeCloudException] {
                 $exceptionInfo = Parse-CloudExceptionMessage($_.Exception.Message)
                 if (!$exceptionInfo) {
@@ -1072,7 +1078,7 @@ function Upgrade-VmssExtension {
                 $i++
                 Write-Verbose "$vmssName : Updating instance $($scaleSetInstance.Name) $i of $instanceCount"
                 try {
-                    $result = Update-AzVmssInstance -ResourceGroupName $vmssResourceGroupName -VMScaleSetName $vmssName -InstanceId $scaleSetInstance.InstanceId -ErrorAction "Stop"
+                    $result = Update-AzVmssInstance -ResourceGroupName $vmssResourceGroupName -VMScaleSetName $vmssName -InstanceId $scaleSetInstance.InstanceId
                     if ($result.Status -ne "Succeeded") {
                         throw [OperationFailed]::new($UNAVAILABLE,$UNAVAILABLE,"$vmssName ($vmssResourceGroupName) : Failed to upgrade virtual machine scale set isntance : $($scaleSetInstance.Name). $($result.Status)")
                     }
@@ -1117,7 +1123,7 @@ function Update-VMssExtension {
         $VMssObject = Update-AzVmss -VMScaleSetName $vmssName `
                                     -ResourceGroupName $vmssResourceGroupName `
                                     -VirtualMachineScaleSet $VMssObject `
-                                    -ErrorAction "Stop"
+                                   
     } catch [Microsoft.Azure.Commands.Compute.Common.ComputeCloudException] {
         $exceptionInfo = Parse-CloudExceptionMessage($_.Exception.Message)
         if (!$exceptionInfo) {
@@ -1186,7 +1192,7 @@ function Assign-VmssManagedIdentity {
                                     -VirtualMachineScaleSet $VMssObject `
                                     -IdentityType "UserAssigned" `
                                     -IdentityID $userAssignedManagedIdentityId `
-                                    -ErrorAction "Stop"
+                                   
         } catch [Microsoft.Azure.Commands.Compute.Common.ComputeCloudException] {
             $exceptionInfo = Parse-CloudExceptionMessage($_.Exception.Message)
             if (!$exceptionInfo) {
@@ -1241,7 +1247,7 @@ function Assign-VmUserManagedIdentity {
                                   -ResourceGroupName $vmResourceGroup `
                                   -IdentityType "UserAssigned" `
                                   -IdentityID $userAssignedManagedIdentityId `
-                                  -ErrorAction "Stop"                              
+                                                               
         } catch [Microsoft.Azure.Commands.Compute.Common.ComputeCloudException] {
             $exceptionInfo = Parse-CloudExceptionMessage($_.Exception.Message)
             if (!$exceptionInfo) {
@@ -1320,7 +1326,7 @@ try {
             Write-Output "Validating ($UserAssignedManagedIdentityName,$UserAssignedManagedIdentityResourceGroup)"
             $userAssignedIdentityObject = Get-AzUserAssignedIdentity -Name $UserAssignedManagedIdentityName `
                                     -ResourceGroupName $UserAssignedManagedIdentityResourceGroup `
-                                    -ErrorAction "Stop"
+                                   
         } catch [Exception]{
             Write-Output $_.Exception.Message
             exit
@@ -1353,7 +1359,7 @@ try {
 
     if ($PolicyAssignmentName) {
         Write-Output "Getting list of VM's from PolicyAssignmentName: $($PolicyAssignmentName)"
-        $complianceResults = Get-AzPolicyState -PolicyAssignmentName $PolicyAssignmentName -ErrorAction "Stop"
+        $complianceResults = Get-AzPolicyState -PolicyAssignmentName $PolicyAssignmentName
 
         foreach ($result in $complianceResults) {
             Write-Verbose($result.ResourceId)
@@ -1369,8 +1375,8 @@ try {
             if ($ResourceGroup -and $ResourceGroup -ne $vmResourceGroup) { continue }
             if ($Name -and $Name -ne $vmName) { continue }
 
-            $vm = Get-AzVM -Name $vmName -ResourceGroupName $vmResourceGroup -ErrorAction "Stop"
-            $vmStatus = Get-AzVM -Status -Name $vmName -ResourceGroupName $vmResourceGroup -ErrorAction "Stop"
+            $vm = Get-AzVM -Name $vmName -ResourceGroupName $vmResourceGroup
+            $vmStatus = Get-AzVM -Status -Name $vmName -ResourceGroupName $vmResourceGroup
 
             # fix to have same property as VM that is retrieved without Name
             $vm | Add-Member -NotePropertyName PowerState -NotePropertyValue $vmStatus.Statuses[1].DisplayStatus
@@ -1380,10 +1386,10 @@ try {
         Write-Output "Getting list of VM's or VM ScaleSets matching criteria specified"
         if (!$ResourceGroup -and !$Name) {
             # If ResourceGroup and Name value is not passed - get all VMs under given SubscriptionId
-            $Vms = Get-AzVM -Status -ErrorAction "Stop"
+            $Vms = Get-AzVM -Status
             #skipping VMSS Instances and Virtual Machines not running.
             $Vms = $Vms | Where-Object {$_.PowerState -eq 'VM running' -and !($_.VirtualMachineScaleSet)}
-            $Vmss = Get-AzVmss -ErrorAction "Stop"
+            $Vmss = Get-AzVmss
         } else {
             if (!$ResourceGroup -and $Name) {
                 Write-Output ("Script input parameters contain resource : $Name but no Resource Group information.")
@@ -1392,7 +1398,7 @@ try {
             # If ResourceGroup value is passed - select all VMs under given ResourceGroupName
             #Virtual Machines not running and those part of a virtual machine scale set will be skipped.
             try {
-                $Vms = Get-AzVM -ResourceGroupName $ResourceGroup -Status -ErrorAction "Stop"
+                $Vms = Get-AzVM -ResourceGroupName $ResourceGroup -Status
             } catch [Microsoft.Azure.Commands.Compute.Common.ComputeCloudException] {
                 Write-Output ("Cannot lookup resourceGroup : $ResourceGroup. Exiting...")
                 exit    
@@ -1402,7 +1408,7 @@ try {
                 $Vms = $Vms | Where-Object {$_.Name -like $Name}
             }
             try {
-                $Vmss = Get-AzVmss -ResourceGroupName $ResourceGroup -ErrorAction "Stop"
+                $Vmss = Get-AzVmss -ResourceGroupName $ResourceGroup
             } catch [Microsoft.Azure.Commands.Compute.Common.ComputeCloudException] {
                 Write-Output ("Cannot lookup resourceGroup : $ResourceGroup. Check access permissions or if ResourceGroup was deleted. Exiting...")
                 exit
