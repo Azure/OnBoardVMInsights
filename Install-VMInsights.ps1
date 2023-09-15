@@ -230,11 +230,11 @@ $ErrorActionPreference = 1 # Stop
 
 class InputParameterObsolete : System.Exception {
     [String]$errorMessage
-    [Object]$innerExcepObj
+    [Object]$innerErrorRecord
     [String]$obsParamType
-    InputParameterObsolete($message, $excepObj, $obsParamType) {
+    InputParameterObsolete($message, $innerErrorRecord, $obsParamType) {
         $this.errorMessage = $message
-        $this.innerExcepObj = $excepObj
+        $this.innerErrorRecord = $innerErrorRecord
         $this.obsParamType = $obsParamType
     }
 }
@@ -249,11 +249,11 @@ class OperationFailed : System.Exception {
     }
 }
 class FatalException : System.Exception {
-    [Object]$innerExcepObj
+    [Object]$innerErrorRecord
     [String]$errorMessage
-    FatalException($message, $excepObj) {
+    FatalException($message, $innerErrorRecord) {
         $this.errorMessage = $message
-        $this.innerExcepObj = $excepObj
+        $this.innerErrorRecord = $innerErrorRecord
     }
 }
 
@@ -1267,14 +1267,14 @@ function Assign-VmUserManagedIdentity {
 
 function Display-Exception {
     param(
-    [Parameter(Mandatory = $True)][Object]$ExcepObj
+    [Parameter(Mandatory = $True)][Object]$ErrorRecord
     )
     try {
-        try { "ExceptionClass = $($ExcepObj.Exception.GetType().Name)" | Write-Output } catch { }
-        try { "ExceptionMessage:`r`n$($ExcepObj.Exception.Message)`r`n" | Write-Output } catch { }
-        try { "StackTrace:`r`n$($ExcepObj.Exception.StackTrace)`r`n" | Write-Output } catch { }
-        try { "ScriptStackTrace:`r`n$($ExcepObj.ScriptStackTrace)`r`n" | Write-Output } catch { }
-        try { "Exception.HResult = 0x{0,0:x8}" -f $ExcepObj.Exception.HResult | Write-Output } catch { }
+        try { "ExceptionClass = $($ErrorRecord.Exception.GetType().Name)" | Write-Output } catch { }
+        try { "ExceptionMessage:`r`n$($ErrorRecord.Exception.Message)`r`n" | Write-Output } catch { }
+        try { "StackTrace:`r`n$($ErrorRecord.Exception.StackTrace)`r`n" | Write-Output } catch { }
+        try { "ScriptStackTrace:`r`n$($ErrorRecord.ScriptStackTrace)`r`n" | Write-Output } catch { }
+        try { "Exception.HResult = 0x{0,0:x8}" -f $ErrorRecord.Exception.HResult | Write-Output } catch { }
     }
     catch {
         #silently ignore
@@ -1469,12 +1469,12 @@ try {
             $OnboardingStatus.Succeeded += $message
         } catch [InputParameterObsolete] {
             $errorMessage = $_.Exception.errorMessage
-            $innerExcepObj = $_.Exception.innerExcepObj
+            $innerErrorRecord = $_.Exception.innerErrorRecord
             $obsParamType = $_.Exception.obsParamType
             $cannotContinue = @("DataCollectionRule", "ResourceGroup","UserAssignedManagedIdentity")
             Write-Output "InputParameterObsolete =>`n`rCustomer Action : Please check if $obsParamType exists or check access permissions"
             Write-Output $errorMessage
-            Display-Exception -ExcepObj $innerExcepObj
+            Display-Exception -ErrorRecord $innerErrorRecord
             if ($cannotContinue.Contains($obsParamType)) {
                 Write-Output "Exiting..."
                 $OnboardingStatus.Failed  += $errorMessage
@@ -1527,10 +1527,10 @@ try {
             }
         } catch [FatalException] {
             $errorMessage = $_.Exception.errorMessage
-            $innerExcepObj = $_.Exception.innerExcepObj
+            $innerErrorRecord = $_.Exception.innerErrorRecord
             Write-Output "FatalException =>`n`rCustomer Action : Please consider raising support ticket with below details"
             Write-Output $errorMessage
-            Display-Exception -ExcepObj $innerExcepObj
+            Display-Exception -ErrorRecord $innerErrorRecord
             Write-Output "Exiting..."
             $OnboardingStatus.Failed  += $errorMessage
             exit
@@ -1540,7 +1540,7 @@ try {
 catch {
     Write-Output "UnknownException :`n`rCustomer Action : Check Error Message, if issue persists. Please consider raising support ticket with below details against owning service : Service Map and VM Insights"
     $OnboardingStatus.Failed  += $_.Exception.Message
-    Display-Exception -ExcepObj $_
+    Display-Exception -ErrorRecord $_
     Write-Output "Exiting..."
 }
 finally {
