@@ -33,15 +33,12 @@
 <#
 .SYNOPSIS
 This script installs VM extensions for Log Analytics/Azure Monitoring Agent (AMA) and Dependency Agent as needed for VM Insights.
-If AMA is onboarded a Data Collection Rule(DCR) and a User Assigned Managed Identity (UAMI) is also associated with the VM's and VM Scale Sets.
+If AMA is onboarded, a Data Collection Rule(DCR) and a User Assigned Managed Identity (UAMI) is also associated with the VM's and VM Scale Sets.
 
 .DESCRIPTION
 This script installs or re-configures following on VM's and VM Scale Sets:
-- Log Analytics VM Extension configured to supplied Log Analytics Workspace
-- Azure Monitor Agent
-- Data Collection Rule
-- User Assigned Identity
-- Dependency Agent VM Extension
+1. Log Analytics VM Extension configured to supplied Log Analytics Workspace and Dependency Agent VM Extension.
+2. Azure Monitor Agent along with Data Collection Rule, User Assigned Managed Identity and Dependency Agent VM Extension if 'ProcessAndDependencies' is provided.
 
 Can be applied to:
 - Subscription
