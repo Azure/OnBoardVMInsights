@@ -1489,8 +1489,7 @@ try {
             if ($Rghashtable.ContainsKey($vmResourceGroup)) {
                 $Rghashtable[$vmResourceGroup]["VirtualMachine"] += @($vm)
             } else {
-                $resourceTable = @{"VirtualMachine" = @($vm)}
-                $Rghashtable.add($vmResourceGroup,$resourceTable)
+                $Rghashtable.add($vmResourceGroup,@{"VirtualMachine" = @($vm)})
             }            
         }
     } else {
