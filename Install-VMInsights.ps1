@@ -469,8 +469,7 @@ function Onboard-VmiWithMmaVm {
                   -WorkspaceId $workspaceId `
                   -WorkspaceKey $workspacekey `
                   -ReInstall $reInstall
-
-    Install-DaVm -VMObject $VMObject
+                  
 }
 
 function Onboard-VmiWithMmaVmss {
@@ -494,8 +493,6 @@ function Onboard-VmiWithMmaVmss {
                     -WorkspaceKey $workspacekey `
                     -ReInstall $reInstall `
                     -TriggerVmssManualVMUpdate $triggerVmssManualVMUpdate
-
-    Install-DaVmss -VMssObject $VMssObject -TriggerVmssManualVMUpdate $triggerVmssManualVMUpdate
 }
 
 function Onboard-VmiWithAmaVm {
@@ -509,12 +506,6 @@ function Onboard-VmiWithAmaVm {
         [Parameter(mandatory = $True)][hashtable]$OnboardParameters
     )
     
-    $amaPublicSettings = @{'authentication' = @{
-        'managedIdentity' = @{
-        'identifier-name' = 'mi_res_id'
-        }
-      }
-    }
     $dcrResourceId = $OnboardParameters.DcrResourceId
     $userAssignedManagedIdentityObject = $OnboardParameters.UserAssignedIdentityObject
 
@@ -526,86 +517,6 @@ function Onboard-VmiWithAmaVm {
                   -AmaPublicSettings $amaPublicSettings
 
     New-DCRAssociation -VMObject $VMObject `
-                  -DcrResourceId $dcrResourceId
-}
-
-function Onboard-VmiWithAmaAndDaVm {
-    <#
-	.SYNOPSIS
-	Onboard VMI with AMA and DA on Vms
-	#>
-    param
-    (
-        [Parameter(mandatory = $True)][Object]$VMObject,
-        [Parameter(mandatory = $True)][hashtable]$OnboardParameters
-    )
-    
-    $amaPublicSettings = @{'authentication' = @{
-        'managedIdentity' = @{
-        'identifier-name' = 'mi_res_id'
-        }
-      }
-    }
-
-    # 1 script blocks that handles MMA and other for AMA, separte script block for DA, another script DA, empty
-    #body of the loop - (MMA, AMA) (DA)
-    # Different set of 3 script blocks for VMSS - first all VMs then all VMss
-    #script block that does update or not.
-    $dcrResourceId = $OnboardParameters.DcrResourceId
-    $userAssignedManagedIdentityObject = $OnboardParameters.UserAssignedIdentityObject
-
-    Assign-VmUserManagedIdentity -VMObject $VMObject `
-                             -UserAssignedManagedIdentityObject $userAssignedManagedIdentityObject `
-                             -AmaPublicSettings $amaPublicSettings
-    
-    Install-AmaVm -VMObject $VMObject `
-                  -AmaPublicSettings $amaPublicSettings
-
-    Install-DaVm -VMObject $VMObject `
-                -IsAmaOnboarded             
-    
-    New-DCRAssociation `
-                  -VMObject $VMObject `
-                  -DcrResourceId $dcrResourceId
-}
-
-function Onboard-VmiWithAmaandDaVmss {
-    <#
-	.SYNOPSIS
-	Onboard VMI with AMA on VMSS
-	#>
-    [CmdletBinding(SupportsShouldProcess = $True, ConfirmImpact = 'Medium')]
-    param
-    (
-        [Parameter(mandatory = $True)][Object]$VMssObject,
-        [Parameter(mandatory = $True)][hashtable]$OnboardParameters
-    )
-
-    $amaPublicSettings = @{'authentication' = @{
-        'managedIdentity' = @{
-        'identifier-name' = 'mi_res_id'
-        }
-      }
-    }
-    $dcrResourceId = $OnboardParameters.DcrResourceId
-    $userAssignedManagedIdentityObject = $OnboardParameters.UserAssignedIdentityObject
-    $triggerVmssManualVMUpdate = $OnboardParameters.TriggerVmssManualVMUpdate
-            
-    Assign-VmssManagedIdentity -VMssObject $VMssObject `
-                               -UserAssignedManagedIdentityObject $userAssignedManagedIdentityObject `
-                               -AmaPublicSettings $amaPublicSettings
-                               
-    Install-AmaVmss -VMssObject $VMssObject `
-                    -AmaPublicSettings $amaPublicSettings `
-                    -TriggerVmssManualVMUpdate $triggerVmssManualVMUpdate
-                    
-    
-    Install-DaVmss -VMssObject $VMssObject `
-                    -TriggerVmssManualVMUpdate $triggerVmssManualVMUpdate `
-                    -IsAmaOnboarded                          
-    
-    New-DCRAssociation `
-                  -VMObject $VMssObject `
                   -DcrResourceId $dcrResourceId
 }
 
@@ -621,12 +532,6 @@ function Onboard-VmiWithAmaVmss {
         [Parameter(mandatory = $True)][hashtable]$OnboardParameters
     )
 
-    $amaPublicSettings = @{'authentication' = @{
-        'managedIdentity' = @{
-        'identifier-name' = 'mi_res_id'
-        }
-      }
-    }
     $dcrResourceId = $OnboardParameters.DcrResourceId
     $userAssignedManagedIdentityObject = $OnboardParameters.UserAssignedIdentityObject
     $triggerVmssManualVMUpdate = $OnboardParameters.TriggerVmssManualVMUpdate
@@ -710,8 +615,10 @@ function Install-DaVmss {
     [CmdletBinding(SupportsShouldProcess = $True, ConfirmImpact = 'Medium')]
     param
     (
-        [Parameter(mandatory = $True)][Object]$VMssObject,
-        [Parameter(mandatory = $False)][Switch]$IsAmaOnboarded,
+        [Parameter(Mandatory = $True)][Object]$VMssObject,
+        [Parameter(mandatory = $True)][hashtable]$DaPublicSettings,
+        [Parameter(mandatory = $True)][String]$DaExtensionType,
+        [Parameter(mandatory = $True)][String]$DaExtensionVersion,
         [Parameter(mandatory = $True)][bool]$TriggerVmssManualVMUpdate
     )
     
@@ -719,23 +626,13 @@ function Install-DaVmss {
     $vmssResourceGroupName = $VMssObject.ResourceGroupName
     # Use supplied name unless already deployed, use same name
     $extensionName = $daExtensionName
-    $osType = $VMssObject.VirtualMachineProfile.StorageProfile.OsDisk.OsType
-    $extensionType = $daExtensionMap.($osType.ToString())
-    $extension = Get-VMssExtension -VMssObject $VMssObject -ExtensionType $extensionType 
+    $extension = Get-VMssExtension -VMssObject $VMssObject -ExtensionType $DaExtensionType
      
     if ($extension) {
         $extensionName = $extension.Name
-        Write-Verbose "$vmssName ($vmssResourceGroupName) : Extension $extensionType with name $extensionName already installed."
-        if (!$IsAmaOnboarded) {
-            return
-        } else {
-            if ($extension.Settings.ToString() -match $processAndDependenciesPublicSettingsRegexPattern -and $matches[1] -eq "true") {
-                Write-Output "$vmssName ($vmssResourceGroupName) : Extension $extensionType already configured with AMA enabled.`n $($extension.PublicSettings)"
-            } else {
-                $extension.Settings = $processAndDependenciesPublicSettings
-                $VMssObject = Update-VMssExtension -VMssObject $VMssObject
-            }
-        }
+        Write-Verbose "$vmssName ($vmssResourceGroupName) : Extension $DaExtensionType with name $extensionName already installed."
+        $extension.Settings = $processAndDependenciesPublicSettings
+        $VMssObject = Update-VMssExtension -VMssObject $VMssObject
     } else {
         if (!($PSCmdlet.ShouldProcess("$vmssName ($vmssResourceGroupName)", "install extension $extensionType"))) {
             return
@@ -748,11 +645,9 @@ function Install-DaVmss {
             Name                   = $extensionName
             TypeHandlerVersion     = $daExtensionVersionMap.($osType.ToString())
             AutoUpgradeMinorVersion = $True
+            Setting                 = $processAndDependenciesPublicSettings
         }
 
-        if ($IsAmaOnboarded) {
-            $parameters.Add("Setting", $processAndDependenciesPublicSettings)
-        }
         $VMssObject = Add-AzVmssExtension @parameters
         Write-Output "$vmssName ($vmssResourceGroupName) : $extensionType added"
         $VMssObject = Update-VMssExtension -VMssObject $VMssObject
@@ -821,8 +716,7 @@ function Install-MmaVm {
     param
     (
         [Parameter(mandatory = $True)][Object]$VMObject,
-        [Parameter(mandatory = $True)][String]$WorkspaceId,
-        [Parameter(mandatory = $True)][String]$WorkspaceKey,
+        [Parameter(mandatory = $True)][String]$MmaExtensionType,
         [Parameter(mandatory = $False)][Bool]$ReInstall
     )
 
@@ -831,29 +725,17 @@ function Install-MmaVm {
     $vmResourceGroupName = $VMObject.ResourceGroupName
     # Use supplied name unless already deployed, use same name
     $extensionName = $mmaExtensionName
-    $osType = $VMObject.StorageProfile.OsDisk.OsType
-    $extensionType = $mmaExtensionMap.($osType.ToString())
-    $extension = Get-VMExtension -VMObject $VMObject -ExtensionType $extensionType
-    $mmaPublicSettings = @{"workspaceId" = $WorkspaceId; "stopOnMultipleConnections" = "true"}
-    $mmaProtectedSettings = @{"workspaceKey" = $WorkspaceKey}
-    $osType = $VMObject.StorageProfile.OsDisk.OsType
+    $extension = Get-VMExtension -VMObject $VMObject -ExtensionType $MmaExtensionType
 
     if ($extension) {
         $extensionName = $extension.Name
-        Write-Verbose "$vmName ($vmResourceGroupName) : Extension $extensionType with name $extensionName already installed. Provisioning State: $($extension.ProvisioningState)"
-        if ($extension.PublicSettings) {
-            if ($extension.PublicSettings.Contains($MmaPublicSettings.workspaceId)) {
-                Write-Output "$vmName ($vmResourceGroupName) : Extension $extensionType already configured for this workspace. Provisioning State: $($extension.ProvisioningState) `n $($extension.PublicSettings)"
-                return
-            } else {
-                if (!$ReInstall) {
-                    Write-Output "$vmName ($vmResourceGroupName) : Extension $extensionType present, run with -ReInstall again to move to new workspace. Provisioning State: $($extension.ProvisioningState) `n $($extension.PublicSettings)"
-                    return
-                }
-            }
+        Write-Verbose "$vmName ($vmResourceGroupName) : Extension $MmaExtensionType with name $extensionName already installed. Provisioning State: $($extension.ProvisioningState)"    
+        if (!$ReInstall) {
+            Write-Output "$vmName ($vmResourceGroupName) : Extension $extensionType present, run with -ReInstall again to move to new workspace. Provisioning State: $($extension.ProvisioningState) `n $($extension.PublicSettings)"
+            return
         }
     }
-
+    
     if ($extensionType -eq "OmsAgentForLinux") {
         Write-Output "$vmName ($vmResourceGroupName) : ExtensionType $extensionType does not support updating workspace. An uninstall followed by re-install is required"
     }
