@@ -176,45 +176,51 @@ $ErrorActionPreference = "Stop"
 $isAma = if ($DcrResourceId) {"True"} else {"False"}
 
 class FatalException : System.Exception {
-    FatalException($vmObject, $errorMessage) : base((FormatMessageWithHeader -VMObject $vmObject -Message $errorMessage)) {}
     FatalException($errorMessage) : base($errorMessage) {}
     FatalException($errorMessage, $innerException) : base($errorMessage, $innerException) {}
 }
 
 class UnknownException : System.Exception {
-    UnknownException($vmObject, $errorMessage, $innerException) : base((FormatMessageWithHeader -VMObject $vmObject -Message $errorMessage), $innerException) {}
+    UnknownException($errorMessage, $innerException) : base($errorMessage, $innerException) {}
+    UnknownException($vmObject, $errorMessage, $innerException) : base((ExtractVmInformation -VMObject $vmObject -Message $errorMessage), $innerException) {}
 }
 
 class VirtualMachineDoesNotExist : System.Exception {
-    VirtualMachineDoesNotExist ($vmObject, $errorMessage, $innerException) : base((FormatMessageWithHeader -VMObject $vmObject -Message $errorMessage) , $innerException) {}
+    $errorMessage = "Virtual Machine does not exist or unaccessible."
+    VirtualMachineDoesNotExist ($vmObject, $innerException) : base((ExtractVmInformation -VMObject $vmObject -Message $errorMessage) , $innerException) {}
 }
 
 class VirtualMachineScaleSetDoesNotExist : System.Exception {
-    VirtualMachineScaleSetDoesNotExist ($vmssObject, $errorMessage, $innerException) : base((FormatMessageWithHeader -VMObject $vmssObject -Message $errorMessage) , $innerException) {}
+    $errorMessage = "Virtual Machine Scale Set does not exist or unaccessible."
+    VirtualMachineScaleSetDoesNotExist ($vmssObject, $innerException) : base((ExtractVmInformation -VMObject $vmssObject -Message $errorMessage) , $innerException) {}
+}
+
+class ResourceGroupDoesNotExist : System.Exception {
+    ResourceGroupDoesNotExist ($vmObject, $innerException) : base("$($vmObject.ResourceGroupName) : Does not exist or unaccessible." , $innerException) {}
 }
 
 class OperationFailed : System.Exception {
-    OperationFailed($errorMessage) : base($errorMessage) {}
+    OperationFailed($vmObject, $errorMessage) : base((ExtractVmInformation -VMObject $vmObject -Message $errorMessage)) {}
 }
 
 class DataCollectionRuleForbidden : FatalException {
-    DataCollectionRuleForbidden($errorMessage, $innerException) : base($errorMessage, $innerException) {}
+    DataCollectionRuleForbidden($dcrResourceId, $innerException) : base("$dcrResourceId : Access to data collection rule is forbidden", $innerException) {}
 }
 
 class DataCollectionRuleDoesNotExist : FatalException {
-    DataCollectionRuleDoesNotExist($errorMessage, $innerException) : base($errorMessage, $innerException) {}
+    DataCollectionRuleDoesNotExist($dcrResourceId, $innerException) : base("$dcrResourceId : Data Collection Rule does not exist.", $innerException) {}
 }
 
 class DataCollectionRuleIncorrect : FatalException {
-    DataCollectionRuleIncorrect($errorMessage, $innerException) : base($errorMessage, $innerException) {}
+    DataCollectionRuleIncorrect($dcrResourceId, $innerException) : base("$dcrResourceId : Data Collection Rule does not exist." , $innerException) {}
 }
 
 class PolicyAssignmentDoesNoExist : FatalException {
-    PolicyAssignmentDoesNoExist($errorMessage, $innerException) : base($errorMessage, $innerException) {}
+    PolicyAssignmentDoesNoExist($policyAssignmentName, $innerException) : base("$policyAssignmentName : Policy Assignment does not exist.", $innerException) {}
 }
 
 class UserAssignedManagedIdentityDoesNotExist : FatalException {
-    UserAssignedManagedIdentityDoesNotExist($errorMessage, $innerException) : base($errorMessage, $innerException) {}
+    UserAssignedManagedIdentityDoesNotExist($uamiobj, $innerException) : base("$($uamiobj.Name) : User Assigned Managed Identity doesn't Exist or unaccessible.", $innerException) {}
 }
 
 class ResourceGroupTableElement {
@@ -270,7 +276,7 @@ function GetVMExtension {
         } elseif ($errorCode -eq "ResourceGroupNotFound") {
             throw [ResourceGroupDoesNotExist]::new($VMObject,$_.Exception)   
         } else {
-            throw [UnknownException]::new("Failed to lookup extension with type = $ExtensionType, publisher = $ExtensionPublisher", $_.Exception)
+            throw [UnknownException]::new($VMObject, "Failed to lookup extension with type = $ExtensionType, publisher = $ExtensionPublisher", $_.Exception)
         }
     }
     
@@ -328,7 +334,7 @@ function RemoveVMExtension {
             throw [ResourceGroupDoesNotExist]::new($VMObject,$_.Exception)       
         } 
         
-        throw [UnknownException]::new("Failed to remove extension $ExtensionName", $_.Exception)
+        throw [UnknownException]::new($VMObject, "Failed to remove extension $ExtensionName", $_.Exception)
     }
     
     if ($removeResult.IsSuccessStatusCode) {
@@ -336,7 +342,7 @@ function RemoveVMExtension {
         return
     }
 
-    throw [OperationFailed]::new("Failed to remove extension $ExtensionName. StatusCode = $($removeResult.StatusCode). ReasonPhrase = $($removeResult.ReasonPhrase)")
+    throw [OperationFailed]::new($VMObject, "Failed to remove extension $ExtensionName. StatusCode = $($removeResult.StatusCode). ReasonPhrase = $($removeResult.ReasonPhrase)")
 }
 
 function NewDCRAssociation {
@@ -379,17 +385,17 @@ function NewDCRAssociation {
         $exceptionMessage = $_.Exception.InnerException.Message
         
         if ($exceptionMessage.Contains('Invalid format of the resource identifier')) {
-            throw [DataCollectionRuleIncorrect]::new("$DcrResourceId : Data Collection Rule does not exist.")
+            throw [DataCollectionRuleIncorrect]::new($DcrResourceId)
         } elseif (!($exceptionMessage -match $invalidOperationParserPattern)){
             throw [UnknownException]::new($VMObject, "Failed to create data collection rule association with $DcrResourceId", $_.Exception)
         } else {
             $statusCode = $matches[1]
             if ($statusCode -eq 'BadRequest') {
-                throw [DataCollectionRuleDoesNotExist]::new("$DcrResourceId : Data Collection Rule does not exist.", $_.Exception)
+                throw [DataCollectionRuleDoesNotExist]::new($DcrResourceId, $_.Exception)
             } elseif ($statusCode -eq 'NotFound') {
                 throw [VirtualMachineDoesNotExist]::new($VMObject, $_.Exception)
             } elseif ($statusCode -eq 'Forbidden') {
-                throw [DataCollectionRuleForbidden]::new("$DcrResourceId : Access to data collection rule is forbidden", $_.Exception)     
+                throw [DataCollectionRuleForbidden]::new($DcrResourceId, $_.Exception)     
             } else {
                 throw [UnknownException]::new($VMObject, "Failed to create data collection rule association with with $DcrResourceId. StatusCode = $statusCode", $_.Exception)
             }
@@ -1022,7 +1028,7 @@ function AssignVmssManagedIdentity {
         } catch [Microsoft.Azure.Commands.Compute.Common.ComputeCloudException] {
             $errorCode = ExtractCloudExceptionMessage($_)
             if ($errorCode -eq "FailedIdentityOperation") {
-                throw [UserAssignedManagedIdentityDoesNotExist]::new($VMssObject, "User Assigned Managed Identity $userAssignedManagedIdentityName doesn't Exist or unaccessible.", $_.Exception)
+                throw [UserAssignedManagedIdentityDoesNotExist]::new($UserAssignedManagedIdentityObject, $_.Exception)
             } elseif($errorCode -eq "ResourceGroupNotFound") {
                 throw [ResourceGroupDoesNotExist]::new($VMssObject, $_)       
             } elseif ($errorCode -eq "InvalidParameter") {
@@ -1077,7 +1083,7 @@ function AssignVmUserManagedIdentity {
     } catch [Microsoft.Azure.Commands.Compute.Common.ComputeCloudException] {
         $errorCode = ExtractCloudExceptionMessage($_)
         if ($errorCode -eq "FailedIdentityOperation") {
-            throw [UserAssignedManagedIdentityDoesNotExist]::new("User Assigned Managed Identity $userAssignedManagedIdentityName doesn't Exist or unaccessible.", $_.Exception)
+            throw [UserAssignedManagedIdentityDoesNotExist]::new($userAssignedManagedIdentityName, $_.Exception)
         } elseif($errorCode -eq "ResourceGroupNotFound") {
             throw [ResourceGroupDoesNotExist]::new($VMObject, $_.Exception)       
         } elseif ($errorCode -eq "InvalidParameter") {
@@ -1088,13 +1094,13 @@ function AssignVmUserManagedIdentity {
     }
 
     if (!($result.IsSuccessStatusCode)) {
-        throw [OperationFailed]::new("($vmResourceGroup) $vmName, $userAssignedManagedIdentityName : Failed to assign user assigned managed identity. StatusCode : $($result.StatusCode). ReasonPhrase : $($result.ReasonPhrase)")
+        throw [OperationFailed]::new($VMObject, "Failed to assign user assigned managed identity $userAssignedManagedIdentityName. StatusCode : $($result.StatusCode). ReasonPhrase : $($result.ReasonPhrase)")
     }
     
     Write-Output "($vmResourceGroup) $vmName, $userAssignedManagedIdentityName : Successfully assigned managed identity"
 }
 
-function FormatMessageWithHeader {
+function ExtractVmInformation {
     <#
 	.SYNOPSIS
 	Format VM/VMSS Information for messages
@@ -1121,9 +1127,9 @@ function ScriptLog {
     )
 
     if ($Verbose) {
-        Write-Verbose (FormatMessageWithHeader -VMObject $VMObject + $Message)    
+        Write-Verbose (ExtractVmInformation -VMObject $VMObject + $Message)    
     } else {
-        Write-Output (FormatMessageWithHeader -VMObject $VMObject + $Message)
+        Write-Output (ExtractVmInformation -VMObject $VMObject + $Message)
     }
 }
 
@@ -1177,7 +1183,7 @@ function SetManagedIdentityRolesAma {
             if ($excepMessage.Contains('Conflict')) {
                 Write-Verbose ("$userAssignedManagedIdentityName : $role has been assigned already")
             } elseif ($excepMessage.Contains('BadRequest')) {
-                throw [FatalException]::new("$userAssignedManagedIdentityName : User Assigned Managed Identity doesn't Exist or unaccessible.", $_.Exception) 
+                throw [UserAssignedManagedIdentityDoesNotExist]::new($UserAssignedManagedIdentity, $_.Exception) 
             } elseif ($excepMessage.Contains('NotFound')) {
                 throw [FatalException]::new("$TargetScope : Target Scope does not exist",$_.Exception) 
             } else {
@@ -1321,7 +1327,7 @@ try {
         try {
             $complianceResults = Get-AzPolicyState -PolicyAssignmentName $PolicyAssignmentName
         } catch [Microsoft.Azure.Commands.ResourceManager.Cmdlets.Entities.ErrorResponses.ErrorResponseMessageException] {
-            throw [PolicyAssignmentDoesNoExist]::new("$PolicyAssignmentName : Policy Assignment does not exist.",$_)
+            throw [PolicyAssignmentDoesNoExist]::new($PolicyAssignmentName ,$_)
         }
 
         foreach ($result in $complianceResults) {
