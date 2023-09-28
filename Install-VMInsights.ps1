@@ -142,17 +142,38 @@ param(
     
     [Parameter(mandatory = $False, ParameterSetName = 'NonPolicyAssignment')][String]$ResourceGroup,
     [Parameter(mandatory = $False, ParameterSetName = 'NonPolicyAssignment')][String]$Name = "*",
-    
     [Parameter(mandatory = $False, ParameterSetName = 'PolicyAssignment')][String]$PolicyAssignmentName,
     
-    [Parameter(mandatory = $False, ParameterSetName = 'AzureMonitoringAgent')][Switch]$ProcessAndDependencies,
-    [Parameter(mandatory = $True,  ParameterSetName = 'AzureMonitoringAgent')][String]$DcrResourceId,
-    [Parameter(mandatory = $True,  ParameterSetName = 'AzureMonitoringAgent')][String]$UserAssignedManagedIdentityResourceGroup,
-    [Parameter(mandatory = $True,  ParameterSetName = 'AzureMonitoringAgent')][String]$UserAssignedManagedIdentityName,
+    
+    [Parameter(mandatory = $False, ParameterSetName = 'AzureMonitoringAgent')]
+    [Parameter(mandatory = $False, ParameterSetName = 'NonPolicyAssignment')]
+    [Parameter(mandatory = $False, ParameterSetName = 'PolicyAssignment')]
+    [Switch]$ProcessAndDependencies,
+    [Parameter(mandatory = $True, ParameterSetName = 'AzureMonitoringAgent')]
+    [Parameter(mandatory = $True, ParameterSetName = 'NonPolicyAssignment')]
+    [Parameter(mandatory = $True, ParameterSetName = 'PolicyAssignment')]
+    [String]$DcrResourceId,
+    [Parameter(mandatory = $True, ParameterSetName = 'AzureMonitoringAgent')]
+    [Parameter(mandatory = $True, ParameterSetName = 'NonPolicyAssignment')]
+    [Parameter(mandatory = $True, ParameterSetName = 'PolicyAssignment')]
+    [String]$UserAssignedManagedIdentityResourceGroup,
+    [Parameter(mandatory = $True, ParameterSetName = 'AzureMonitoringAgent')]
+    [Parameter(mandatory = $True, ParameterSetName = 'NonPolicyAssignment')]
+    [Parameter(mandatory = $True, ParameterSetName = 'PolicyAssignment')]
+    [String]$UserAssignedManagedIdentityName,
 
-    [Parameter(mandatory = $True,  ParameterSetName = 'LogAnalyticsAgent')][String]$WorkspaceId,
-    [Parameter(mandatory = $True,  ParameterSetName = 'LogAnalyticsAgent')][String]$WorkspaceKey,
-    [Parameter(mandatory = $False, ParameterSetName = 'LogAnalyticsAgent')][Switch]$ReInstall
+    [Parameter(mandatory = $True,  ParameterSetName = 'LogAnalyticsAgent')]
+    [Parameter(mandatory = $True, ParameterSetName = 'PolicyAssignment')]
+    [Parameter(mandatory = $True, ParameterSetName = 'NonPolicyAssignment')]
+    [String]$WorkspaceId,
+    [Parameter(mandatory = $True,  ParameterSetName = 'LogAnalyticsAgent')]
+    [Parameter(mandatory = $True, ParameterSetName = 'PolicyAssignment')]
+    [Parameter(mandatory = $True, ParameterSetName = 'NonPolicyAssignment')]
+    [String]$WorkspaceKey,
+    [Parameter(mandatory = $False, ParameterSetName = 'LogAnalyticsAgent')]
+    [Parameter(mandatory = $False, ParameterSetName = 'NonPolicyAssignment')]
+    [Parameter(mandatory = $False, ParameterSetName = 'PolicyAssignment')]
+    [Switch]$ReInstall
     )
 
 # Log Analytics Extension constants
