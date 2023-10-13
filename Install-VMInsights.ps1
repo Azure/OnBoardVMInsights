@@ -524,6 +524,8 @@ function NewDCRAssociationVm {
     if (($null -eq $dcrassociation) -or ($dcrassociation -is [Microsoft.Azure.Management.Monitor.Models.ErrorResponseCommonV2Exception])) {
         throw [VirtualMachineUnknownException]::new($VMObject, "Failed to create data collection rule association with $DcrResourceId", $dcrassociation)
     }
+
+    Write-Host "$vmlogheader : Successfully created data collection rule association $dcrassociationName"
 }
 
 function NewDCRAssociationVmss {
