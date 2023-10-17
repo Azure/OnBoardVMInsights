@@ -181,6 +181,7 @@ class VirtualMachineDoesNotExist : VirtualMachineException {
 class VirtualMachineOperationFailed : VirtualMachineException {
     VirtualMachineOperationFailed($vmObject, $errorMessage) : base($vmObject, $errorMessage, $null) {}
 }
+
 class VirtualMachinePoweredDown : VirtualMachineException {
     VirtualMachinePoweredDown($vmObject, $errorMessage) : base($vmObject, "Virtual Machine is powered down", $null) {}
 }
@@ -195,10 +196,6 @@ class VirtualMachineScaleSetDoesNotExist : VirtualMachineScaleSetException {
 
 class VirtualMachineScaleSetOperationFailed : VirtualMachineScaleSetException {
     VirtualMachineScaleSetOperationFailed($vmssObject, $errorMessage) : base($vmssObject, $errorMessage, $null) {}
-}
-
-class VirtualMachineScaleSetPoweredDown : VirtualMachineScaleSetException {
-    VirtualMachineScaleSetPoweredDown($vmssObject, $errorMessage) : base($vmssObject, "VMSS is powered down", $null) {}
 }
 
 class DataCollectionRuleForbidden : FatalException {
@@ -855,7 +852,7 @@ function OnboardVmiWithAmaVmss {
     NewDCRAssociationVmss -VMssObject $VMssObject
     return InstallVMssExtension -VMssObject $VMssObject `
                                 -ExtensionName $amaExtensionName `
-                                -Settings $processAndDependenciesPublicSettings `
+                                -Settings $amaPublicSettings `
                                 -ExtensionConstantProperties $amaExtensionMap[$VMssObject.VirtualMachineProfile.StorageProfile.OsDisk.OsType.ToString()]
 }
 
@@ -874,7 +871,7 @@ function SetManagedIdentityRoles {
     $userAssignedManagedIdentityId = $UserAssignedManagedIdentityObject.principalId
     $roleDefinitionList = @("Virtual Machine Contributor", "Azure Connected Machine Resource Administrator", "Log Analytics Contributor") 
     
-    if (!($PSCmdlet.ShouldProcess($ResourceGroupId, "assign roles $roleDefinitionList to user assigned managed identity : $userAssignedManagedIdentityName"))) {
+    if (!($PSCmdlet.ShouldProcess($ResourceGroupId, "Assign roles $roleDefinitionList to user assigned managed identity : $userAssignedManagedIdentityName"))) {
         return
     }
 
@@ -884,7 +881,7 @@ function SetManagedIdentityRoles {
         } else {
             Write-Verbose "Scope $ResourceGroupId, $role : assigning role"
             New-AzRoleAssignment  -ObjectId $userAssignedManagedIdentityId -RoleDefinitionName $role -Scope $ResourceGroupId
-            Write-Verbose "Scope $ResourceGroupId : role assignment for $userAssignedManagedIdentityName with $role succeeded"
+            Write-Host "Scope $ResourceGroupId : role assignment for $userAssignedManagedIdentityName with $role succeeded"
         }
     }
 }
@@ -1139,7 +1136,7 @@ function AssignVmUserManagedIdentity {
         return $VMObject
     }
 
-    Write-Host "$vmlogheader : Assigning with managed identity $userAssignedManagedIdentityName"
+    Write-Host "$vmlogheader : Assigning managed identity $userAssignedManagedIdentityName"
 
     try {
         $result = Update-AzVM -VM $VMObject `
@@ -1199,7 +1196,7 @@ function SetManagedIdentityRolesAma {
         if ($excepMessage.Contains('NotFound')) {
             [ResourceGroupDoesNotExist]::new($($VMObject.ResourceGroupName))
         }
-        Write-Host "$ResourceGroupId : Failed to assign managed identity to targetScope. ExceptionInfo = $excepMessage"
+        Write-Host "$ResourceGroupId : Failed to assign managed identity to resource-group. ExceptionInfo = $excepMessage"
     }
 }
 
