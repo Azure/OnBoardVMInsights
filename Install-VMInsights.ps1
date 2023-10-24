@@ -765,7 +765,8 @@ function OnboardVmiWithLaVmWithReInstall {
         if ($osType -eq "Linux" -and $extension.PublicSettings) {
             $extensionPublicSettingsJson = $extension.PublicSettings | ConvertFrom-Json
             if ($extensionPublicSettingsJson.workspaceId -ne $laPublicSettings.workspaceId) {
-                Write-Host "$vmlogheader : Extension $extensionName does not support updating workspace. An uninstall followed by re-install is required"
+                Write-Host "$vmlogheader : Extension $extensionName does not support updating workspace. An uninstall followed by re-install is required."
+
                 if (!(RemoveVMExtension -VMObject $VMObject `
                                     -ExtensionName $extensionName)) {
                     Write-Host "$vmlogheader : Extension $extensionName was not chosen to be removed. Skipping Re-install"
