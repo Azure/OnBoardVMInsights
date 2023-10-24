@@ -101,15 +101,15 @@ User Assigned Managed Identity (UAMI) name .
 
 
 .EXAMPLE
-Install-VMInsights.ps1 -WorkspaceRegion eastus -WorkspaceId <WorkspaceId> -WorkspaceKey <WorkspaceKey> -SubscriptionId <SubscriptionId> -ResourceGroup <ResourceGroup>
+Install-VMInsights.ps1 -WorkspaceId <WorkspaceId> -WorkspaceKey <WorkspaceKey> -SubscriptionId <SubscriptionId> -ResourceGroup <ResourceGroup>
 Install for all VM's in a Resource Group in a subscription
 
 .EXAMPLE
-Install-VMInsights.ps1 -WorkspaceRegion eastus -WorkspaceId <WorkspaceId> -WorkspaceKey <WorkspaceKey> -SubscriptionId <SubscriptionId> -ResourceGroup <ResourceGroup> -ReInstall
+Install-VMInsights.ps1 -WorkspaceId <WorkspaceId> -WorkspaceKey <WorkspaceKey> -SubscriptionId <SubscriptionId> -ResourceGroup <ResourceGroup> -ReInstall
 Specify to ReInstall extensions even if already installed, for example to update to a different workspace
 
 .EXAMPLE
-Install-VMInsights.ps1 -WorkspaceRegion eastus -WorkspaceId <WorkspaceId> -WorkspaceKey <WorkspaceKey> -SubscriptionId <SubscriptionId> -PolicyAssignmentName a4f79f8ce891455198c08736 -ReInstall
+Install-VMInsights.ps1 -WorkspaceId <WorkspaceId> -WorkspaceKey <WorkspaceKey> -SubscriptionId <SubscriptionId> -PolicyAssignmentName a4f79f8ce891455198c08736 -ReInstall
 Specify to use a PolicyAssignmentName for source, and to ReInstall (move to a new workspace)
 
 .EXAMPLE
@@ -396,6 +396,52 @@ function DisplayException {
     }
 }
 
+function PopulateRgHashTableVm {
+    <#
+    .SYNOPSIS
+    Populate Resource group hash table for VMs
+    #>
+    param(
+        [Parameter(Mandatory=$True)]
+        [Hashtable]
+        $Rghashtable,
+        [Parameter(Mandatory=$True)]
+        [Microsoft.Azure.Commands.Compute.Models.PSVirtualMachine]
+        $VMObject
+    )
+
+    $vmResourceGroupName = $VMObject.ResourceGroupName
+    $rgTableElemObject = $Rghashtable[$vmResourceGroupName]
+    if ($null -eq $rgTableElemObject) {
+        $rgTableElemObject = [ResourceGroupTableElement]::new()
+        $Rghashtable.Add($vmResourceGroupName,$rgTableElemObject)
+    }
+    $rgTableElemObject.VirtualMachineList.Add($VMObject)  > $null
+}
+
+function PopulateRgHashTableVmss {
+    <#
+    .SYNOPSIS
+    Populate Resource group hash table for VMSS
+    #>
+    param(
+        [Parameter(Mandatory=$True)]
+        [Hashtable]
+        $Rghashtable,
+        [Parameter(Mandatory=$True)]
+        [Microsoft.Azure.Commands.Compute.Automation.Models.PSVirtualMachineScaleSet]
+        $VMssObject
+    )
+
+    $vmssResourceGroupName = $VMssObject.ResourceGroupName
+    $rgTableElemObject = $Rghashtable[$vmssResourceGroupName]
+    if ($null -eq $rgTableElemObject) {
+        $rgTableElemObject = [ResourceGroupTableElement]::new()
+        $Rghashtable.Add($vmssResourceGroupName,$rgTableElemObject)
+    }
+    $rgTableElemObject.VirtualMachineScaleSetList.Add($VMssObject)  > $null
+}
+
 function GetVMExtension {
     <#
 	.SYNOPSIS
@@ -505,6 +551,9 @@ function RemoveVMExtension {
     throw [VirtualMachineOperationFailed]::new($VMObject, "Failed to remove extension $ExtensionName. StatusCode = $($removeResult.StatusCode). ReasonPhrase = $($removeResult.ReasonPhrase)")
 }
 
+#VMI supports Customers onboarding DCR from different subscription
+#Cannot validate DCRResourceId as parameter set ByResourceId will be deprecated for - Get-AzDataCollectionRule
+        
 function NewDCRAssociationVm {
     <#
 	.SYNOPSIS
@@ -941,7 +990,7 @@ function SetManagedIdentityRoles {
             throw [ResourceGroupDoesNotExist]::new($($VMObject.ResourceGroupName))
         }
     }
-    Write-Host "Scope $ResourceGroupId : Role assignment for $uamiName with $Role succeeded"
+    Write-Verbose "Scope $ResourceGroupId : Role assignment for $uamiName with $Role succeeded"
 }
 
 function SetVMExtension {
@@ -1259,52 +1308,6 @@ function SetManagedIdentityRolesAma {
     }
 }
 
-function PopulateRgHashTableVm {
-    <#
-    .SYNOPSIS
-    Populate Resource group hash table for VMs
-    #>
-    param(
-        [Parameter(Mandatory=$True)]
-        [Hashtable]
-        $Rghashtable,
-        [Parameter(Mandatory=$True)]
-        [Microsoft.Azure.Commands.Compute.Models.PSVirtualMachine]
-        $VMObject
-    )
-
-    $vmResourceGroupName = $VMObject.ResourceGroupName
-    $rgTableElemObject = $Rghashtable[$vmResourceGroupName]
-    if ($null -eq $rgTableElemObject) {
-        $rgTableElemObject = [ResourceGroupTableElement]::new()
-        $Rghashtable.Add($vmResourceGroupName,$rgTableElemObject)
-    }
-    $rgTableElemObject.VirtualMachineList.Add($VMObject)  > $null
-}
-
-function PopulateRgHashTableVmss {
-    <#
-    .SYNOPSIS
-    Populate Resource group hash table for VMSS
-    #>
-    param(
-        [Parameter(Mandatory=$True)]
-        [Hashtable]
-        $Rghashtable,
-        [Parameter(Mandatory=$True)]
-        [Microsoft.Azure.Commands.Compute.Automation.Models.PSVirtualMachineScaleSet]
-        $VMssObject
-    )
-
-    $vmssResourceGroupName = $VMssObject.ResourceGroupName
-    $rgTableElemObject = $Rghashtable[$vmssResourceGroupName]
-    if ($null -eq $rgTableElemObject) {
-        $rgTableElemObject = [ResourceGroupTableElement]::new()
-        $Rghashtable.Add($vmssResourceGroupName,$rgTableElemObject)
-    }
-    $rgTableElemObject.VirtualMachineScaleSetList.Add($VMssObject)  > $null
-}
-
 #
 # Main Script
 #
@@ -1344,23 +1347,12 @@ try {
     if ($ResourceGroup) {
         try { 
             #Existence test only.
-            Get-AzResourceGroup -Name $ResourceGroup
+            Get-AzResourceGroup -Name $ResourceGroup >$null
         } catch { 
             throw [FatalException]::new("$ResourceGroup : Invalid ResourceGroup", $_.Exception)
         }
     }
-
-    if ($UserAssignedManagedIdentityName) {
-        try {
-            Write-Verbose "Validating ($UserAssignedManagedIdentityResourceGroup, $UserAssignedManagedIdentityName)"
-            Set-Variable -Name UserAssignedManagedIdentityObject `
-                    -Option Constant `
-                    -Value (Get-AzUserAssignedIdentity -Name $UserAssignedManagedIdentityName -ResourceGroupName $UserAssignedManagedIdentityResourceGroup)   
-        } catch {
-            throw [FatalException]::new($_.Exception.Message, $_.Exception)
-        }
-    }
- 
+    
     if (!$isAma) {
         #Cannot validate Workspace existence with WorkspaceId, WorkspaceKey parameters.
         Set-Variable -Name laPublicSettings -Option Constant -Value @{"workspaceId" = $WorkspaceId; "stopOnMultipleConnections" = "true"}
@@ -1379,8 +1371,15 @@ try {
                                                                                       -ExtensionConstantProperties $daExtensionConstantsMap[$vmssObj.VirtualMachineProfile.StorageProfile.OsDisk.OsType.ToString()]}
         Set-Variable -Name sb_roles -Option Constant -Value $sb_nop_block_roles
     } else {
-        #VMI supports Customers onboarding DCR from different subscription
-        #Cannot validate DCRResourceId as parameter set ByResourceId will be deprecated for - Get-AzDataCollectionRule
+        try {
+            Write-Verbose "Validating ($UserAssignedManagedIdentityResourceGroup, $UserAssignedManagedIdentityName)"
+            Set-Variable -Name UserAssignedManagedIdentityObject `
+                    -Option Constant `
+                    -Value (Get-AzUserAssignedIdentity -Name $UserAssignedManagedIdentityName -ResourceGroupName $UserAssignedManagedIdentityResourceGroup)   
+        } catch {
+            throw [FatalException]::new($_.Exception.Message, $_.Exception)
+        }
+        
         Set-Variable -Name amaPublicSettings -Option Constant -Value `
                    @{
                         'authentication' = @{ 
@@ -1393,15 +1392,17 @@ try {
         Set-Variable -Name sb_vm -Option Constant -Value { param($vmObj) OnboardVmiWithAmaVm -VMObject $vmObj}
         Set-Variable -Name sb_vmss -Option Constant -Value { param($vmssObj) OnboardVmiWithAmaVmss -VMssObject $vmssObj}
         
-        if ($ProcessAndDependencies) {
-            Set-Variable -Name processAndDependenciesPublicSettings -Option Constant -Value @{"enableAMA" = "true"}
-            Set-Variable -Name sb_da -Option Constant -Value {param($vmObj) OnboardDaVm -VMObject $vmObj -Settings $processAndDependenciesPublicSettings}
-            Set-Variable -Name sb_da_vmss -Option Constant -Value { param($vmssObj) SetVMssExtension -VMssObject $vmssObj `
-                                                                                      -ExtensionName $daDefaultExtensionName `
-                                                                                      -Settings $processAndDependenciesPublicSettings -ExtensionConstantProperties $daExtensionConstantsMap[$vmssObj.VirtualMachineProfile.StorageProfile.OsDisk.OsType.ToString()]}
-        } else {
+        if (!$ProcessAndDependencies) {
             Set-Variable -Name sb_da -Option Constant -Value $sb_nop_block
             Set-Variable -Name sb_da_vmss -Option Constant -Value $sb_nop_block
+        } else {
+            Set-Variable -Name processAndDependenciesPublicSettings -Option Constant -Value @{"enableAMA" = "true"}
+            Set-Variable -Name sb_da -Option Constant -Value {param($vmObj) OnboardDaVm -VMObject $vmObj `
+                                                                                        -Settings $processAndDependenciesPublicSettings}
+            Set-Variable -Name sb_da_vmss -Option Constant -Value { param($vmssObj) SetVMssExtension -VMssObject $vmssObj `
+                                                                                      -ExtensionName $daDefaultExtensionName `
+                                                                                      -Settings $processAndDependenciesPublicSettings `
+                                                                                      -ExtensionConstantProperties $daExtensionConstantsMap[$vmssObj.VirtualMachineProfile.StorageProfile.OsDisk.OsType.ToString()]}
         }
     
         Set-Variable -Name sb_roles -Option Constant -Value { param($rgName) SetManagedIdentityRolesAma -ResourceGroupName $rgName}
@@ -1484,11 +1485,11 @@ try {
         exit 1
     }
     
-    ForEach ($rg in $Rghashtable.Keys) {
+    ForEach ($rg in ($Rghashtable.Keys | Sort-Object)) {
         try {
             &$sb_roles -rgName $rg
-
-            foreach ($vm in $Rghashtable[$rg].VirtualMachineList) {
+            
+            foreach ($vm in ($Rghashtable[$rg].VirtualMachineList | Sort-Object -Property $_.Name)) {
                 try {
                     $vm = &$sb_vm -vmObj $vm
                     $vm = &$sb_da -vmObj $vm
@@ -1514,7 +1515,7 @@ try {
                 }
             }
 
-            foreach ($vmss in $Rghashtable[$rg].VirtualMachineScaleSetList) {
+            foreach ($vmss in ($Rghashtable[$rg].VirtualMachineScaleSetList | Sort-Object -Property $_.Name)) {
                 try {
                     $vmsslogheader = FormatVmssIdentifier -VMssObject $vmss
                     $vmss = &$sb_vmss -vmssObj $vmss
