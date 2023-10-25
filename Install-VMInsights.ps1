@@ -183,7 +183,7 @@ class VirtualMachineUnknownException : VirtualMachineException {
 
 class VirtualMachineDoesNotExist : VirtualMachineException {
     VirtualMachineDoesNotExist ([Microsoft.Azure.Commands.Compute.Models.PSVirtualMachine]$vmObject,
-                                [Exception]$innerException) : base($vmObject, "Virtual Machine does not exist", $innerException) {}
+                                [Exception]$innerException) : base($vmObject, "VM does not exist", $innerException) {}
 }
 
 class VirtualMachineOperationFailed : VirtualMachineException {
@@ -193,7 +193,7 @@ class VirtualMachineOperationFailed : VirtualMachineException {
 
 class VirtualMachinePoweredDown : VirtualMachineException {
     VirtualMachinePoweredDown([Microsoft.Azure.Commands.Compute.Models.PSVirtualMachine]$vmObject,
-                              [String]$errorMessage) : base($vmObject, "Virtual Machine is powered down", $null) {}
+                              [String]$errorMessage) : base($vmObject, "VM is powered down", $null) {}
 }
 
 class VirtualMachineScaleSetUnknownException : VirtualMachineScaleSetException {
@@ -214,7 +214,7 @@ class VirtualMachineScaleSetOperationFailed : VirtualMachineScaleSetException {
 
 class DataCollectionRuleForbidden : FatalException {
     DataCollectionRuleForbidden([String]$dcrResourceId,
-                                [Exception]$innerException) : base("$dcrResourceId : Access to data collection rule is forbidden", $innerException) {}
+                                [Exception]$innerException) : base("$dcrResourceId : Access to Data Collection Rule is forbidden", $innerException) {}
 }
 
 class DataCollectionRuleDoesNotExist : FatalException {
@@ -309,7 +309,7 @@ function PrintSummaryMessage {
 function ExtractCloudExceptionErrorMessage {
     <#
 	.SYNOPSIS
-	Extract error codes from the Cloud Exception. 
+	Extract error code from the Cloud Exception. 
 	#>
     param
     (
@@ -328,7 +328,7 @@ function ExtractCloudExceptionErrorMessage {
 function ExtractCloudExceptionErrorCode {
     <#
 	.SYNOPSIS
-	Extract error codes from the Cloud Exception. 
+	Extract error code from the Cloud Exception. 
 	#>
     param
     (
@@ -372,11 +372,11 @@ function FormatVmssIdentifier {
 function DisplayException {
     <#
     .SYNOPSIS
-    Renders the given exception on the output.
+    Renders the given exception on the console.
     Does not throw any exceptions.
     #>
     param (
-        [Parameter(Mandatory=$True,Position=0)]
+        [Parameter(Mandatory=$True)]
         [System.Management.Automation.ErrorRecord]
         $ErrorRecord
     )
@@ -399,7 +399,7 @@ function DisplayException {
 function PopulateRgHashTableVm {
     <#
     .SYNOPSIS
-    Populate Resource group hash table for VMs
+    Populate Resource-group hash table for VMs
     #>
     param(
         [Parameter(Mandatory=$True)]
@@ -422,7 +422,7 @@ function PopulateRgHashTableVm {
 function PopulateRgHashTableVmss {
     <#
     .SYNOPSIS
-    Populate Resource group hash table for VMSS
+    Populate Resource-group hash table for VMSS
     #>
     param(
         [Parameter(Mandatory=$True)]
@@ -445,7 +445,7 @@ function PopulateRgHashTableVmss {
 function GetVMExtension {
     <#
 	.SYNOPSIS
-	Return the VM extension of specified Type and Publisher
+	Return the VM extension of specified Type and Publisher.
 	#>
     param
     (
@@ -463,7 +463,6 @@ function GetVMExtension {
         $extensions = Get-AzVMExtension -ResourceGroupName $VMObject.ResourceGroupName -VMName $VMObject.Name
         foreach ($extension in $extensions) {
             if ($extension.ExtensionType -eq $extensionType -and $extension.Publisher -eq $extensionPublisher) {
-                Write-Verbose "$(FormatVmIdentifier -VMObject $VMObject) : Extension with type = $extensionType, publisher = $extensionPublisher found."
                 return $extension
             }
         }
@@ -484,7 +483,7 @@ function GetVMExtension {
 function GetVMssExtension {
     <#
 	.SYNOPSIS
-	Return the VMss extension of specified ExtensionType and ExtensionPublisher
+	Return the VMSS extension of specified ExtensionType and ExtensionPublisher.
 	#>
     param
     (
@@ -502,7 +501,6 @@ function GetVMssExtension {
     $extensions = $VMssObject.VirtualMachineProfile.ExtensionProfile.Extensions 
     foreach ($extension in $extensions) {
         if ($extension.ExtensionType -eq $extensionType -and $extension.Publisher -eq $extensionPublisher) {
-            Write-Verbose "$(FormatVmssIdentifier -VMssObject $VmssObject) : Extension with type = $extensionType , publisher = $extensionPublisher found"
             return $extension
         }
     }
@@ -513,7 +511,7 @@ function GetVMssExtension {
 function RemoveVMExtension {
     <#
 	.SYNOPSIS
-	Remove a VM Extension, used for OMSAgent to switch workspace.
+	Remove a VM Extension.
 	#>
     [CmdletBinding(SupportsShouldProcess = $True, ConfirmImpact = 'High')]
     param
@@ -523,11 +521,17 @@ function RemoveVMExtension {
         $VMObject,
         [Parameter(mandatory = $True)]
         [String]
-        $ExtensionName
+        $ExtensionName,
+        [Parameter(mandatory = $True)]
+        [hashtable]
+        $ExtensionProperties
     )
 
     $vmlogheader = FormatVmIdentifier -VMObject $VMObject
-    if (!$PSCmdlet.ShouldProcess($vmlogheader, "Remove $ExtensionName")) {
+    $extensionType = $ExtensionProperties.ExtensionType
+    $extensionPublisher = $ExtensionProperties.Publisher
+
+    if (!$PSCmdlet.ShouldProcess($vmlogheader, "Remove $ExtensionName, type $extensionType, publisher $extensionPublisher")) {
         return $False
     }
 
@@ -540,24 +544,23 @@ function RemoveVMExtension {
             throw [ResourceGroupDoesNotExist]::new($VMObject.ResourceGroupName,$_.Exception)       
         } 
         
-        throw [VirtualMachineUnknownException]::new($VMObject, "Failed to remove extension $ExtensionName", $_.Exception)
+        throw [VirtualMachineUnknownException]::new($VMObject, "Failed to remove extension $ExtensionName, type $extensionType, publisher $extensionPublisher", $_.Exception)
     }
     
     if ($removeResult.IsSuccessStatusCode) {
-         Write-Host "$vmlogheader : Successfully removed extension $ExtensionName"
+         Write-Host "$vmlogheader : Successfully removed extension $ExtensionName, type $extensionType, publisher $extensionPublisher"
         return $True
     }
 
-    throw [VirtualMachineOperationFailed]::new($VMObject, "Failed to remove extension $ExtensionName. StatusCode = $($removeResult.StatusCode). ReasonPhrase = $($removeResult.ReasonPhrase)")
+    throw [VirtualMachineOperationFailed]::new($VMObject, "Failed to remove extension $ExtensionName, type $extensionType, publisher $extensionPublisher. StatusCode = $($removeResult.StatusCode). ReasonPhrase = $($removeResult.ReasonPhrase)")
 }
 
-#VMI supports Customers onboarding DCR from different subscription
-#Cannot validate DCRResourceId as parameter set ByResourceId will be deprecated for - Get-AzDataCollectionRule
-        
+#VMI supports Customers onboarding DCR from different subscription to which it has access to.
+#Cannot validate DCRResourceId parameter Get-AzDataCollectionRule -ResourceId is getting deprecated.        
 function NewDCRAssociationVm {
     <#
 	.SYNOPSIS
-	Create a new DCRAssociation.
+	Create a new DCRAssociation with VMs.
 	#>
     [CmdletBinding(SupportsShouldProcess = $True, ConfirmImpact = 'Medium')]
     param
@@ -571,11 +574,11 @@ function NewDCRAssociationVm {
     $vmlogheader = FormatVmIdentifier -VMObject $VMObject
     
     try {
-        # A VM may have zero or more Data Collection Rule Associations
+        # A VM may have zero or more Data Collection Rule Associations.
         $dcrAssociationList = Get-AzDataCollectionRuleAssociation -TargetResourceId $vmId 
         foreach ($dcra in $dcrAssociationList) {
             if ($dcra.DataCollectionRuleId -eq $DcrResourceId) {
-                Write-Host "$vmlogheader : Data Collection Rule $($dcra.Name) already associated to the VM"
+                Write-Host "$vmlogheader : Data Collection Rule Id $DcrResourceId already associated to the VM"
                 return
             }
         }
@@ -590,7 +593,7 @@ function NewDCRAssociationVm {
     $dcrAssociationName = "VM-Insights-DCR-Association-$(New-Guid)"
     Write-Host "$vmlogheader : Deploying Data Collection Rule Association $dcrAssociationName"
     try {
-        #New-AzDataCollectionRuleAssociation allows creating multiple DCRAs for the same {DCR,VMSS} combination.
+        #TBF by AMCS team - New-AzDataCollectionRuleAssociation allows creating multiple DCRAs for the same {DCR,VMSS} combination.
         $dcrAssociation = New-AzDataCollectionRuleAssociation -TargetResourceId $vmId -AssociationName $dcrAssociationName -RuleId $DcrResourceId
     } catch [System.Management.Automation.PSInvalidOperationException] {
         $exceptionMessage = $_.Exception.Message
@@ -599,7 +602,7 @@ function NewDCRAssociationVm {
             throw [DataCollectionRuleIncorrect]::new($DcrResourceId)
         } 
 
-        if (!($exceptionMessage -match "status code '([a-zA-Z]+)'")) {
+        if (!($exceptionMessage -match "status code '([^\s]+)'")) {
             throw [VirtualMachineUnknownException]::new($VMObject, "Failed to create data collection rule association with $DcrResourceId", $_.Exception)
         }
 
@@ -628,7 +631,7 @@ function NewDCRAssociationVm {
 function NewDCRAssociationVmss {
     <#
 	.SYNOPSIS
-	Create a new DCRAssociation.
+	Create a new DCR Association with VMSS.
 	#>
     [CmdletBinding(SupportsShouldProcess = $True, ConfirmImpact = 'Medium')]
     param
@@ -642,7 +645,7 @@ function NewDCRAssociationVmss {
     $vmssId = $VMssObject.Id
 
     try {
-        # A VMSS may have zero or more Data Collection Rule Associations
+        # A VMSS may have zero or more Data Collection Rule Associations.
         $dcrAssociationList = Get-AzDataCollectionRuleAssociation -TargetResourceId $vmssId 
         foreach ($dcra in $dcrAssociationList) {
             if ($dcra.DataCollectionRuleId -eq $DcrResourceId) {
@@ -654,7 +657,7 @@ function NewDCRAssociationVmss {
         throw [VirtualMachineScaleSetDoesNotExist]::new($VMssObject, $_.Exception)
     }
 
-    #The Customer is responsible to uninstall the DCR Association themselves
+    #The Customer is responsible to uninstall the DCR Association themselves.
     if (!($PSCmdlet.ShouldProcess($vmsslogheader, "Install Data Collection Rule Association"))) {
         return
     }
@@ -662,7 +665,7 @@ function NewDCRAssociationVmss {
     $dcrAssociationName = "VM-Insights-DCR-Association-$(New-Guid)"
     Write-Host "$vmsslogheader : Deploying Data Collection Rule Association $dcrAssociationName"
     try {
-        #New-AzDataCollectionRuleAssociation allows creating multiple DCRAs for the same {DCR,VMSS} combination.
+        #TBF by AMCS team - New-AzDataCollectionRuleAssociation allows creating multiple DCRAs for the same {DCR,VMSS} combination.
         $dcrAssociation = New-AzDataCollectionRuleAssociation -TargetResourceId $vmssId -AssociationName $dcrAssociationName -RuleId $DcrResourceId
     } catch [System.Management.Automation.PSInvalidOperationException] {
         $exceptionMessage = $_.Exception.Message
@@ -671,7 +674,7 @@ function NewDCRAssociationVmss {
             throw [DataCollectionRuleIncorrect]::new($DcrResourceId)
         } 
         
-        if (!($exceptionMessage -match "status code '([a-zA-Z]+)'")) {
+        if (!($exceptionMessage -match "status code '([^\s]+)'")) {
             throw [VirtualMachineScaleSetUnknownException]::new($VMssObject, "Failed to create data collection rule association with $DcrResourceId", $_.Exception)
         }
 
@@ -697,7 +700,7 @@ function NewDCRAssociationVmss {
 function OnboardDaVm {
     <#
 	.SYNOPSIS
-	Install DA (VM), handling if already installed
+	Onboard DA on VM, handling if already installed.
 	#>
     param
     (
@@ -715,7 +718,7 @@ function OnboardDaVm {
     
     if ($extension) {
         $extensionName = $extension.Name
-        Write-Verbose "$(FormatVmIdentifier -VMObject $VMObject) : Extension $extensionName, type $($daExtensionConstantProperties.ExtensionType), publisher $($daExtensionConstantProperties.Publisher) already installed."
+        Write-Host "$(FormatVmIdentifier -VMObject $VMObject) : Extension $extensionName, type $($daExtensionConstantProperties.ExtensionType), publisher $($daExtensionConstantProperties.Publisher) already installed."
     }
     
     $parameters = @{"Settings" = $Settings}
@@ -726,10 +729,210 @@ function OnboardDaVm {
                           -InstallParameters $parameters
 }
 
+function OnboardAmaVm {
+    <#
+	.SYNOPSIS
+	Onboard AMA on VM, handling if already installed.
+	#>
+    param
+    (
+        [Parameter(mandatory = $True)]
+        [Microsoft.Azure.Commands.Compute.Models.PSVirtualMachine]
+        $VMObject
+    )
+   
+    # Use supplied name unless already deployed, use same name.
+    $amaExtensionConstantProperties = $amaExtensionConstantMap[$VMObject.StorageProfile.OsDisk.OsType.ToString()]
+    $extensionName = $amaDefaultExtensionName
+    $extension = GetVMExtension -VMObject $VMObject -ExtensionProperties $amaExtensionConstantProperties
+
+    if ($extension) {
+        $extensionName = $extension.Name
+        Write-Host "$(FormatVmIdentifier -VMObject $VMObject) : Extension $extensionName, type $($amaExtensionConstantProperties.ExtensionType), publisher $($amaExtensionConstantProperties.Publisher) already installed. Provisioning State: $($extension.ProvisioningState)"
+    }
+
+    $parameters = @{
+        Settings = $amaPublicSettings
+    }
+
+    return SetVMExtension -VMObject $VMObject `
+                          -ExtensionName $extensionName `
+                          -ExtensionConstantProperties $amaExtensionConstantProperties `
+                          -InstallParameters $parameters 
+}
+
+function OnboardLaVmWithReInstall {
+    <#
+	.SYNOPSIS
+	Onboard LA on VM, ReInstall flag provided.
+	#>
+    param
+    (
+        [Parameter(mandatory = $True)]
+        [Microsoft.Azure.Commands.Compute.Models.PSVirtualMachine]
+        $VMObject
+    )
+
+    $osType = $VMObject.StorageProfile.OsDisk.OsType.ToString()
+    $laExtensionConstantProperties = $laExtensionMap[$osType]
+    # Use supplied name unless already deployed, use same name.
+    $extensionName = $laDefaultExtensionName
+    $vmlogheader = FormatVmIdentifier -VMObject $VMObject
+    
+    $extension = GetVMExtension -VMObject $VMObject -ExtensionProperties $laExtensionConstantProperties
+
+    if ($extension) {
+        $extensionName = $extension.Name
+        Write-Host "$vmlogheader : Extension $extensionName, type $($laExtensionConstantProperties.ExtensionType), publisher $($laExtensionConstantProperties.Publisher) already installed. Provisioning State: $($extension.ProvisioningState)"
+        if ($osType -eq "Linux" -and $extension.PublicSettings) {
+            $extensionPublicSettingsJson = $extension.PublicSettings | ConvertFrom-Json
+            if ($extensionPublicSettingsJson.workspaceId -ne $laPublicSettings.workspaceId) {
+                Write-Host "$vmlogheader : OmsAgentForLinux does not support updating workspace. An uninstall followed by re-install is required."
+
+                if (!(RemoveVMExtension -VMObject $VMObject `
+                                        -ExtensionName $extensionName `
+                                        -ExtensionProperties $laExtensionConstantProperties)) {
+                    Write-Host "$vmlogheader : Extension $extensionName was not removed. Skipping replacement."
+                    return $VMObject
+                }
+            }
+        }
+    }
+    
+    $parameters = @{
+        Settings           = $laPublicSettings
+        ProtectedSettings  = $laProtectedSettings
+    }
+
+    return SetVMExtension -VMObject $VMObject `
+                          -ExtensionName $extensionName `
+                          -ExtensionConstantProperties $laExtensionConstantProperties `
+                          -InstallParameters $parameters
+}
+
+function OnboardLaVmWithoutReInstall {
+    <#
+	.SYNOPSIS
+	Onboard LA on VM, ReInstall flag not provided.
+	#>
+    param
+    (
+        [Parameter(mandatory = $True)]
+        [Microsoft.Azure.Commands.Compute.Models.PSVirtualMachine]
+        $VMObject
+    )
+
+    $osType = $VMObject.StorageProfile.OsDisk.OsType.ToString()
+    $laExtensionConstantProperties = $laExtensionMap[$osType]
+    # Use supplied name unless already deployed, use same name
+    $extensionName = $laDefaultExtensionName
+    $extension = GetVMExtension -VMObject $VMObject -ExtensionProperties $laExtensionConstantProperties
+    $vmlogheader = FormatVmIdentifier -VMObject $VMObject
+
+    if ($extension) {
+        $extensionName = $extension.Name
+        Write-Host "$vmlogheader : Extension $extensionName, type $($laExtensionConstantProperties.ExtensionType), publisher $($laExtensionConstantProperties.Publisher) already installed. Provisioning State: $($extension.ProvisioningState)"
+        if ($osType -eq "Linux" -and $extension.PublicSettings) {
+            $ext = $extension.PublicSettings | ConvertFrom-Json 
+            if ($ext.workspaceId -ne $laPublicSettings.workspaceId) {
+                Write-Host "$vmlogheader : OmsAgentForLinux does not support updating workspace. Please try again with reinstall Flag"
+                return $VMObject
+            }
+        }
+    }
+
+    $parameters = @{
+        Settings           = $laPublicSettings
+        ProtectedSettings  = $laProtectedSettings
+    }
+
+    return SetVMExtension -VMObject $VMObject `
+                          -ExtensionName $extensionName `
+                          -ExtensionConstantProperties $laExtensionConstantProperties `
+                          -InstallParameters $parameters
+}
+
+function OnboardVmiWithAmaVm {
+    <#
+	.SYNOPSIS
+	Onboard VMI with AMA on VM.
+	#>
+    param
+    (
+        [Parameter(mandatory = $True)]
+        [Microsoft.Azure.Commands.Compute.Models.PSVirtualMachine]
+        $VMObject
+    )
+
+    $VMObject = AssignVmUserManagedIdentity -VMObject $VMObject
+    NewDCRAssociationVm -VMObject $VMObject
+    return OnboardAmaVm -VMObject $VMObject
+}
+
+function OnboardVmiWithAmaVmss {
+    <#
+	.SYNOPSIS
+	Onboard VMI with AMA on VMSS
+	#>
+    param
+    (
+        [Parameter(mandatory = $True)]
+        [Microsoft.Azure.Commands.Compute.Automation.Models.PSVirtualMachineScaleSet]
+        $VMssObject
+    )
+            
+    $VMssObject = AssignVmssUserManagedIdentity -VMssObject $VMssObject
+    NewDCRAssociationVmss -VMssObject $VMssObject
+    return SetVMssExtension -VMssObject $VMssObject `
+                                -ExtensionName $amaDefaultExtensionName `
+                                -Settings $amaPublicSettings `
+                                -ExtensionConstantProperties $amaExtensionConstantMap[$VMssObject.VirtualMachineProfile.StorageProfile.OsDisk.OsType.ToString()]
+}
+
+function SetManagedIdentityRoles {
+    <#
+	.SYNOPSIS
+	Set roles to user managed identity.
+	#>
+    [CmdletBinding(SupportsShouldProcess = $True, ConfirmImpact = 'Medium')]
+    param
+    (
+        [Parameter(Mandatory = $True)]
+        [String]
+        $ResourceGroupId,
+        [Parameter(Mandatory = $True)]
+        [String]
+        $Role
+    )
+
+    $uamiName = $UserAssignedManagedIdentityObject.Name
+    
+    if (!($PSCmdlet.ShouldProcess($ResourceGroupId, "Assign $Role to user managed identity $uamiName"))) {
+        return
+    }
+
+    Write-Verbose "Scope $ResourceGroupId : Assigning role $Role"
+    try {
+        New-AzRoleAssignment -ObjectId $($UserAssignedManagedIdentityObject.principalId) -RoleDefinitionName $Role -Scope $ResourceGroupId
+    } catch {
+        $excepMessage = $_.Exception.Message
+        if ($excepMessage.Contains('Conflict')) {
+            Write-Verbose "$uamiName : Role $Role has been assigned already"
+        }
+        if ($excepMessage.Contains('BadRequest')) {
+            throw [FatalException]::new("$uamiName : User Assigned Managed Identity doesn't exist", $_.Exception)
+        }
+        if ($excepMessage.Contains('NotFound')) {
+            throw [ResourceGroupDoesNotExist]::new($($VMObject.ResourceGroupName))
+        }
+    }
+    Write-Verbose "Scope $ResourceGroupId : $Role has been successfully assigned to $uamiName"
+}
+
 function SetVMssExtension {
     <#
 	.SYNOPSIS
-	Install Extension (VMSS), handling if already installed
+	Install/Update Extension VMSS, handling if already installed
 	#>
     #check if this supposed to be all the stack. that is functioing call it as well.
     [CmdletBinding(SupportsShouldProcess = $True, ConfirmImpact = 'Medium')]
@@ -753,12 +956,13 @@ function SetVMssExtension {
     )
 
     $extension = GetVMssExtension -VMssObject $VMssObject -ExtensionProperties $ExtensionConstantProperties
+    $extensionType = $ExtensionConstantProperties.ExtensionType
+    $extensionPublisher = $ExtensionConstantProperties.Publisher
     $vmsslogheader = FormatVmssIdentifier -VMssObject $VMssObject
 
     if ($extension) {
-        #$extension here is a references of extension property. $VMssObject. (Not a copy)
-        Write-Host "$vmsslogheader : Extension $($extension.Name) already installed."
-        
+        Write-Host "$vmsslogheader : Extension $extensionName, type $extensionType, publisher $extensionPublisher already installed."
+
         if ($Settings) {
             $extension.Settings = $Settings
         }
@@ -771,7 +975,7 @@ function SetVMssExtension {
         return $VMssObject
     } 
 
-    if (!($PSCmdlet.ShouldProcess($vmsslogheader, "Install extension $ExtensionName"))) {
+    if (!($PSCmdlet.ShouldProcess($vmsslogheader, "Install extension $extensionName, type $extensionType, publisher $extensionPublisher"))) {
         return $VMssObject
     }
     
@@ -792,211 +996,14 @@ function SetVMssExtension {
                                       -TypeHandlerVersion $ExtensionConstantProperties.TypeHandlerVersion `
                                       -AutoUpgradeMinorVersion $True
 
-    Write-Host "$vmsslogheader : $ExtensionName added"
+    Write-Host "$vmsslogheader : Extension $extensionName, type $extensionType, publisher $extensionPublisher added."
     return $VMssObject
-}
-
-function OnboardAmaVm {
-    <#
-	.SYNOPSIS
-	Install AMA (VM), handling if already installed
-	#>
-    param
-    (
-        [Parameter(mandatory = $True)]
-        [Microsoft.Azure.Commands.Compute.Models.PSVirtualMachine]
-        $VMObject
-    )
-   
-    # Use supplied name unless already deployed, use same name
-    $amaExtensionConstantProperties = $amaExtensionConstantMap[$VMObject.StorageProfile.OsDisk.OsType.ToString()]
-    $extensionName = $amaDefaultExtensionName
-    $extension = GetVMExtension -VMObject $VMObject -ExtensionProperties $amaExtensionConstantProperties
-
-    if ($extension) {
-        $extensionName = $extension.Name
-        Write-Verbose "$(FormatVmIdentifier -VMObject $VMObject) : Extension $extensionName, type $($amaExtensionConstantProperties.ExtensionType), publisher $($amaExtensionConstantProperties.Publisher) already installed. Provisioning State: $($extension.ProvisioningState)"
-    }
-
-    $parameters = @{
-        Settings           = $amaPublicSettings
-    }
-
-    return SetVMExtension -VMObject $VMObject `
-                          -ExtensionName $extensionName `
-                          -ExtensionConstantProperties $amaExtensionConstantProperties `
-                          -InstallParameters $parameters 
-}
-
-function OnboardLaVmWithReInstall {
-    <#
-	.SYNOPSIS
-	Install LA Extension on Virtual Machines, ReInstall flag provided.
-	#>
-    param
-    (
-        [Parameter(mandatory = $True)]
-        [Microsoft.Azure.Commands.Compute.Models.PSVirtualMachine]
-        $VMObject
-    )
-
-    $osType = $VMObject.StorageProfile.OsDisk.OsType.ToString()
-    $laExtensionConstantProperties = $laExtensionMap[$osType]
-    # Use supplied name unless already deployed, use same name
-    $extensionName = $laDefaultExtensionName
-    $vmlogheader = FormatVmIdentifier -VMObject $VMObject
-    
-    $extension = GetVMExtension -VMObject $VMObject -ExtensionProperties $laExtensionConstantProperties
-
-    if ($extension) {
-        $extensionName = $extension.Name
-        
-        if ($osType -eq "Linux" -and $extension.PublicSettings) {
-            $extensionPublicSettingsJson = $extension.PublicSettings | ConvertFrom-Json
-            if ($extensionPublicSettingsJson.workspaceId -ne $laPublicSettings.workspaceId) {
-                Write-Host "$vmlogheader : Extension $extensionName does not support updating workspace. An uninstall followed by re-install is required."
-
-                if (!(RemoveVMExtension -VMObject $VMObject `
-                                    -ExtensionName $extensionName)) {
-                    Write-Host "$vmlogheader : Extension $extensionName was not removed. Skipping replacement."
-                    return $VMObject
-                }
-            }
-        }
-    }
-    
-    $parameters = @{
-        Settings           = $laPublicSettings
-        ProtectedSettings  = $laProtectedSettings
-    }
-
-    return SetVMExtension -VMObject $VMObject `
-                          -ExtensionName $extensionName `
-                          -ExtensionConstantProperties $laExtensionConstantProperties `
-                          -InstallParameters $parameters
-}
-
-function OnboardLaVmWithoutReInstall {
-    <#
-	.SYNOPSIS
-	Install LA Extension on Virtual Machines, ReInstall flag not provided.
-	#>
-    param
-    (
-        [Parameter(mandatory = $True)]
-        [Microsoft.Azure.Commands.Compute.Models.PSVirtualMachine]
-        $VMObject
-    )
-
-    $osType = $VMObject.StorageProfile.OsDisk.OsType.ToString()
-    $laExtensionConstantProperties = $laExtensionMap[$osType]
-    # Use supplied name unless already deployed, use same name
-    $extensionName = $laDefaultExtensionName
-    $extension = GetVMExtension -VMObject $VMObject -ExtensionProperties $laExtensionConstantProperties
-
-    if ($extension) {
-        $extensionName = $extension.Name
-        if ($osType -eq "Linux" -and $extension.PublicSettings) {
-            $ext = $extension.PublicSettings | ConvertFrom-Json 
-            if ($ext.workspaceId -ne $laPublicSettings.workspaceId) {
-                Write-Host "$(FormatVmIdentifier -VMObject $VMObject) : OmsAgentForLinux does not support updating workspace. Please try again with reinstall Flag"
-                return $VMObject
-            }
-        }
-    }
-
-    $parameters = @{
-        Settings           = $laPublicSettings
-        ProtectedSettings  = $laProtectedSettings
-    }
-
-    return SetVMExtension -VMObject $VMObject `
-                          -ExtensionName $extensionName `
-                          -ExtensionConstantProperties $laExtensionConstantProperties `
-                          -InstallParameters $parameters
-}
-
-function OnboardVmiWithAmaVm {
-    <#
-	.SYNOPSIS
-	Onboard VMI with AMA on Vms
-	#>
-    param
-    (
-        [Parameter(mandatory = $True)]
-        [Microsoft.Azure.Commands.Compute.Models.PSVirtualMachine]
-        $VMObject
-    )
-
-    $VMObject = AssignVmUserManagedIdentity -VMObject $VMObject
-    NewDCRAssociationVm -VMObject $VMObject
-    return OnboardAmaVm -VMObject $VMObject
-}
-
-function OnboardVmiWithAmaVmss {
-    <#
-	.SYNOPSIS
-	Onboard VMI with AMA on VMSIns
-	#>
-    param
-    (
-        [Parameter(mandatory = $True)]
-        [Microsoft.Azure.Commands.Compute.Automation.Models.PSVirtualMachineScaleSet]
-        $VMssObject
-    )
-            
-    $VMssObject = AssignVmssUserManagedIdentity -VMssObject $VMssObject
-    NewDCRAssociationVmss -VMssObject $VMssObject
-    return SetVMssExtension -VMssObject $VMssObject `
-                                -ExtensionName $amaDefaultExtensionName `
-                                -Settings $amaPublicSettings `
-                                -ExtensionConstantProperties $amaExtensionConstantMap[$VMssObject.VirtualMachineProfile.StorageProfile.OsDisk.OsType.ToString()]
-}
-
-function SetManagedIdentityRoles {
-    <#
-	.SYNOPSIS
-	Set roles to managed identity.
-	#>
-    [CmdletBinding(SupportsShouldProcess = $True, ConfirmImpact = 'Medium')]
-    param
-    (
-        [Parameter(Mandatory = $True)]
-        [String]
-        $ResourceGroupId,
-        [Parameter(Mandatory = $True)]
-        [String]
-        $Role
-    )
-
-    $uamiName = $UserAssignedManagedIdentityObject.Name
-    
-    if (!($PSCmdlet.ShouldProcess($ResourceGroupId, "Assign roles $Role to user assigned managed identity : $uamiName"))) {
-        return
-    }
-
-    Write-Verbose "Scope $ResourceGroupId, $Role : assigning role"
-    try {
-        New-AzRoleAssignment -ObjectId $($UserAssignedManagedIdentityObject.principalId) -RoleDefinitionName $Role -Scope $ResourceGroupId
-    } catch {
-        $excepMessage = $_.Exception.Message
-        if ($excepMessage.Contains('Conflict')) {
-            Write-Verbose "$uamiName : $Role has been assigned already"
-        }
-        if ($excepMessage.Contains('BadRequest')) {
-            throw [FatalException]::new("$uamiName : User Assigned Managed Identity doesn't exist", $_.Exception)
-        }
-        if ($excepMessage.Contains('NotFound')) {
-            throw [ResourceGroupDoesNotExist]::new($($VMObject.ResourceGroupName))
-        }
-    }
-    Write-Verbose "Scope $ResourceGroupId : Role assignment for $uamiName with $Role succeeded"
 }
 
 function SetVMExtension {
     <#
 	.SYNOPSIS
-	Install VM Extension, handling if already installed
+	Install/Update VM Extension, handling if already installed
 	#>
     [CmdletBinding(SupportsShouldProcess = $True, ConfirmImpact = 'Medium')]
     param
@@ -1016,12 +1023,14 @@ function SetVMExtension {
     )
     
     $vmlogheader = $(FormatVmIdentifier -VMObject $VMObject)
+    $extensionType = $ExtensionConstantProperties.ExtensionType
+    $extensionPublisher = $ExtensionConstantProperties.Publisher
 
-    if (!($PSCmdlet.ShouldProcess($vmlogheader, "Install extension $ExtensionName"))) {
+    if (!($PSCmdlet.ShouldProcess($vmlogheader, "Install extension $ExtensionName, type $extensionType, publisher $extensionPublisher"))) {
         return $VMObject
     }
 
-    Write-Host "$vmlogheader : Deploying/Updating extension $ExtensionName"
+    Write-Host "$vmlogheader : Deploying/Updating extension $ExtensionName, type $extensionType, publisher $extensionPublisher"
     
     try {
         $result = Set-AzVMExtension -ResourceGroupName $($VMObject.ResourceGroupName) `
@@ -1033,7 +1042,7 @@ function SetVMExtension {
             throw [VirtualMachineOperationFailed]::new($VMObject, "Failed to update extension. StatusCode = $($removeResult.StatusCode). ReasonPhrase = $($removeResult.ReasonPhrase)")
         }
     
-        Write-Host "$vmlogheader : Successfully deployed/updated extension $ExtensionName"
+        Write-Host "$vmlogheader : Successfully deployed/updated extension $ExtensionName, type $extensionType, publisher $extensionPublisher"
         return $VMObject
     } catch [Microsoft.Azure.Commands.Compute.Common.ComputeCloudException] {
         $errorMessage = ExtractCloudExceptionErrorMessage $_
@@ -1050,7 +1059,7 @@ function SetVMExtension {
             throw [ResourceGroupDoesNotExist]::new($VMObject.ResourceGroupName, $_.Exception)       
         } 
         
-        throw [VirtualMachineUnknownException]::new($VMObject, "Failed to update/install extension $ExtensionName", $_.Exception)
+        throw [VirtualMachineUnknownException]::new($VMObject, "Failed to update/install extension $ExtensionName, type $extensionType, publisher $extensionPublisher", $_.Exception)
     }
 }
 
@@ -1133,7 +1142,7 @@ function UpgradeVmssExtensionManualUpdateEnabled {
             }
             if ($errorCode -eq "OperationNotAllowed") {
                 Write-Host "$vmsslogheader : Unable to lookup VMSS instance name $scaleSetInstanceName. Continuing..."
-                DisplayException $_
+                DisplayException -ErrorRecord $_
             } 
             #Counter -> consdider throwing exception is hard.
             throw [VirtualMachineScaleSetUnknownException]::new($VMssObject, "Failed to upgrade VMSS instance name $scaleSetInstanceName", $_.Exception)
@@ -1188,7 +1197,7 @@ function UpdateVMssExtension {
 function AssignVmssUserManagedIdentity {
     <#
 	.SYNOPSIS
-	Assign managed identity to VMss
+	Assign user managed identity to VMSS
 	#>
     [CmdletBinding(SupportsShouldProcess = $True, ConfirmImpact = 'Medium')]
     param
@@ -1201,11 +1210,11 @@ function AssignVmssUserManagedIdentity {
     $userAssignedManagedIdentityName = $UserAssignedManagedIdentityObject.Name
     $vmsslogheader = FormatVmssIdentifier -VMssObject $VmssObject
 
-    if (!($PSCmdlet.ShouldProcess($vmsslogheader, "Assign managed identity $userAssignedManagedIdentityName"))) {
+    if (!($PSCmdlet.ShouldProcess($vmsslogheader, "Assign user managed identity $userAssignedManagedIdentityName"))) {
         return $VMssObject
     }
 
-    Write-Host "$vmsslogheader : Assigning user assign managed identity $userAssignedManagedIdentityName"
+    Write-Host "$vmsslogheader : Assigning user managed identity $userAssignedManagedIdentityName"
     try {
         $VMssObject = Update-AzVmss -VMScaleSetName $VMssObject.Name `
                                 -ResourceGroupName  $VMssObject.ResourceGroupName `
@@ -1213,10 +1222,10 @@ function AssignVmssUserManagedIdentity {
                                 -IdentityType "UserAssigned" `
                                 -IdentityID $UserAssignedManagedIdentityObject.Id
         if ($VMssObject.ProvisioningState -ne "Succeeded") {
-            throw [VirtualMachineOperationScaleSetFailed]::new($VMssObject, "Failed to assign user assigned managed identity $userAssignedManagedIdentityName")
+            throw [VirtualMachineOperationScaleSetFailed]::new($VMssObject, "Failed to assign user managed identity $userAssignedManagedIdentityName")
         }
         
-        Write-Host "$vmsslogheader : Successfully assigned user assign managed identity $userAssignedManagedIdentityName"
+        Write-Host "$vmsslogheader : Successfully assigned user managed identity $userAssignedManagedIdentityName"
         return $VMssObject
     } catch [Microsoft.Azure.Commands.Compute.Common.ComputeCloudException] {
         $errorCode = ExtractCloudExceptionErrorCode($_)
@@ -1230,7 +1239,7 @@ function AssignVmssUserManagedIdentity {
             throw [VirtualMachineScaleSetDoesNotExist]::new($VMssObject, $_.Exception) 
         } 
             
-        throw [VirtualMachineScaleSetUnknownException]::new($VMssObject, "Failed to user assign managed identity $userAssignedManagedIdentityName", $_.Exception)
+        throw [VirtualMachineScaleSetUnknownException]::new($VMssObject, "Failed to assign user managed identity $userAssignedManagedIdentityName", $_.Exception)
     }
 }
 
@@ -1250,11 +1259,11 @@ function AssignVmUserManagedIdentity {
     $userAssignedManagedIdentityName = $UserAssignedManagedIdentityObject.Name
     $vmlogheader = FormatVmIdentifier -VMObject $VMObject
     
-    if (!($PSCmdlet.ShouldProcess($vmlogheader, "Assign managed identity $userAssignedManagedIdentityName"))) {
+    if (!($PSCmdlet.ShouldProcess($vmlogheader, "Assign user managed identity $userAssignedManagedIdentityName"))) {
         return $VMObject
     }
 
-    Write-Host "$vmlogheader : Assigning managed identity $userAssignedManagedIdentityName"
+    Write-Host "$vmlogheader : Assigning user managed identity $userAssignedManagedIdentityName"
 
     try {
         $result = Update-AzVM -VM $VMObject `
@@ -1281,14 +1290,14 @@ function AssignVmUserManagedIdentity {
         throw [VirtualMachineOperationFailed]::new($VMObject, "Failed to assign managed identity $userAssignedManagedIdentityName. StatusCode : $($result.StatusCode). ReasonPhrase : $($result.ReasonPhrase)")
     }
     
-    Write-Host "$vmlogheader : Successfully assigned managed identity $userAssignedManagedIdentityName"
+    Write-Host "$vmlogheader : Successfully assigned user managed identity $userAssignedManagedIdentityName"
     return $VMObject
 }
 
 function SetManagedIdentityRolesAma {
     <#
     .SYNOPSIS
-    Set Roles to managed identity
+    Set Roles to a managed identity
     #>
     param(
         [Parameter(Mandatory = $True)]
@@ -1358,17 +1367,19 @@ try {
         Set-Variable -Name laPublicSettings -Option Constant -Value @{"workspaceId" = $WorkspaceId; "stopOnMultipleConnections" = "true"}
         Set-Variable -Name laProtectedSettings -Option Constant -Value  @{"workspaceKey" = $WorkspaceKey}
         if ($ReInstall) {
-            Set-Variable -Name sb_vm -Option Constant -Value { param($vmObj) OnboardLaVmWithReInstall -VMObject $vmObj}
+            Set-Variable -Name sb_vm -Option Constant -Value { param([Microsoft.Azure.Commands.Compute.Models.PSVirtualMachine]$vmObj) OnboardLaVmWithReInstall -VMObject $vmObj}
         } else {
-            Set-Variable -Name sb_vm -Option Constant -Value { param($vmObj) OnboardLaVmWithoutReInstall -VMObject $vmObj}
+            Set-Variable -Name sb_vm -Option Constant -Value { param([Microsoft.Azure.Commands.Compute.Models.PSVirtualMachine]$vmObj) OnboardLaVmWithoutReInstall -VMObject $vmObj}
         }
         
-        Set-Variable -Name sb_vmss -Option Constant -Value {param($vmssObj) SetVMssExtension -VMssObject $vmssObj -ExtensionName $laDefaultExtensionName -ExtensionConstantProperties $laExtensionMap[$vmssObj.VirtualMachineProfile.StorageProfile.OsDisk.OsType.ToString()] `
-                                                                              -Settings $laPublicSettings -ProtectedSetting $laProtectedSettings}
-        Set-Variable -Name sb_da -Option Constant -Value { param($vmObj)  OnboardDaVm -VMObject $vmObj -Settings @{}}
-        Set-Variable -Name sb_da_vmss -Option Constant -Value { param($vmssObj) SetVMssExtension -VMssObject $vmssObj `
-                                                                                      -ExtensionName $daDefaultExtensionName `
-                                                                                      -ExtensionConstantProperties $daExtensionConstantsMap[$vmssObj.VirtualMachineProfile.StorageProfile.OsDisk.OsType.ToString()]}
+        Set-Variable -Name sb_vmss -Option Constant -Value {param([Microsoft.Azure.Commands.Compute.Automation.Models.PSVirtualMachineScaleSet]$vmssObj) SetVMssExtension -VMssObject $vmssObj `
+                                                                                                                                                            -ExtensionName $laDefaultExtensionName `
+                                                                                                                                                            -ExtensionConstantProperties $laExtensionMap[$vmssObj.VirtualMachineProfile.StorageProfile.OsDisk.OsType.ToString()] `
+                                                                                                                                                            -Settings $laPublicSettings -ProtectedSetting $laProtectedSettings}
+        Set-Variable -Name sb_da -Option Constant -Value { param([Microsoft.Azure.Commands.Compute.Models.PSVirtualMachine]$vmObj)  OnboardDaVm -VMObject $vmObj -Settings @{}}
+        Set-Variable -Name sb_da_vmss -Option Constant -Value { param([Microsoft.Azure.Commands.Compute.Automation.Models.PSVirtualMachineScaleSet]$vmssObj) SetVMssExtension -VMssObject $vmssObj `
+                                                                                                                                                                  -ExtensionName $daDefaultExtensionName `
+                                                                                                                                                                   -ExtensionConstantProperties $daExtensionConstantsMap[$vmssObj.VirtualMachineProfile.StorageProfile.OsDisk.OsType.ToString()]}
         Set-Variable -Name sb_roles -Option Constant -Value $sb_nop_block_roles
     } else {
         try {
@@ -1389,47 +1400,44 @@ try {
                             }
                         }
                     }
-        Set-Variable -Name sb_vm -Option Constant -Value { param($vmObj) OnboardVmiWithAmaVm -VMObject $vmObj}
-        Set-Variable -Name sb_vmss -Option Constant -Value { param($vmssObj) OnboardVmiWithAmaVmss -VMssObject $vmssObj}
+        Set-Variable -Name sb_vm -Option Constant -Value { param([Microsoft.Azure.Commands.Compute.Models.PSVirtualMachine]$vmObj) OnboardVmiWithAmaVm -VMObject $vmObj}
+        Set-Variable -Name sb_vmss -Option Constant -Value { param([Microsoft.Azure.Commands.Compute.Automation.Models.PSVirtualMachineScaleSet]$vmssObj) OnboardVmiWithAmaVmss -VMssObject $vmssObj}
         
         if (!$ProcessAndDependencies) {
             Set-Variable -Name sb_da -Option Constant -Value $sb_nop_block
             Set-Variable -Name sb_da_vmss -Option Constant -Value $sb_nop_block
         } else {
             Set-Variable -Name processAndDependenciesPublicSettings -Option Constant -Value @{"enableAMA" = "true"}
-            Set-Variable -Name sb_da -Option Constant -Value {param($vmObj) OnboardDaVm -VMObject $vmObj `
-                                                                                        -Settings $processAndDependenciesPublicSettings}
-            Set-Variable -Name sb_da_vmss -Option Constant -Value { param($vmssObj) SetVMssExtension -VMssObject $vmssObj `
-                                                                                      -ExtensionName $daDefaultExtensionName `
-                                                                                      -Settings $processAndDependenciesPublicSettings `
-                                                                                      -ExtensionConstantProperties $daExtensionConstantsMap[$vmssObj.VirtualMachineProfile.StorageProfile.OsDisk.OsType.ToString()]}
+            Set-Variable -Name sb_da -Option Constant -Value {param([Microsoft.Azure.Commands.Compute.Models.PSVirtualMachine]$vmObj) OnboardDaVm -VMObject $vmObj `
+                                                                                                                                            -Settings $processAndDependenciesPublicSettings}
+            Set-Variable -Name sb_da_vmss -Option Constant -Value { param([Microsoft.Azure.Commands.Compute.Automation.Models.PSVirtualMachineScaleSet]$vmssObj) SetVMssExtension -VMssObject $vmssObj `
+                                                                                                                                                                                  -ExtensionName $daDefaultExtensionName `
+                                                                                                                                                                                  -Settings $processAndDependenciesPublicSettings `
+                                                                                                                                                                                  -ExtensionConstantProperties $daExtensionConstantsMap[$vmssObj.VirtualMachineProfile.StorageProfile.OsDisk.OsType.ToString()]}
         }
     
-        Set-Variable -Name sb_roles -Option Constant -Value { param($rgName) SetManagedIdentityRolesAma -ResourceGroupName $rgName}
+        Set-Variable -Name sb_roles -Option Constant -Value { param([String]$rgName) SetManagedIdentityRolesAma -ResourceGroupName $rgName}
     }
 
     if ($TriggerVmssManualVMUpdate) {
-        Set-Variable -Name sb_upgrade -Option Constant -Value { param($vmssObj)  UpgradeVmssExtensionManualUpdateEnabled -VMssObject $vmssObj}
+        Set-Variable -Name sb_upgrade -Option Constant -Value { param([Microsoft.Azure.Commands.Compute.Automation.Models.PSVirtualMachineScaleSet]$vmssObj)  UpgradeVmssExtensionManualUpdateEnabled -VMssObject $vmssObj}
     } else {
-        Set-Variable -Name sb_upgrade -Option Constant -Value  { param($vmssObj)  UpgradeVmssExtensionManualUpdateDisabled -VMssObject $vmssObj}
+        Set-Variable -Name sb_upgrade -Option Constant -Value  { param([Microsoft.Azure.Commands.Compute.Automation.Models.PSVirtualMachineScaleSet]$vmssObj)  UpgradeVmssExtensionManualUpdateDisabled -VMssObject $vmssObj}
+    }
+
+    $searchParameters = @{}
+    if ($ResourceGroup) {
+        $searchParameters.add("ResourceGroupName", $ResourceGroup)
     }
 
     if ($PolicyAssignmentName) {
         #this section is only for VMs
-        $searchParameters = @{}
-
-        if ($ResourceGroup) {
-            $searchParameters.add("ResourceGroupName",  $ResourceGroup)
-        }
-
         Write-Host "Looking up resources in policy assingment $PolicyAssignmentName"
-        $policyStateInfo = Get-AzPolicyState @searchParameters `
-                            -Filter "PolicyAssignmentName eq '$PolicyAssignmentName' and ResourceType eq 'Microsoft.Compute/virtualMachines'"
-        
         $policyAssignmentNameResources = @{}
-        foreach ($policyAssignmentNameResourceInfo in $policyStateInfo) {
-            $policyAssignmentNameResources.Add($policyAssignmentNameResourceInfo.ResourceId, $True)
-        }
+        Get-AzPolicyState @searchParameters -Filter "PolicyAssignmentName eq '$PolicyAssignmentName' and ResourceType eq 'Microsoft.Compute/virtualMachines'"
+                          | ForEach-Object {
+                            $policyAssignmentNameResources.Add($_.ResourceId, $True)
+                          }
 
         #Virtual Machines part of a VMSS will be skipped.
         Get-AzVM @searchParameters
@@ -1441,11 +1449,7 @@ try {
     } else {
         Write-Host "Getting list of VM's or VM ScaleSets matching criteria specified"
         # If ResourceGroup value is passed - select all VMs under given ResourceGroupName
-        $searchParameters = @{}
-        if ($ResourceGroup) {
-            $searchParameters.add("ResourceGroupName", $ResourceGroup)
-        }
-       
+        
         Get-AzVM @searchParameters
             | Where-Object {!($_.VirtualMachineScaleSet) -and $_.Name -like $Name}
             | ForEach-Object { 
@@ -1456,22 +1460,26 @@ try {
         #VMI does not support VMSS with flexible orchestration.
         Get-AzVmss @searchParameters 
             | Where-Object {$_.Name -like $Name -and $_.OrchestrationMode -ne 'Flexible'}
-            | ForEach-Object { 
+            | ForEach-Object {
                 $onboardingCounters.Total +=1 ; 
                 PopulateRgHashTableVmss -RgHashTable $Rghashtable -VMssObject $_
               }
     }
 
+    $rgList = $Rghashtable.Keys | Sort-Object
     Write-Host "VM's and VMSS matching selection criteria :"
-    Foreach ($rgName in $Rghashtable.Keys) {
-        Write-Host "" "ResourceGroup = $rgName"
-        $vmList = $Rghashtable[$rgName].VirtualMachineList
-        $vmssList = $Rghashtable[$rgName].VirtualMachineScaleSetList
+    Foreach ($rg in $rgList) {
+        Write-Host "" "ResourceGroup : $rg"
+        $Rghashtable[$rg].VirtualMachineList = $Rghashtable[$rg].VirtualMachineList | Sort-Object -Property Name
+        $Rghashtable[$rg].VirtualMachineScaleSetList = $Rghashtable[$rg].VirtualMachineScaleSetList | Sort-Object -Property Name
+        
+        $vmList = $Rghashtable[$rg].VirtualMachineList
+        $vmssList = $Rghashtable[$rg].VirtualMachineScaleSetList
         if ($vmList.Length -gt 0) {
-            $vmList | ForEach-Object { Write-Host "  " "$($_.Name)" }
+            $vmList | ForEach-Object { Write-Host " " "$($_.Name)" }
         }
         if ($vmssList.Length -gt 0) {
-            $vmssList | ForEach-Object { Write-Host "  " "$($_.Name)" }
+            $vmssList | ForEach-Object { Write-Host " " "$($_.Name)" }
         }
     }
     Write-Host ""
@@ -1485,11 +1493,11 @@ try {
         exit 1
     }
     
-    ForEach ($rg in ($Rghashtable.Keys | Sort-Object)) {
+    ForEach ($rg in $rgList) {
         try {
             &$sb_roles -rgName $rg
             
-            foreach ($vm in ($Rghashtable[$rg].VirtualMachineList | Sort-Object -Property $_.Name)) {
+            foreach ($vm in $Rghashtable[$rg].VirtualMachineList) {
                 try {
                     $vm = &$sb_vm -vmObj $vm
                     $vm = &$sb_da -vmObj $vm
@@ -1506,16 +1514,16 @@ try {
                     Write-Host "Unexpected VM Exception :"
                     $unknownExceptionTotalCounter+=1
                     $unknownExceptionVirtualMachineConsequentCounter+=1
-                    DisplayException $_
+                    DisplayException -ErrorRecord $_
                     Write-Host "Continuing to the next VM..."
                 } catch [VirtualMachineException] {
                     Write-Host "VM Exception :"
-                    DisplayException $_
+                    DisplayException -ErrorRecord $_
                     Write-Host "Continuing to the next VM..."
                 }
             }
 
-            foreach ($vmss in ($Rghashtable[$rg].VirtualMachineScaleSetList | Sort-Object -Property $_.Name)) {
+            foreach ($vmss in $Rghashtable[$rg].VirtualMachineScaleSetList) {
                 try {
                     $vmsslogheader = FormatVmssIdentifier -VMssObject $vmss
                     $vmss = &$sb_vmss -vmssObj $vmss
@@ -1540,30 +1548,30 @@ try {
                     $unknownExceptionTotalCounter+=1
                     $unknownExceptionVirtualMachineScaleSetConsequentCounter+=1
                     Write-Host "Unexpected VMSS Exception :"
-                    DisplayException $_
+                    DisplayException -ErrorRecord $_
                     Write-Host "Continuing to the next VMSS..."
                 } catch [VirtualMachineScaleSetException] {
                     Write-Host "VMSS Exception :"
-                    DisplayException $_
+                    DisplayException -ErrorRecord $_
                     Write-Host "Continuing to the next VMSS..."
                 }
             }
         } catch [ResourceGroupDoesNotExist] {
             Write-Host "Resource-Group Exception :"
-            DisplayException $_
+            DisplayException -ErrorRecord $_
             Write-Host "Continuing to the next Resource-Group..."
         }
     }
 }
 catch [FatalException] {
     Write-Host "FatalException :"
-    DisplayException $_
+    DisplayException -ErrorRecord $_
     Write-Host "Exiting..."
     exit 1
 }
 catch {
     Write-Host "Unexcepted FatalException :"
-    DisplayException $_
+    DisplayException -ErrorRecord $_
     Write-Host "Exiting..."
     exit 1
 }
