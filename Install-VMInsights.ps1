@@ -242,26 +242,26 @@ class OnboardingCounters {
 # Log Analytics Extension constants
 Set-Variable -Name laExtensionMap -Option Constant -Value @{ 
     "Windows" = @{ ExtensionType = "MicrosoftMonitoringAgent"
-                  TypeHandlerVersion = "1.0"
-                  Publisher = "Microsoft.EnterpriseCloud.Monitoring"
+                   TypeHandlerVersion = "1.0"
+                   Publisher = "Microsoft.EnterpriseCloud.Monitoring"
                 }
-    "Linux" = @{  ExtensionType = "OmsAgentForLinux"
-                  TypeHandlerVersion = "1.6"
-                  Publisher = "Microsoft.EnterpriseCloud.Monitoring"
+    "Linux" =  @{  ExtensionType = "OmsAgentForLinux"
+                   TypeHandlerVersion = "1.6"
+                   Publisher = "Microsoft.EnterpriseCloud.Monitoring"
                 }
 }
 Set-Variable -Name laDefaultExtensionName -Option Constant -Value "MMAExtension"
 
 # Azure Monitoring Agent Extension constants
 Set-Variable -Name amaExtensionConstantMap -Option Constant -Value @{ 
-       "Windows" = @{ExtensionType = "AzureMonitorWindowsAgent"
-                    TypeHandlerVersion = "1.16"
-                    Publisher = "Microsoft.Azure.Monitor" 
-                }
-       "Linux" = @{ExtensionType = "AzureMonitorLinuxAgent" 
-                   TypeHandlerVersion = "1.16"
-                   Publisher = "Microsoft.Azure.Monitor"
-                }
+       "Windows" = @{ ExtensionType = "AzureMonitorWindowsAgent"
+                      TypeHandlerVersion = "1.16"
+                      Publisher = "Microsoft.Azure.Monitor" 
+                    }
+       "Linux" =   @{ ExtensionType = "AzureMonitorLinuxAgent" 
+                      TypeHandlerVersion = "1.16"
+                      Publisher = "Microsoft.Azure.Monitor"
+                    }
 }
 Set-Variable -Name amaDefaultExtensionName -Option Constant -Value "AzureMonitoringAgent"
 
@@ -298,7 +298,7 @@ function PrintSummaryMessage {
         [OnboardingCounters]
         $OnboardingCounters
     )
-    Write-Host "" "Summary:"
+    Write-Host "Summary:"
     Write-Host "Total VM/VMSS processed: $($OnboardingCounters.Total)"
     Write-Host "Succeeded : $($OnboardingCounters.Succeeded)"
     Write-Host "Failed : $($OnboardingCounters.Total -  $OnboardingCounters.Succeeded)"
@@ -496,9 +496,10 @@ function GetVMssExtension {
     $extensionPublisher = $ExtensionProperties.Publisher
     $extensionType = $ExtensionProperties.ExtensionType
 
-    $extensions = $VMssObject.VirtualMachineProfile.ExtensionProfile.Extensions 
+    $extensions = $VMssObject.VirtualMachineProfile.ExtensionProfile.Extensions
+
     foreach ($extension in $extensions) {
-        if ($extension.ExtensionType -eq $extensionType -and $extension.Publisher -eq $extensionPublisher) {
+        if ($extension.Type -eq $extensionType -and $extension.Publisher -eq $extensionPublisher) {
             return $extension
         }
     }
@@ -992,7 +993,8 @@ function SetVMssExtension {
                                       -Type $ExtensionConstantProperties.ExtensionType `
                                       -Publisher $ExtensionConstantProperties.Publisher `
                                       -TypeHandlerVersion $ExtensionConstantProperties.TypeHandlerVersion `
-                                      -AutoUpgradeMinorVersion $True
+                                      -AutoUpgradeMinorVersion $True `
+                                      @parameters
 
     Write-Host "$vmsslogheader : Extension $extensionName, type $extensionType, publisher $extensionPublisher added."
     return $VMssObject
@@ -1464,20 +1466,24 @@ try {
               }
     }
 
-    $rgList = $Rghashtable.Keys | Sort-Object
+    $rgList = Sort-Object -InputObject $Rghashtable.Keys
     Write-Host "VM's and VMSS matching selection criteria :"
     Foreach ($rg in $rgList) {
+        $rgTableObj  = $Rghashtable[$rg]
+        $vmList = $rgTableObj.VirtualMachineList
+        $vmssList = $rgTableObj.VirtualMachineScaleSetList
         Write-Host "" "ResourceGroup : $rg"
-        $Rghashtable[$rg].VirtualMachineList = $Rghashtable[$rg].VirtualMachineList | Sort-Object -Property Name
-        $Rghashtable[$rg].VirtualMachineScaleSetList = $Rghashtable[$rg].VirtualMachineScaleSetList | Sort-Object -Property Name
-        
-        $vmList = $Rghashtable[$rg].VirtualMachineList
-        $vmssList = $Rghashtable[$rg].VirtualMachineScaleSetList
+
         if ($vmList.Length -gt 0) {
+            $vmList = Sort-Object -Property Name -InputObject $vmList
             $vmList | ForEach-Object { Write-Host " " "$($_.Name)" }
+            $rgTableObj.VirtualMachineList = $vmList
         }
+
         if ($vmssList.Length -gt 0) {
+            $vmssList = Sort-Object -Property Name -InputObject $vmssList
             $vmssList | ForEach-Object { Write-Host " " "$($_.Name)" }
+            $rgTableObj.VirtualMachineScaleSetList = $vmssList
         }
     }
     Write-Host ""
@@ -1493,9 +1499,10 @@ try {
     
     ForEach ($rg in $rgList) {
         try {
+            $rgTableObj  = $Rghashtable[$rg]
             &$sb_roles -rgName $rg
             
-            foreach ($vm in $Rghashtable[$rg].VirtualMachineList) {
+            foreach ($vm in $rgTableObj.VirtualMachineList) {
                 try {
                     $vm = &$sb_vm -vmObj $vm
                     $vm = &$sb_da -vmObj $vm
@@ -1521,7 +1528,7 @@ try {
                 }
             }
 
-            foreach ($vmss in $Rghashtable[$rg].VirtualMachineScaleSetList) {
+            foreach ($vmss in $rgTableObj.VirtualMachineScaleSetList) {
                 try {
                     $vmsslogheader = FormatVmssIdentifier -VMssObject $vmss
                     $vmss = &$sb_vmss -vmssObj $vmss
