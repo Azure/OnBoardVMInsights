@@ -1026,7 +1026,7 @@ function SetVMExtension {
     $extensionType = $ExtensionConstantProperties.ExtensionType
     $extensionPublisher = $ExtensionConstantProperties.Publisher
 
-    if (!($PSCmdlet.ShouldProcess($vmlogheader, "Install extension $ExtensionName, type $extensionType, publisher $extensionPublisher"))) {
+    if (!($PSCmdlet.ShouldProcess($vmlogheader, "Install/Update extension $ExtensionName, type $extensionType, publisher $extensionPublisher"))) {
         return $VMObject
     }
 
@@ -1042,7 +1042,7 @@ function SetVMExtension {
             throw [VirtualMachineOperationFailed]::new($VMObject, "Failed to update extension. StatusCode = $($removeResult.StatusCode). ReasonPhrase = $($removeResult.ReasonPhrase)")
         }
     
-        Write-Host "$vmlogheader : Successfully deployed/updated extension $ExtensionName, type $extensionType, publisher $extensionPublisher"
+        Write-Host "$vmlogheader : Successfully installed/updated extension $ExtensionName, type $extensionType, publisher $extensionPublisher"
         return $VMObject
     } catch [Microsoft.Azure.Commands.Compute.Common.ComputeCloudException] {
         $errorMessage = ExtractCloudExceptionErrorMessage $_
@@ -1059,7 +1059,7 @@ function SetVMExtension {
             throw [ResourceGroupDoesNotExist]::new($VMObject.ResourceGroupName, $_.Exception)       
         } 
         
-        throw [VirtualMachineUnknownException]::new($VMObject, "Failed to update/install extension $ExtensionName, type $extensionType, publisher $extensionPublisher", $_.Exception)
+        throw [VirtualMachineUnknownException]::new($VMObject, "Failed to install/update extension $ExtensionName, type $extensionType, publisher $extensionPublisher", $_.Exception)
     }
 }
 
