@@ -115,10 +115,10 @@ Specify PolicyAssignmentName to onboard VMI for VMs part of the policy assignmen
 Install-VMInsights.ps1 -SubscriptionId <SubscriptionId> -ResourceGroup <ResourceGroup>  -DcrResourceId <DataCollectionRuleResourceId> -UserAssignedManagedIdentityName <UserAssignedIdentityName> -UserAssignedManagedIdentityResourceGroup <UserAssignedIdentityResourceGroup>
 Onboard VMI for all VM's or VMSS in a Resource Group in a subscription with Azure Monitoring Agent (AMA).
 Specify DcrResourceId to associate a data collection rule with VM or VMSS
-Specify UserAssignedManagedIdentityName and UserAssignedManagedIdentityResourceGroup for AMA functioning.
+Specify UserAssignedManagedIdentityName and UserAssignedManagedIdentityResourceGroup for AMA authentication purposes.
 
 .EXAMPLE
-Install-VMInsights.ps1 -SubscriptionId <SubscriptionId> -ResourceGroup <ResourceGroup>  -DcrResourceId <DataCollectionRuleResourceId> -UserAssignedManagedIdentityName <UserAssignedIdentityName> -UserAssignedManagedIdentityResourceGroup <UserAssignedIdentityResourceGroup> -ProcessAndDependencies
+Install-VMInsights.ps1 -SubscriptionId <SubscriptionId> -ResourceGroup <ResourceGroup> -ProcessAndDependencies -DcrResourceId <DataCollectionRuleResourceId> -UserAssignedManagedIdentityName <UserAssignedIdentityName> -UserAssignedManagedIdentityResourceGroup <UserAssignedIdentityResourceGroup>
 The above command will onboard Assign a UAMI to a VM/VMss for AMA, Onboard AMA and associate a DCR with the VM/Vmss
 Specify ProcessAndDependencies to onboard VM's or VMSS with Dependency Agent (DA).
 
