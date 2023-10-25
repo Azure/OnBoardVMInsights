@@ -32,34 +32,34 @@
 
 <#
 .SYNOPSIS
-This script installs VM extensions for Log Analytics/Azure Monitoring Agent (AMA) and Dependency Agent as needed for VM Insights.
-If AMA is onboarded, a Data Collection Rule (DCR) and a User Assigned Managed Identity (UAMI) is also associated with the VM's and VM Scale Sets.
+This script installs VM extensions for Log Analytics/Azure Monitoring Agent (AMA) and Dependency Agent if needed for VM Insights.
+If AMA is onboarded, a Data Collection Rule (DCR) and a User Assigned Managed Identity (UAMI) is also associated with the VM's and VMSS.
 
 .DESCRIPTION
-This script installs or re-configures following on VM's and VM Scale Sets under a Subscription.
+This script installs or re-configures following on VM's and VMSS under a Subscription.
 1. Log Analytics VM Extension configured to supplied Log Analytics Workspace and Dependency Agent VM Extension.
-2. Azure Monitor Agent along with Data Collection Rule, User Assigned Managed Identity and Dependency Agent VM Extension (optional).
+2. Azure Monitor Agent along with Data Collection Rule association, User Assigned Managed Identity and Dependency Agent VM Extension (optional).
 
 Scope can further narrowed down to:
 - Resource Group
-- Specific VM/VM Scale Set
+- Specific VM/VMSS
 - Policy Assignment Scope
 
-Script will show you list of VM's/VM Scale Sets that will apply to and let you confirm to continue.
+Script will show you list of VM's/VMSS that will apply to and let you confirm to continue.
 Use -Approve Switch to run without prompting, if all required parameters are provided.
 
 If the Log Analyitcs Agent extension is already configured with a workspace, use -ReInstall Switch to update the workspace.
 Use -WhatIf if you would like to see what would happen in terms of installs, what workspace configured to, and status of the extension.
 
 .PARAMETER SubscriptionId
-Subscription identifier for the VMs/VM Scale Sets
-If using PolicyAssignmentName parameter, VMs part of the subscriptions are considered.
+Subscription identifier for the VMs or VMSS
+If using PolicyAssignmentName parameter, VMs part of the parameter SubscriptionId are considered.
 
 .PARAMETER ResourceGroup
-<Optional> Name of the Resource Group of VMs or VM Scale Sets.
+<Optional> Name of the Resource Group of VMs or VMSS.
 
 .PARAMETER PolicyAssignmentName
-<Optional> Name of policy assignment for the for the VMs or VM Scale Sets in its scope.
+<Optional> Name of policy assignment for the VMs or VMSS in its scope.
 
 .PARAMETER Name
 <Optional> Name qualifier to match on VM/VMSS's name in the scope. Default behavior is match all. 
@@ -68,7 +68,7 @@ If using PolicyAssignmentName parameter, VMs part of the subscriptions are consi
 <Optional> Set this flag to trigger update of VM instances in a scale set whose upgrade policy is set to Manual.
 
 .PARAMETER Approve
-<Optional> Set this flag to provide the approval for the installation to start with no confirmation prompt for the listed VM's/VM Scale Sets.
+<Optional> Set this flag to provide the approval for the installation to start with no confirmation prompt for the listed VM's/VMSS.
 
 .PARAMETER Whatif
 <Optional> Set this flag to get info about expected effect of the commands in the script.
@@ -87,46 +87,44 @@ Log Analytics Workspace primary or secondary key.
 <Optional> Set this flag to trigger removal of existing Log analytics extension and re-installation to migrate log analytics workspaces. 
 
 
-.PARAMETER ProcessAndDependencies
-<Optional> Set this flag to onboard Dependency Agent with Azure Monitoring Agent (AMA) settings.
-
 .PARAMETER DcrResourceId
 Data Collection Rule (DCR) azure resource ID identifier.
 
 .PARAMETER UserAssignedManagedIdentityResourceGroup
-User Assigned Managed Identity (UAMI) resource group.
+Name of User Assigned Managed Identity (UAMI) resource group.
 
 .PARAMETER UserAssignedManagedIdentityName
-User Assigned Managed Identity (UAMI) name .
+Name of User Assigned Managed Identity (UAMI).
 
+.PARAMETER ProcessAndDependencies
+<Optional> Set this flag to onboard Dependency Agent with Azure Monitoring Agent (AMA) settings.
 
 .EXAMPLE
 Install-VMInsights.ps1 -WorkspaceId <WorkspaceId> -WorkspaceKey <WorkspaceKey> -SubscriptionId <SubscriptionId> -ResourceGroup <ResourceGroup>
-Install for all VM's in a Resource Group in a subscription
+Onboard VMI for all VM's or VMSS in a Resource Group in a subscription with Legacy Agent (LA).
 
 .EXAMPLE
 Install-VMInsights.ps1 -WorkspaceId <WorkspaceId> -WorkspaceKey <WorkspaceKey> -SubscriptionId <SubscriptionId> -ResourceGroup <ResourceGroup> -ReInstall
-Specify to ReInstall extensions even if already installed, for example to update to a different workspace
+Specify ReInstall to switch workspace with Legacy Agent (Linux) - OMSAgent.
 
 .EXAMPLE
-Install-VMInsights.ps1 -WorkspaceId <WorkspaceId> -WorkspaceKey <WorkspaceKey> -SubscriptionId <SubscriptionId> -PolicyAssignmentName a4f79f8ce891455198c08736 -ReInstall
-Specify to use a PolicyAssignmentName for source, and to ReInstall (move to a new workspace)
-
-.EXAMPLE
-Install-VMInsights.ps1 -SubscriptionId <SubscriptionId> -ResourceGroup <ResourceGroup>  -DcrResourceId <DataCollectionRuleResourceId> -ProcessAndDependencies -UserAssignedManagedIdentityName <UserAssignedIdentityName> -UserAssignedManagedIdentityResourceGroup <UserAssignedIdentityResourceGroup>
-The above command will onboard Assign a UAMI to a VM/VMss for AMA, Onboard AMA, DA and associate a DCR with the VM/Vmss
+Install-VMInsights.ps1 -WorkspaceId <WorkspaceId> -WorkspaceKey <WorkspaceKey> -SubscriptionId <SubscriptionId> -PolicyAssignmentName a4f79f8ce891455198c08736
+Specify PolicyAssignmentName to onboard VMI for VMs part of the policy assignment scope with Legacy Agent (LA).
 
 .EXAMPLE
 Install-VMInsights.ps1 -SubscriptionId <SubscriptionId> -ResourceGroup <ResourceGroup>  -DcrResourceId <DataCollectionRuleResourceId> -UserAssignedManagedIdentityName <UserAssignedIdentityName> -UserAssignedManagedIdentityResourceGroup <UserAssignedIdentityResourceGroup>
+Onboard VMI for all VM's or VMSS in a Resource Group in a subscription with Azure Monitoring Agent (AMA).
+Specify DcrResourceId to associate a data collection rule with VM or VMSS
+Specify UserAssignedManagedIdentityName and UserAssignedManagedIdentityResourceGroup for AMA functioning.
+
+.EXAMPLE
+Install-VMInsights.ps1 -SubscriptionId <SubscriptionId> -ResourceGroup <ResourceGroup>  -DcrResourceId <DataCollectionRuleResourceId> -UserAssignedManagedIdentityName <UserAssignedIdentityName> -UserAssignedManagedIdentityResourceGroup <UserAssignedIdentityResourceGroup> -ProcessAndDependencies
 The above command will onboard Assign a UAMI to a VM/VMss for AMA, Onboard AMA and associate a DCR with the VM/Vmss
+Specify ProcessAndDependencies to onboard VM's or VMSS with Dependency Agent (DA).
 
 .EXAMPLE
 Install-VMInsights.ps1 -SubscriptionId <SubscriptionId> -PolicyAssignmentName a4f79f8ce891455198c08736  -DcrResourceId <DataCollectionRuleResourceId> -UserAssignedManagedIdentityName <UserAssignedIdentityName> -UserAssignedManagedIdentityResourceGroup <UserAssignedIdentityResourceGroup>
-The above command will onboard Assign a UAMI to a VMs for AMA, Onboard AMA and associate a DCR with the VM/Vmss
-
-.EXAMPLE
-Install-VMInsights.ps1 -SubscriptionId <SubscriptionId> -PolicyAssignmentName a4f79f8ce891455198c08736  -DcrResourceId <DataCollectionRuleResourceId> -ProcessAndDependencies -UserAssignedManagedIdentityName <UserAssignedIdentityName> -UserAssignedManagedIdentityResourceGroup <UserAssignedIdentityResourceGroup>
-The above command will onboard Assign a UAMI to a VMs for AMA, Onboard AMA, DA and associate a DCR with the VM/Vmss
+Specify PolicyAssignmentName to onboard VMI for VMs part of the policy assignment scope with Azure Monitoring Agent (AMA).
 
 .LINK
 This script is posted to and further documented at the following location:
@@ -134,8 +132,8 @@ http://aka.ms/OnBoardVMInsights
 #>
 
 <#CmdletBinding ConfirmImpact level Info: High - Irreversible action. For example: A resource being deleted. 
-                                          Medium (Default) - Resource propetries being updated.
-                                          Low -  local variables operations.
+                                          Medium (Default) - Resource properties being updated.
+                                          Low -  Local variables operations.
 #>
 #Assumption - The script assumes the entity running the script has access to all VMs/VMSS in the script.
 [CmdletBinding(SupportsShouldProcess = $True, ConfirmImpact = 'High')]
@@ -649,7 +647,7 @@ function NewDCRAssociationVmss {
         $dcrAssociationList = Get-AzDataCollectionRuleAssociation -TargetResourceId $vmssId 
         foreach ($dcra in $dcrAssociationList) {
             if ($dcra.DataCollectionRuleId -eq $DcrResourceId) {
-                Write-Host "$vmsslogheader : Data Collection Rule $($dcra.Name) already associated to the VMSS"
+                Write-Host "$vmsslogheader : Data Collection Rule Id $DcrResourceId already associated to the VMSS"
                 return
             }
         }
@@ -1030,7 +1028,7 @@ function SetVMExtension {
         return $VMObject
     }
 
-    Write-Host "$vmlogheader : Deploying/Updating extension $ExtensionName, type $extensionType, publisher $extensionPublisher"
+    Write-Host "$vmlogheader : Installing/Updating extension $ExtensionName, type $extensionType, publisher $extensionPublisher"
     
     try {
         $result = Set-AzVMExtension -ResourceGroupName $($VMObject.ResourceGroupName) `
@@ -1076,7 +1074,7 @@ function UpgradeVmssExtensionManualUpdateDisabled {
     )
 
     $vmsslogheader = FormatVmssIdentifier -VMssObject $VMssObject
-    Write-Host "$vmsslogheader : UpgradePolicy is Manual. Please trigger upgrade of VM Scale Set or call with -TriggerVmssManualVMUpdate"
+    Write-Host "$vmsslogheader : UpgradePolicy is Manual. Please trigger upgrade of VMSS or call with -TriggerVmssManualVMUpdate"
 }
 
 function UpgradeVmssExtensionManualUpdateEnabled {
