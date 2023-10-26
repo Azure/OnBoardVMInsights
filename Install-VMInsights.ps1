@@ -36,8 +36,8 @@ This script installs VM extensions for Log Analytics/Azure Monitoring Agent (AMA
 If AMA is onboarded, a Data Collection Rule (DCR) and a User Assigned Managed Identity (UAMI) is also associated with the VM's and VMSS.
 
 .DESCRIPTION
-This script installs or re-configures following on VM's and VMSS under a Subscription.
-1. Log Analytics VM Extension configured to supplied Log Analytics Workspace and Dependency Agent VM Extension.
+This script installs or re-configures the following on VM's and VMSS under a Subscription.
+1. Log Analytics VM Extension configured to supply Log Analytics Workspace and Dependency Agent VM Extension.
 2. Azure Monitor Agent along with Data Collection Rule association, User Assigned Managed Identity and Dependency Agent VM Extension (optional).
 
 Scope can further narrowed down to:
@@ -49,7 +49,7 @@ Script will show you list of VM's/VMSS that will apply to and let you confirm to
 Use -Approve Switch to run without prompting, if all required parameters are provided.
 
 If the Log Analyitcs Agent extension is already configured with a workspace, use -ReInstall Switch to update the workspace.
-Use -WhatIf if you would like to see what would happen in terms of installs, what workspace configured to, and status of the extension.
+Use -WhatIf to get info about expected effect of the commands in the script.
 
 .PARAMETER SubscriptionId
 Subscription identifier for the VMs or VMSS
