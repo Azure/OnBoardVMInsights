@@ -38,7 +38,8 @@ If AMA is onboarded, a Data Collection Rule (DCR) and a User Assigned Managed Id
 .DESCRIPTION
 This script installs or re-configures the following on VM's and VMSS under a Subscription.
 1. Log Analytics VM Extension configured to supply Log Analytics Workspace and Dependency Agent VM Extension.
-2. Azure Monitor Agent along with Data Collection Rule association, User Assigned Managed Identity and Dependency Agent VM Extension (optional).
+2. Azure Monitor Agent along with Data Collection Rule association, User Assigned Managed Identity, and Dependency Agent VM Extension (optional).
+
 
 Scope can further narrowed down to:
 - Resource Group
