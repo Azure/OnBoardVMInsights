@@ -1146,7 +1146,7 @@ function UpgradeVmssExtensionManualUpdateEnabled {
                 Write-Host "$vmsslogheader : Unable to lookup VMSS instance name $scaleSetInstanceName. Continuing..."
                 DisplayException -ErrorRecord $_
             } 
-            #Counter -> consdider throwing exception is hard.
+            
             throw [VirtualMachineScaleSetUnknownException]::new($VMssObject, "Failed to upgrade VMSS instance name $scaleSetInstanceName", $_.Exception)
         }
     }
