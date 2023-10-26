@@ -234,6 +234,7 @@ class ResourceGroupTableElement {
     [System.Collections.ArrayList] $VirtualMachineList = [System.Collections.ArrayList]::new()
     [System.Collections.ArrayList] $VirtualMachineScaleSetList = [System.Collections.ArrayList]::new()
 }
+
 class OnboardingCounters {
     [Decimal]$Succeeded = 0
     [Decimal]$Total = 0
@@ -354,6 +355,7 @@ function FormatVmIdentifier {
     )
     return "($($VMObject.ResourceGroupName)) $($VMObject.Name)"
 }
+
 function FormatVmssIdentifier {
     <#
     .SYNOPSIS
@@ -367,6 +369,7 @@ function FormatVmssIdentifier {
     
     return "($($VMssObject.ResourceGroupName)) $($VMssObject.Name)"
 }
+
 function DisplayException {
     <#
     .SYNOPSIS
@@ -1039,7 +1042,7 @@ function SetVMExtension {
                                     @InstallParameters @ExtensionConstantProperties -ForceRerun $True
 
         if (!$result.IsSuccessStatusCode) {
-            throw [VirtualMachineOperationFailed]::new($VMObject, "Failed to update extension. StatusCode = $($removeResult.StatusCode). ReasonPhrase = $($removeResult.ReasonPhrase)")
+            throw [VirtualMachineOperationFailed]::new($VMObject, "Failed to update extension. StatusCode = $($result.StatusCode). ReasonPhrase = $($result.ReasonPhrase)")
         }
     
         Write-Host "$vmlogheader : Successfully installed/updated extension $ExtensionName, type $extensionType, publisher $extensionPublisher"
