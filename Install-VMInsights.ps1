@@ -1384,8 +1384,8 @@ try {
         try {
             Write-Verbose "Validating ($UserAssignedManagedIdentityResourceGroup, $UserAssignedManagedIdentityName)"
             Set-Variable -Name UserAssignedManagedIdentityObject `
-                    -Option Constant `
-                    -Value (Get-AzUserAssignedIdentity -Name $UserAssignedManagedIdentityName -ResourceGroupName $UserAssignedManagedIdentityResourceGroup)   
+                         -Option Constant `
+                         -Value (Get-AzUserAssignedIdentity -Name $UserAssignedManagedIdentityName -ResourceGroupName $UserAssignedManagedIdentityResourceGroup)   
         } catch {
             throw [FatalException]::new($_.Exception.Message, $_.Exception)
         }
