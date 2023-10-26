@@ -1128,7 +1128,8 @@ function UpgradeVmssExtensionManualUpdateEnabled {
         try {
             $result = Update-AzVmssInstance -ResourceGroupName $vmssResourceGroupName -VMScaleSetName $vmssName -InstanceId $scaleSetInstance.InstanceId
             if ($result.Status -ne "Succeeded") {
-                Write-Host "$vmsslogheader : Failed to upgrade VMSS instance name $scaleSetInstanceName. $($result.Status)"
+                Write-Host "$vmsslogheader : Failed to upgrade VMSS instance name $scaleSetInstanceName, $i of $instanceCount. $($result.Status)"
+
             } else {
                 Write-Verbose "$vmsslogheader : Upgrade VMSS instance name $scaleSetInstanceName, $i of $instanceCount"
             }
