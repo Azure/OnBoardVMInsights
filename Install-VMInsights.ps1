@@ -1115,7 +1115,8 @@ function UpgradeVmssExtensionManualUpdateEnabled {
     $instanceCount = $scaleSetInstances.Length
     Foreach ($scaleSetInstance in $scaleSetInstances) {
         $i++
-        Write-Host "Upgrading $i of $instanceCount"
+        Write-Host "Upgrading $scaleSetInstanceName, $i of $instanceCount"
+
         $scaleSetInstanceName = $($scaleSetInstance.Name)
         if ($scaleSetInstance.LatestModelApplied) {
             Write-Verbose "$vmsslogheader : Latest model already applied for $scaleSetInstanceName, $i of $instanceCount"
