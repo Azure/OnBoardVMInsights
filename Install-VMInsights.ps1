@@ -717,10 +717,10 @@ function OnboardDaVm {
     $extensionName = $daDefaultExtensionName
     $daExtensionConstantProperties = $daExtensionConstantsMap[$VMObject.StorageProfile.OsDisk.OsType.ToString()]
     $extension = GetVMExtension -VMObject $VMObject -ExtensionProperties $daExtensionConstantProperties
-    
+    # Use supplied name unless already deployed, use same name.
     if ($extension) {
         $extensionName = $extension.Name
-        Write-Host "$(FormatVmIdentifier -VMObject $VMObject) : Extension $extensionName, type $($daExtensionConstantProperties.ExtensionType), publisher $($daExtensionConstantProperties.Publisher) already installed."
+        Write-Host "$(FormatVmIdentifier -VMObject $VMObject) : Extension $extensionName, type $($daExtensionConstantProperties.ExtensionType), publisher $($daExtensionConstantProperties.Publisher) already installed. Provisioning State: $($extension.ProvisioningState)"
     }
     
     $parameters = @{"Settings" = $Settings}
@@ -742,20 +742,17 @@ function OnboardAmaVm {
         [Microsoft.Azure.Commands.Compute.Models.PSVirtualMachine]
         $VMObject
     )
-   
-    # Use supplied name unless already deployed, use same name.
+    
     $amaExtensionConstantProperties = $amaExtensionConstantMap[$VMObject.StorageProfile.OsDisk.OsType.ToString()]
     $extensionName = $amaDefaultExtensionName
     $extension = GetVMExtension -VMObject $VMObject -ExtensionProperties $amaExtensionConstantProperties
-
+    # Use supplied name unless already deployed, use same name.
     if ($extension) {
         $extensionName = $extension.Name
         Write-Host "$(FormatVmIdentifier -VMObject $VMObject) : Extension $extensionName, type $($amaExtensionConstantProperties.ExtensionType), publisher $($amaExtensionConstantProperties.Publisher) already installed. Provisioning State: $($extension.ProvisioningState)"
     }
 
-    $parameters = @{
-        Settings = $amaPublicSettings
-    }
+    $parameters = @{"Settings" = $amaPublicSettings}
 
     return SetVMExtension -VMObject $VMObject `
                           -ExtensionName $extensionName `
@@ -782,7 +779,7 @@ function OnboardLaVmWithReInstall {
     $vmlogheader = FormatVmIdentifier -VMObject $VMObject
     
     $extension = GetVMExtension -VMObject $VMObject -ExtensionProperties $laExtensionConstantProperties
-
+    # Use supplied name unless already deployed, use same name.
     if ($extension) {
         $extensionName = $extension.Name
         Write-Host "$vmlogheader : Extension $extensionName, type $($laExtensionConstantProperties.ExtensionType), publisher $($laExtensionConstantProperties.Publisher) already installed. Provisioning State: $($extension.ProvisioningState)"
@@ -826,11 +823,10 @@ function OnboardLaVmWithoutReInstall {
 
     $osType = $VMObject.StorageProfile.OsDisk.OsType.ToString()
     $laExtensionConstantProperties = $laExtensionMap[$osType]
-    # Use supplied name unless already deployed, use same name
     $extensionName = $laDefaultExtensionName
     $extension = GetVMExtension -VMObject $VMObject -ExtensionProperties $laExtensionConstantProperties
     $vmlogheader = FormatVmIdentifier -VMObject $VMObject
-
+    # Use supplied name unless already deployed, use same name
     if ($extension) {
         $extensionName = $extension.Name
         Write-Host "$vmlogheader : Extension $extensionName, type $($laExtensionConstantProperties.ExtensionType), publisher $($laExtensionConstantProperties.Publisher) already installed. Provisioning State: $($extension.ProvisioningState)"
@@ -963,7 +959,7 @@ function SetVMssExtension {
     $vmsslogheader = FormatVmssIdentifier -VMssObject $VMssObject
 
     if ($extension) {
-        Write-Host "$vmsslogheader : Extension $extensionName, type $extensionType, publisher $extensionPublisher already installed."
+        Write-Host "$vmsslogheader : Extension $ExtensionName, type $extensionType, publisher $extensionPublisher already installed."
 
         if ($Settings) {
             $extension.Settings = $Settings
@@ -977,7 +973,7 @@ function SetVMssExtension {
         return $VMssObject
     } 
 
-    if (!($PSCmdlet.ShouldProcess($vmsslogheader, "Install extension $extensionName, type $extensionType, publisher $extensionPublisher"))) {
+    if (!($PSCmdlet.ShouldProcess($vmsslogheader, "Install extension $ExtensionName, type $extensionType, publisher $extensionPublisher"))) {
         return $VMssObject
     }
     
@@ -999,7 +995,7 @@ function SetVMssExtension {
                                       -AutoUpgradeMinorVersion $True `
                                       @parameters
 
-    Write-Host "$vmsslogheader : Extension $extensionName, type $extensionType, publisher $extensionPublisher added."
+    Write-Host "$vmsslogheader : Extension $ExtensionName, type $extensionType, publisher $extensionPublisher added."
     return $VMssObject
 }
 
