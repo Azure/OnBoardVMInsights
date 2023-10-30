@@ -1541,7 +1541,8 @@ try {
                     if ($vmss.UpgradePolicy.Mode -eq 'Manual') {
                         &$sb_upgrade -vmssObj $vmss    
                     } else {
-                        Write-Host "$vmsslogheader : Upgrade mode is $($vmss.UpgradePolicy.Mode). Continuing..."
+                        Write-Host "$vmsslogheader : Upgrade mode is $($vmss.UpgradePolicy.Mode)."
+
                     }
                     
                     Write-Host "$vmsslogheader : Successfully onboarded VMInsights"
