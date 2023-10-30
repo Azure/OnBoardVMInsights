@@ -391,7 +391,8 @@ function DisplayException {
             Write-Verbose "$($ex.StackTrace)"
             $ex = $ex.InnerException
         }
-        Write-Host "ScriptStackTrace :`r`n$($ErrorRecord.ScriptStackTrace)"
+        Write-Host "ScriptStackTrace :" $ErrorRecord.ScriptStackTrace
+
     }
     catch {
         # silently ignore
