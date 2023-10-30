@@ -834,7 +834,8 @@ function OnboardLaVmWithoutReInstall {
         if ($osType -eq "Linux" -and $extension.PublicSettings) {
             $ext = $extension.PublicSettings | ConvertFrom-Json 
             if ($ext.workspaceId -ne $laPublicSettings.workspaceId) {
-                Write-Host "$vmlogheader : OmsAgentForLinux does not support updating workspace. Please try again with reinstall Flag"
+                Write-Host "$vmlogheader : OmsAgentForLinux does not support changing the workspace. Use the -Reinstall flag to make the change."
+
                 return $VMObject
             }
         }
