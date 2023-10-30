@@ -1434,7 +1434,8 @@ try {
 
     if ($PolicyAssignmentName) {
         #this section is only for VMs
-        Write-Host "Looking up resources in policy assingment $PolicyAssignmentName"
+        Write-Host "Looking up Virtual Machines in policy assingment $PolicyAssignmentName"
+
         $policyAssignmentNameResources = @{}
         Get-AzPolicyState @searchParameters -Filter "PolicyAssignmentName eq '$PolicyAssignmentName' and ResourceType eq 'Microsoft.Compute/virtualMachines'"
                           | ForEach-Object {
