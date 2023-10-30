@@ -129,7 +129,7 @@ Specify PolicyAssignmentName to onboard VMI for VMs part of the policy assignmen
 
 .LINK
 This script is posted to and further documented at the following location :
-http ://aka.ms/OnBoardVMInsights
+http://aka.ms/OnBoardVMInsights
 #>
 
 <#CmdletBinding ConfirmImpact level Info : High - Customer data-flow disruptive action.
