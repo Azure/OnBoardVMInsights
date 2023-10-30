@@ -1571,7 +1571,8 @@ try {
     }
 }
 catch [FatalException] {
-    Write-Host "FatalException :"
+    Write-Host "Fatal Exception :"
+
     DisplayException -ErrorRecord $_
     Write-Host "Exiting..."
     exit 1
