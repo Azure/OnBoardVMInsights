@@ -1449,7 +1449,8 @@ try {
                 PopulateRgHashTableVm -Rghashtable $Rghashtable -VMObject $_
               }
     } else {
-        Write-Host "Getting list of VM's or VM ScaleSets matching criteria specified"
+        Write-Host "Getting list of VMs or VM Scale Sets matching specified criteria."
+
         # If ResourceGroup value is passed - select all VMs under given ResourceGroupName
         
         Get-AzVM @searchParameters
