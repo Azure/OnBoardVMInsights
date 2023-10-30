@@ -171,7 +171,7 @@ class VirtualMachineScaleSetException : System.Exception {
 }
 
 class ResourceGroupDoesNotExist : System.Exception {
-    ResourceGroupDoesNotExist ([String]$rgName, [Exception]$innerException) : base("$rgName : Resource-Group does not exist", $innerException) {}
+    ResourceGroupDoesNotExist ([String]$rgName, [Exception]$innerException) : base("$rgName : Resource Group does not exist", $innerException) {}
 }
 
 class VirtualMachineUnknownException : VirtualMachineException {
@@ -477,7 +477,7 @@ function GetVMExtension {
         if ($errorCode -eq "ResourceGroupNotFound") {
             throw [ResourceGroupDoesNotExist]::new($($VMObject.ResourceGroupName),$_.Exception)   
         }    
-        throw [VirtualMachineUnknownException]::new($VMObject, "Failed to lookup extension with type = $extensionType, publisher = $extensionPublisher", $_.Exception)
+        throw [VirtualMachineUnknownException]::new($VMObject, "Failed to locate extension with type = $extensionType, publisher = $extensionPublisher", $_.Exception)
     }
     
     return $null
@@ -915,7 +915,7 @@ function SetManagedIdentityRoles {
         return
     }
 
-    Write-Verbose "Scope $ResourceGroupId : Assigning role $Role"
+    Write-Verbose "$ResourceGroupId : Assigning role $Role"
     try {
         New-AzRoleAssignment -ObjectId $($UserAssignedManagedIdentityObject.principalId) -RoleDefinitionName $Role -Scope $ResourceGroupId
     } catch {
@@ -930,7 +930,7 @@ function SetManagedIdentityRoles {
             throw [ResourceGroupDoesNotExist]::new($($VMObject.ResourceGroupName))
         }
     }
-    Write-Verbose "Scope $ResourceGroupId : $Role has been successfully assigned to $uamiName"
+    Write-Verbose "$ResourceGroupId : $Role has been successfully assigned to $uamiName"
 }
 
 function SetVMssExtension {
@@ -1148,7 +1148,7 @@ function UpgradeVmssExtensionManualUpdateEnabled {
                 throw [ResourceGroupDoesNotExist]::new($VMssObject.ResourceGroupName ,$_.Exception)  
             }
             if ($errorCode -eq "OperationNotAllowed") {
-                Write-Host "$vmsslogheader : Unable to lookup VMSS instance name $scaleSetInstanceName. Continuing..."
+                Write-Host "$vmsslogheader : Unable to locate VMSS instance name $scaleSetInstanceName. Continuing ..."
                 DisplayException -ErrorRecord $_
             } 
             
@@ -1373,6 +1373,7 @@ try {
         #Cannot validate Workspace existence with WorkspaceId, WorkspaceKey parameters.
         Set-Variable -Name laPublicSettings -Option Constant -Value @{"workspaceId" = $WorkspaceId; "stopOnMultipleConnections" = "true"}
         Set-Variable -Name laProtectedSettings -Option Constant -Value  @{"workspaceKey" = $WorkspaceKey}
+        Set-Variable -Name disableAmaDaPublicSettings -Option Constant -Value @{"enableAMA" = "false"}
         if ($ReInstall) {
             Set-Variable -Name sb_vm -Option Constant -Value { param([Microsoft.Azure.Commands.Compute.Models.PSVirtualMachine]$vmObj) OnboardLaVmWithReInstall -VMObject $vmObj}
         } else {
@@ -1383,10 +1384,11 @@ try {
                                                                                                                                                             -ExtensionName $laDefaultExtensionName `
                                                                                                                                                             -ExtensionConstantProperties $laExtensionMap[$vmssObj.VirtualMachineProfile.StorageProfile.OsDisk.OsType.ToString()] `
                                                                                                                                                             -Settings $laPublicSettings -ProtectedSetting $laProtectedSettings}
-        Set-Variable -Name sb_da -Option Constant -Value { param([Microsoft.Azure.Commands.Compute.Models.PSVirtualMachine]$vmObj)  OnboardDaVm -VMObject $vmObj -Settings @{}}
+        Set-Variable -Name sb_da -Option Constant -Value { param([Microsoft.Azure.Commands.Compute.Models.PSVirtualMachine]$vmObj)  OnboardDaVm -VMObject $vmObj -Settings $disableAmaDaPublicSettings}
         Set-Variable -Name sb_da_vmss -Option Constant -Value { param([Microsoft.Azure.Commands.Compute.Automation.Models.PSVirtualMachineScaleSet]$vmssObj) SetVMssExtension -VMssObject $vmssObj `
                                                                                                                                                                   -ExtensionName $daDefaultExtensionName `
-                                                                                                                                                                   -ExtensionConstantProperties $daExtensionConstantsMap[$vmssObj.VirtualMachineProfile.StorageProfile.OsDisk.OsType.ToString()]}
+                                                                                                                                                                   -ExtensionConstantProperties $daExtensionConstantsMap[$vmssObj.VirtualMachineProfile.StorageProfile.OsDisk.OsType.ToString()] `
+                                                                                                                                                                   -Settings $disableAmaDaPublicSettings}
         Set-Variable -Name sb_roles -Option Constant -Value $sb_nop_block_roles
     } else {
         try {
@@ -1414,12 +1416,12 @@ try {
             Set-Variable -Name sb_da -Option Constant -Value $sb_nop_block
             Set-Variable -Name sb_da_vmss -Option Constant -Value $sb_nop_block
         } else {
-            Set-Variable -Name processAndDependenciesPublicSettings -Option Constant -Value @{"enableAMA" = "true"}
+            Set-Variable -Name enableAmaDaPublicSettings -Option Constant -Value @{"enableAMA" = "true"}
             Set-Variable -Name sb_da -Option Constant -Value {param([Microsoft.Azure.Commands.Compute.Models.PSVirtualMachine]$vmObj) OnboardDaVm -VMObject $vmObj `
-                                                                                                                                            -Settings $processAndDependenciesPublicSettings}
+                                                                                                                                            -Settings $enableAmaDaPublicSettings}
             Set-Variable -Name sb_da_vmss -Option Constant -Value { param([Microsoft.Azure.Commands.Compute.Automation.Models.PSVirtualMachineScaleSet]$vmssObj) SetVMssExtension -VMssObject $vmssObj `
                                                                                                                                                                                   -ExtensionName $daDefaultExtensionName `
-                                                                                                                                                                                  -Settings $processAndDependenciesPublicSettings `
+                                                                                                                                                                                  -Settings $enableAmaDaPublicSettings `
                                                                                                                                                                                   -ExtensionConstantProperties $daExtensionConstantsMap[$vmssObj.VirtualMachineProfile.StorageProfile.OsDisk.OsType.ToString()]}
         }
     
@@ -1448,8 +1450,8 @@ try {
                           }
 
         #Virtual Machines part of a VMSS will be skipped.
-        Get-AzVM @searchParameters
-            | Where-Object {!($_.VirtualMachineScaleSet) -and $_.Name -like $Name -and $policyAssignmentNameResources.ContainsKey($_.Id)}
+        Get-AzVM @searchParameters -Name $Name
+            | Where-Object {!($_.VirtualMachineScaleSet) -and $policyAssignmentNameResources.ContainsKey($_.Id)}
             | ForEach-Object {
                 $onboardingCounters.Total +=1 ;
                 PopulateRgHashTableVm -Rghashtable $Rghashtable -VMObject $_
@@ -1459,7 +1461,7 @@ try {
 
         # If ResourceGroup value is passed - select all VMs under given ResourceGroupName
         
-        Get-AzVM @searchParameters
+        Get-AzVM @searchParameters -Name $Name
             | Where-Object {!($_.VirtualMachineScaleSet) -and $_.Name -like $Name}
             | ForEach-Object { 
                 $onboardingCounters.Total +=1 ; 
@@ -1467,8 +1469,8 @@ try {
               }
         
         #VMI does not support VMSS with flexible orchestration.
-        Get-AzVmss @searchParameters 
-            | Where-Object {$_.Name -like $Name -and $_.OrchestrationMode -ne 'Flexible'}
+        Get-AzVmss @searchParameters -Name $Name
+            | Where-Object {$_.OrchestrationMode -ne 'Flexible'}
             | ForEach-Object {
                 $onboardingCounters.Total +=1 ; 
                 PopulateRgHashTableVmss -RgHashTable $Rghashtable -VMssObject $_
@@ -1485,13 +1487,13 @@ try {
 
         if ($vmList.Length -gt 0) {
             $vmList = Sort-Object -Property Name -InputObject $vmList
-            $vmList | ForEach-Object { Write-Host " " "$($_.Name)" }
+            $vmList | ForEach-Object { Write-Host " $($_.Name)" }
             $rgTableObj.VirtualMachineList = $vmList
         }
 
         if ($vmssList.Length -gt 0) {
             $vmssList = Sort-Object -Property Name -InputObject $vmssList
-            $vmssList | ForEach-Object { Write-Host " " "$($_.Name)" }
+            $vmssList | ForEach-Object { Write-Host " $($_.Name)" }
             $rgTableObj.VirtualMachineScaleSetList = $vmssList
         }
     }
@@ -1529,11 +1531,11 @@ try {
                     $unknownExceptionTotalCounter+=1
                     $unknownExceptionVirtualMachineConsequentCounter+=1
                     DisplayException -ErrorRecord $_
-                    Write-Host "Continuing to the next VM..."
+                    Write-Host "Continuing to the next VM ..."
                 } catch [VirtualMachineException] {
                     Write-Host "VM Exception :"
                     DisplayException -ErrorRecord $_
-                    Write-Host "Continuing to the next VM..."
+                    Write-Host "Continuing to the next VM ..."
                 }
             }
 
@@ -1547,7 +1549,10 @@ try {
                         &$sb_upgrade -vmssObj $vmss    
                     } else {
                         Write-Host "$vmsslogheader : Upgrade mode is $($vmss.UpgradePolicy.Mode)."
+<<<<<<< Updated upstream
 
+=======
+>>>>>>> Stashed changes
                     }
                     
                     Write-Host "$vmsslogheader : Successfully onboarded VMInsights"
@@ -1564,17 +1569,17 @@ try {
                     $unknownExceptionVirtualMachineScaleSetConsequentCounter+=1
                     Write-Host "Unexpected VMSS Exception :"
                     DisplayException -ErrorRecord $_
-                    Write-Host "Continuing to the next VMSS..."
+                    Write-Host "Continuing to the next VMSS ..."
                 } catch [VirtualMachineScaleSetException] {
                     Write-Host "VMSS Exception :"
                     DisplayException -ErrorRecord $_
-                    Write-Host "Continuing to the next VMSS..."
+                    Write-Host "Continuing to the next VMSS ..."
                 }
             }
         } catch [ResourceGroupDoesNotExist] {
-            Write-Host "Resource-Group Exception :"
+            Write-Host "Resource Group Exception :"
             DisplayException -ErrorRecord $_
-            Write-Host "Continuing to the next Resource-Group..."
+            Write-Host "Continuing to the next Resource Group ..."
         }
     }
 }
@@ -1582,15 +1587,15 @@ catch [FatalException] {
     Write-Host "Fatal Exception :"
 
     DisplayException -ErrorRecord $_
-    Write-Host "Exiting..."
-    exit 1
+    Write-Host "Exiting ..."
+    exit 2
 }
 catch {
     Write-Host "Unexpected Fatal Exception :"
 
     DisplayException -ErrorRecord $_
-    Write-Host "Exiting..."
-    exit 1
+    Write-Host "Exiting ..."
+    exit 3
 }
 finally {
     PrintSummaryMessage  $onboardingCounters
