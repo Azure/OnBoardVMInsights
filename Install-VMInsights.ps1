@@ -132,8 +132,8 @@ This script is posted to and further documented at the following location :
 http ://aka.ms/OnBoardVMInsights
 #>
 
-<#CmdletBinding ConfirmImpact level Info : High - When performing a disruptive action. For example : A resource being deleted. 
-                                           Medium (Default) - When updating resource properties. For example : Updating an extension version.
+<#CmdletBinding ConfirmImpact level Info : High - Customer data-flow disruptive action.
+                                           Medium - Everything else that changes the system configuration. 
 #>
 #Assumption - The script assumes the entity running the script has access to all VMs/VMSS in the script.
 [CmdletBinding(SupportsShouldProcess = $True, ConfirmImpact = 'High')]
@@ -238,7 +238,6 @@ class ResourceGroupTableElement {
 class OnboardingCounters {
     [Decimal]$Succeeded = 0
     [Decimal]$Total = 0
-    [Decimal]$SkippedUpgrade = 0
 }
 
 # Log Analytics Extension constants
@@ -303,8 +302,7 @@ function PrintSummaryMessage {
     Write-Host "Summary :"
     Write-Host "Total VM/VMSS should be processed : $($OnboardingCounters.Total)"
     Write-Host "Succeeded : $($OnboardingCounters.Succeeded)"
-    Write-Host "VMSS Upgrade required : $($OnboardingCounters.SkippedUpgrade)"
-    Write-Host "Failed : $($OnboardingCounters.Total - $OnboardingCounters.SkippedUpgrade - $OnboardingCounters.Succeeded)"
+    Write-Host "Failed : $($OnboardingCounters.Total - $OnboardingCounters.Succeeded)"
 }
 
 function ExtractCloudExceptionErrorMessage {
@@ -1357,22 +1355,24 @@ try {
     
     if (!$isAma) {
         #Cannot validate Workspace existence with WorkspaceId, WorkspaceKey parameters.
-        Set-Variable -Name laPublicSettings -Option Constant -Value `
-            @{"workspaceId" = $WorkspaceId; "stopOnMultipleConnections" = "true"}
-        Set-Variable -Name laProtectedSettings -Option Constant -Value @{"workspaceKey" = $WorkspaceKey}
-        Set-Variable -Name disableAmaDaPublicSettings -Option Constant -Value @{"enableAMA" = "false"}
+        Set-Variable -Name laInstallParameters -Option Constant -Value `
+            @{"Settings" = @{"workspaceId" = $WorkspaceId; "stopOnMultipleConnections" = "true"};
+              "ProtectedSettings" = @{"workspaceKey" = $WorkspaceKey}
+             }
+        Set-Variable -Name daInstallParameters -Option Constant -Value `
+            @{"Settings" = @{"enableAMA" = "false"}}
+        
         if ($ReInstall) {
             Set-Variable -Name sb_vm -Option Constant -Value { `
                 param([Microsoft.Azure.Commands.Compute.Models.PSVirtualMachine]$vmObj) `
                 OnboardLaVmWithReInstall -VMObject $vmObj `
-                              -InstallParameters @{"Settings" = $laPublicSettings; "ProtectedSettings"  = $laProtectedSettings}
-            
+                              -InstallParameters $laInstallParameters 
             }
         } else {
             Set-Variable -Name sb_vm -Option Constant -Value { `
                 param([Microsoft.Azure.Commands.Compute.Models.PSVirtualMachine]$vmObj) `
                 OnboardLaVmWithoutReInstall -VMObject $vmObj `
-                              -InstallParameters @{"Settings" = $laPublicSettings; "ProtectedSettings"  = $laProtectedSettings}
+                              -InstallParameters $laInstallParameters
             }
         }
         
@@ -1382,12 +1382,12 @@ try {
                              -ExtensionName $laDefaultExtensionName `
                              -ExtensionConstantProperties `
                                 $laExtensionMap[$vmssObj.VirtualMachineProfile.StorageProfile.OsDisk.OsType.ToString()] `
-                             -InstallParameters @{"Settings" = $laPublicSettings; "ProtectedSetting" = $laProtectedSettings}
+                             -InstallParameters $laInstallParameters
         }
         
         Set-Variable -Name sb_da -Option Constant -Value { `
             param([Microsoft.Azure.Commands.Compute.Models.PSVirtualMachine]$vmObj) `
-            OnboardDaVm -VMObject $vmObj -InstallParameters @{"Settings" = $disableAmaDaPublicSettings}
+            OnboardDaVm -VMObject $vmObj -InstallParameters $daInstallParameters
         }
 
         Set-Variable -Name sb_da_vmss -Option Constant -Value { `
@@ -1396,7 +1396,7 @@ try {
                              -ExtensionName $daDefaultExtensionName `
                              -ExtensionConstantProperties `
                                 $daExtensionConstantsMap[$vmssObj.VirtualMachineProfile.StorageProfile.OsDisk.OsType.ToString()] `
-                             -InstallParameters @{"Settings" = $disableAmaDaPublicSettings}
+                             -InstallParameters $daInstallParameters
         }
 
         Set-Variable -Name sb_roles -Option Constant -Value $sb_nop_block_roles
@@ -1411,8 +1411,8 @@ try {
             throw [FatalException]::new($_.Exception.Message, $_.Exception)
         }
         
-        Set-Variable -Name amaPublicSettings -Option Constant -Value `
-                   @{
+        Set-Variable -Name amaInstallParameters -Option Constant -Value `
+            @{"Settings" = @{
                         'authentication' = @{ 
                             'managedIdentity' = @{
                                 'identifier-name' = 'mi_res_id'
@@ -1420,23 +1420,24 @@ try {
                             }
                         }
                     }
+            }
         Set-Variable -Name sb_vm -Option Constant -Value { `
             param([Microsoft.Azure.Commands.Compute.Models.PSVirtualMachine]$vmObj) `
-            OnboardVmiWithAmaVm -VMObject $vmObj -InstallParameters @{"Settings" = $amaPublicSettings}
+            OnboardVmiWithAmaVm -VMObject $vmObj -InstallParameters $amaInstallParameters
         }
         Set-Variable -Name sb_vmss -Option Constant -Value { `
             param([Microsoft.Azure.Commands.Compute.Automation.Models.PSVirtualMachineScaleSet]$vmssObj) `
-            OnboardVmiWithAmaVmss -VMssObject $vmssObj -InstallParameters @{"Settings" = $amaPublicSettings}
+            OnboardVmiWithAmaVmss -VMssObject $vmssObj -InstallParameters $amaInstallParameters
         }
         
         if (!$ProcessAndDependencies) {
             Set-Variable -Name sb_da -Option Constant -Value $sb_nop_block
             Set-Variable -Name sb_da_vmss -Option Constant -Value $sb_nop_block
         } else {
-            Set-Variable -Name enableAmaDaPublicSettings -Option Constant -Value @{"enableAMA" = "true"}
+            Set-Variable -Name daInstallParameters -Option Constant -Value @{"Settings" = @{"enableAMA" = "true"}}
             Set-Variable -Name sb_da -Option Constant -Value { `
                 param([Microsoft.Azure.Commands.Compute.Models.PSVirtualMachine]$vmObj) `
-                OnboardDaVm -VMObject $vmObj -InstallParameters @{"Settings" = $inenableAmaDaPublicSettings}
+                OnboardDaVm -VMObject $vmObj -InstallParameters $daInstallParameters
             }
 
             Set-Variable -Name sb_da_vmss -Option Constant -Value { `
@@ -1445,7 +1446,7 @@ try {
                                  -ExtensionName $daDefaultExtensionName `
                                  -ExtensionConstantProperties `
                                     $daExtensionConstantsMap[$vmssObj.VirtualMachineProfile.StorageProfile.OsDisk.OsType.ToString()] `
-                                 -InstallParameters @{"Settings" = $enableAmaDaPublicSettings}
+                                 -InstallParameters $daInstallParameters
             }
         }
     
@@ -1502,7 +1503,7 @@ try {
 
     $rgList = Sort-Object -InputObject $Rghashtable.Keys
     Write-Host "VM's and VMSS matching selection criteria :"
-    Write-Host "Script requires VMSS with manual upgrade enabled have parameter TriggerVmssManualVMUpdate set to perform upgrade."
+    $ManualUpgrade = 0
     Foreach ($rg in $rgList) {
         $rgTableObj  = $Rghashtable[$rg]
         $vmList = $rgTableObj.VirtualMachineList
@@ -1514,15 +1515,20 @@ try {
             $vmList | ForEach-Object { Write-Host " $($_.Name)" }
             $rgTableObj.VirtualMachineList = $vmList
         }
-
+        
         if ($vmssList.Length -gt 0) {
             $vmssList = Sort-Object -Property Name -InputObject $vmssList
             $vmssList | ForEach-Object { Write-Host " $($_.Name). Upgrade mode $($_.UpgradePolicy.Mode)"; `
-                                         if (!$TriggerVmssManualVMUpdate) {$onboardingCounters.SkippedUpgrade+=1}
+                                         if ($_.UpgradePolicy.Mode -eq "Manual") {$ManualUpgrade+=1}
                                        }
             $rgTableObj.VirtualMachineScaleSetList = $vmssList
         }
     }
+
+    if ($ManualUpgrade -gt 0 -and !$TriggerVmssManualVMUpdate) {
+        Write-Host "Found VMSS with Manaual upgrade. Please provide 'TriggerVmssManualVMUpdate' to perform upgrade." 
+    }
+
     Write-Host ""
 
     # Validate customer wants to continue
@@ -1604,14 +1610,12 @@ try {
 }
 catch [FatalException] {
     Write-Host "Fatal Exception :"
-
     DisplayException -ErrorRecord $_
     Write-Host "Exiting ..."
     exit 2
 }
 catch {
     Write-Host "Unexpected Fatal Exception :"
-
     DisplayException -ErrorRecord $_
     Write-Host "Exiting ..."
     exit 3
