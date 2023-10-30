@@ -582,7 +582,8 @@ function NewDCRAssociationVm {
         $dcrAssociationList = Get-AzDataCollectionRuleAssociation -TargetResourceId $vmId 
         foreach ($dcra in $dcrAssociationList) {
             if ($dcra.DataCollectionRuleId -eq $DcrResourceId) {
-                Write-Host "$vmlogheader : Data Collection Rule Id $DcrResourceId already associated to the VM"
+                Write-Host "$vmlogheader : Data Collection Rule Id $DcrResourceId already associated with the VM."
+
                 return
             }
         }
