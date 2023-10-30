@@ -653,7 +653,8 @@ function NewDCRAssociationVmss {
         $dcrAssociationList = Get-AzDataCollectionRuleAssociation -TargetResourceId $vmssId 
         foreach ($dcra in $dcrAssociationList) {
             if ($dcra.DataCollectionRuleId -eq $DcrResourceId) {
-                Write-Host "$vmsslogheader : Data Collection Rule Id $DcrResourceId already associated to the VMSS"
+                Write-Host "$vmsslogheader : Data Collection Rule Id $DcrResourceId already associated with the VMSS."
+
                 return
             }
         }
