@@ -57,13 +57,13 @@ Subscription identifier for the VMs or VMSS
 If using PolicyAssignmentName parameter, VMs part of the parameter SubscriptionId are considered.
 
 .PARAMETER ResourceGroup
-<Optional> Name of the Resource Group of VMs or VMSS. Accept wildcard characters. Default behavior is match all.
+<Optional> Name of the Resource Group of VMs or VMSS. It accepts wildcard characters. The default behavior is to match all.
 
 .PARAMETER PolicyAssignmentName
 <Optional> Name of policy assignment to onboard VMI for VMs part of its scope with Azure Monitoring Agent (AMA)/Log Analytics Agent (LA)
 
 .PARAMETER Name
-<Optional> Name qualifier to match on VM/VMSS's name in the scope. Accept wildcard characters. Default behavior is match all.
+<Optional> Name qualifier to match on VM/VMSS's name in the scope. It accepts wildcard characters. The default behavior is to match all.
 
 .PARAMETER TriggerVmssManualVMUpdate
 <Optional> Set this flag to trigger update of VM instances in a scale set whose upgrade policy is set to Manual.
