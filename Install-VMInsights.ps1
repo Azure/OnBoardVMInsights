@@ -607,6 +607,7 @@ function NewDCRAssociationVm {
         return
     }
 
+    #Customer can associate multiple DCRs to a VM.
     $dcrAssociationName = "VM-Insights-DCR-Association-$(New-Guid)"
     Write-Host "$vmlogheader : Deploying Data Collection Rule Association $dcrAssociationName"
     try {
@@ -675,15 +676,15 @@ function NewDCRAssociationVmss {
         throw [VirtualMachineScaleSetDoesNotExist]::new($VMssObject, $_.Exception)
     }
 
-    #The Customer is responsible to uninstall the DCR Association themselves.
     if (!($PSCmdlet.ShouldProcess($vmsslogheader, "Install Data Collection Rule Association"))) {
         return
     }
 
+    #Customer can associate multiple DCRs to a VMSS.
     $dcrAssociationName = "VM-Insights-DCR-Association-$(New-Guid)"
     Write-Host "$vmsslogheader : Deploying Data Collection Rule Association $dcrAssociationName"
     try {
-        #TBF by AMCS team - New-AzDataCollectionRuleAssociation allows creating multiple DCRAs for the same {DCR,VMSS} combination.
+        #BUG! To be fixed by AMCS team - New-AzDataCollectionRuleAssociation allows creating multiple DCRAs for the same {DCR,VMSS} combination.
         $dcrAssociation = New-AzDataCollectionRuleAssociation -TargetResourceId $vmssId -AssociationName $dcrAssociationName -RuleId $DcrResourceId
     } catch [System.Management.Automation.PSInvalidOperationException] {
         $exceptionMessage = $_.Exception.Message
@@ -727,7 +728,7 @@ function OnboardDaVm {
         $VMObject,
         [Parameter(mandatory = $True)]
         [hashtable]
-        $Settings
+        $InstallParameters
     )
 
     $extensionName = $daDefaultExtensionName
@@ -739,12 +740,10 @@ function OnboardDaVm {
         Write-Host "$(FormatVmIdentifier -VMObject $VMObject) : Extension $extensionName, type $($daExtensionConstantProperties.ExtensionType).$($daExtensionConstantProperties.Publisher) already installed. Provisioning State : $($extension.ProvisioningState)"
     }
     
-    $parameters = @{"Settings" = $Settings}
-    
     return SetVMExtension -VMObject $VMObject `
                           -ExtensionName $extensionName `
                           -ExtensionConstantProperties $daExtensionConstantProperties `
-                          -InstallParameters $parameters
+                          -InstallParameters $InstallParameters
 }
 
 function OnboardAmaVm {
@@ -908,7 +907,7 @@ function OnboardVmiWithAmaVmss {
 function SetManagedIdentityRoles {
     <#
 	.SYNOPSIS
-	Set roles to user managed identity.
+	Set roles to User Assigned Managed Identity.
 	#>
     [CmdletBinding(SupportsShouldProcess = $True, ConfirmImpact = 'Medium')]
     param
@@ -917,32 +916,37 @@ function SetManagedIdentityRoles {
         [String]
         $ResourceGroupId,
         [Parameter(Mandatory = $True)]
-        [String]
-        $Role
+        [IIdentity]
+        $UserAssignedManagedIdentity,
+        [Parameter(Mandatory = $True)]
+        [String[]]
+        $Roles
     )
 
-    $uamiName = $UserAssignedManagedIdentityObject.Name
+    $uamiName = $UserAssignedManagedIdentity.Name
     
-    if (!($PSCmdlet.ShouldProcess($ResourceGroupId, "Assign $Role to user managed identity $uamiName"))) {
+    if (!($PSCmdlet.ShouldProcess($ResourceGroupId, "Assign $Roles to User Assigned Managed Identity $uamiName"))) {
         return
     }
 
-    Write-Verbose "$ResourceGroupId : Assigning role $Role"
-    try {
-        New-AzRoleAssignment -ObjectId $($UserAssignedManagedIdentityObject.principalId) -RoleDefinitionName $Role -Scope $ResourceGroupId
-    } catch {
-        $excepMessage = $_.Exception.Message
-        if ($excepMessage.Contains('Conflict')) {
-            Write-Verbose "$uamiName : Role $Role has been assigned already"
+    foreach ($role in $Roles) {
+        Write-Verbose "$ResourceGroupId : Assigning role $role"
+        try {
+            New-AzRoleAssignment -ObjectId $($UserAssignedManagedIdentity.principalId) -RoleDefinitionName $role -Scope $ResourceGroupId
+        } catch {
+            $excepMessage = $_.Exception.Message
+            if ($excepMessage.Contains('Conflict')) {
+                Write-Verbose "$uamiName : Role $role has been assigned already"
+            }
+            if ($excepMessage.Contains('BadRequest')) {
+                throw [FatalException]::new("$uamiName : User Assigned Managed Identity doesn't exist", $_.Exception)
+            }
+            if ($excepMessage.Contains('NotFound')) {
+                throw [ResourceGroupDoesNotExist]::new($($VMObject.ResourceGroupName))
+            }
         }
-        if ($excepMessage.Contains('BadRequest')) {
-            throw [FatalException]::new("$uamiName : User Assigned Managed Identity doesn't exist", $_.Exception)
-        }
-        if ($excepMessage.Contains('NotFound')) {
-            throw [ResourceGroupDoesNotExist]::new($($VMObject.ResourceGroupName))
-        }
+        Write-Verbose "$ResourceGroupId : $role has been successfully assigned to $uamiName"
     }
-    Write-Verbose "$ResourceGroupId : $Role has been successfully assigned to $uamiName"
 }
 
 function SetVMssExtension {
@@ -1200,7 +1204,7 @@ function UpdateVMssExtension {
 function AssignVmssUserManagedIdentity {
     <#
 	.SYNOPSIS
-	Assign user managed identity to VMSS
+	Assign User Assigned Managed Identity to VMSS
 	#>
     [CmdletBinding(SupportsShouldProcess = $True, ConfirmImpact = 'Medium')]
     param
@@ -1213,11 +1217,11 @@ function AssignVmssUserManagedIdentity {
     $userAssignedManagedIdentityName = $UserAssignedManagedIdentityObject.Name
     $vmsslogheader = FormatVmssIdentifier -VMssObject $VmssObject
 
-    if (!($PSCmdlet.ShouldProcess($vmsslogheader, "Assign user managed identity $userAssignedManagedIdentityName"))) {
+    if (!($PSCmdlet.ShouldProcess($vmsslogheader, "Assign User Assigned Managed Identity $userAssignedManagedIdentityName"))) {
         return $VMssObject
     }
 
-    Write-Host "$vmsslogheader : Assigning user managed identity $userAssignedManagedIdentityName"
+    Write-Host "$vmsslogheader : Assigning User Assigned Managed Identity $userAssignedManagedIdentityName"
     try {
         $VMssObject = Update-AzVmss -VMScaleSetName $VMssObject.Name `
                                 -ResourceGroupName  $VMssObject.ResourceGroupName `
@@ -1225,10 +1229,10 @@ function AssignVmssUserManagedIdentity {
                                 -IdentityType "UserAssigned" `
                                 -IdentityID $UserAssignedManagedIdentityObject.Id
         if ($VMssObject.ProvisioningState -ne "Succeeded") {
-            throw [VirtualMachineOperationScaleSetFailed]::new($VMssObject, "Failed to assign user managed identity $userAssignedManagedIdentityName")
+            throw [VirtualMachineOperationScaleSetFailed]::new($VMssObject, "Failed to assign User Assigned Managed Identity $userAssignedManagedIdentityName")
         }
         
-        Write-Host "$vmsslogheader : Successfully assigned user managed identity $userAssignedManagedIdentityName"
+        Write-Host "$vmsslogheader : Successfully assigned User Assigned Managed Identity $userAssignedManagedIdentityName"
         return $VMssObject
     } catch [Microsoft.Azure.Commands.Compute.Common.ComputeCloudException] {
         $errorCode = ExtractCloudExceptionErrorCode($_)
@@ -1242,14 +1246,14 @@ function AssignVmssUserManagedIdentity {
             throw [VirtualMachineScaleSetDoesNotExist]::new($VMssObject, $_.Exception) 
         } 
             
-        throw [VirtualMachineScaleSetUnknownException]::new($VMssObject, "Failed to assign user managed identity $userAssignedManagedIdentityName", $_.Exception)
+        throw [VirtualMachineScaleSetUnknownException]::new($VMssObject, "Failed to assign User Assigned Managed Identity $userAssignedManagedIdentityName", $_.Exception)
     }
 }
 
 function AssignVmUserManagedIdentity {
      <#
 	.SYNOPSIS
-	Assign managed identity to VM
+	Assign User Assigned Managed Identity to VM
 	#>
     [CmdletBinding(SupportsShouldProcess = $True, ConfirmImpact = 'Medium')]
     param
@@ -1262,11 +1266,11 @@ function AssignVmUserManagedIdentity {
     $userAssignedManagedIdentityName = $UserAssignedManagedIdentityObject.Name
     $vmlogheader = FormatVmIdentifier -VMObject $VMObject
     
-    if (!($PSCmdlet.ShouldProcess($vmlogheader, "Assign user managed identity $userAssignedManagedIdentityName"))) {
+    if (!($PSCmdlet.ShouldProcess($vmlogheader, "Assign User Assigned Managed Identity $userAssignedManagedIdentityName"))) {
         return $VMObject
     }
 
-    Write-Host "$vmlogheader : Assigning user managed identity $userAssignedManagedIdentityName"
+    Write-Host "$vmlogheader : Assigning User Assigned Managed Identity $userAssignedManagedIdentityName"
 
     try {
         $result = Update-AzVM -VM $VMObject `
@@ -1290,17 +1294,17 @@ function AssignVmUserManagedIdentity {
     }
 
     if (!($result.IsSuccessStatusCode)) {
-        throw [VirtualMachineOperationFailed]::new($VMObject, "Failed to assign managed identity $userAssignedManagedIdentityName. StatusCode : $($result.StatusCode). ReasonPhrase : $($result.ReasonPhrase)")
+        throw [VirtualMachineOperationFailed]::new($VMObject, "Failed to assign User Assigned Managed Identity $userAssignedManagedIdentityName. StatusCode : $($result.StatusCode). ReasonPhrase : $($result.ReasonPhrase)")
     }
     
-    Write-Host "$vmlogheader : Successfully assigned user managed identity $userAssignedManagedIdentityName"
+    Write-Host "$vmlogheader : Successfully assigned User Assigned Managed Identity $userAssignedManagedIdentityName"
     return $VMObject
 }
 
 function SetManagedIdentityRolesAma {
     <#
     .SYNOPSIS
-    Set Roles to a managed identity
+    Set Roles to a User Assigned Managed Identity
     #>
     param(
         [Parameter(Mandatory = $True)]
@@ -1314,10 +1318,10 @@ function SetManagedIdentityRolesAma {
         throw [ResourceGroupDoesNotExist]::new($ResourceGroupName)
     }
 
-    foreach ($role in @("Virtual Machine Contributor", "Azure Connected Machine Resource Administrator", "Log Analytics Contributor")) {
-        SetManagedIdentityRoles -ResourceGroupId $rgObj.ResourceId `
-                                -Role $role
-    }
+    $roles = @("Virtual Machine Contributor", "Azure Connected Machine Resource Administrator", "Log Analytics Contributor")
+    SetManagedIdentityRoles -ResourceGroupId $rgObj.ResourceId `
+                            -UserAssignedManagedIdentity $UserAssignedManagedIdentityObject
+                            -Roles $roles
 }
 
 #
@@ -1383,7 +1387,7 @@ try {
         
         Set-Variable -Name sb_da -Option Constant -Value { `
             param([Microsoft.Azure.Commands.Compute.Models.PSVirtualMachine]$vmObj) `
-            OnboardDaVm -VMObject $vmObj -Settings $disableAmaDaPublicSettings}
+            OnboardDaVm -VMObject $vmObj -InstallParameters @{"Settings" = $disableAmaDaPublicSettings}}
 
         Set-Variable -Name sb_da_vmss -Option Constant -Value { `
             param([Microsoft.Azure.Commands.Compute.Automation.Models.PSVirtualMachineScaleSet]$vmssObj) `
@@ -1427,8 +1431,7 @@ try {
             Set-Variable -Name enableAmaDaPublicSettings -Option Constant -Value @{"enableAMA" = "true"}
             Set-Variable -Name sb_da -Option Constant -Value { `
                 param([Microsoft.Azure.Commands.Compute.Models.PSVirtualMachine]$vmObj) `
-                OnboardDaVm -VMObject $vmObj `
-                            -Settings $enableAmaDaPublicSettings}
+                OnboardDaVm -VMObject $vmObj -InstallParameters @{"Settings" = $enableAmaDaPublicSettings}}
 
             Set-Variable -Name sb_da_vmss -Option Constant -Value { `
                 param([Microsoft.Azure.Commands.Compute.Automation.Models.PSVirtualMachineScaleSet]$vmssObj) `
