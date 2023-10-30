@@ -788,7 +788,8 @@ function OnboardLaVmWithReInstall {
         if ($osType -eq "Linux" -and $extension.PublicSettings) {
             $extensionPublicSettingsJson = $extension.PublicSettings | ConvertFrom-Json
             if ($extensionPublicSettingsJson.workspaceId -ne $laPublicSettings.workspaceId) {
-                Write-Host "$vmlogheader : OmsAgentForLinux does not support updating workspace. An uninstall followed by re-install is required."
+                Write-Host "$vmlogheader : OmsAgentForLinux requires a uninstall followed by a re-install to change the workspace."
+
 
                 if (!(RemoveVMExtension -VMObject $VMObject `
                                         -ExtensionName $extensionName `
