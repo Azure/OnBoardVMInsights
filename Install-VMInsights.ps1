@@ -292,6 +292,10 @@ Set-Variable -Name daExtensionConstantsMap -Option Constant -Value @{
                }
 }
 Set-Variable -Name daDefaultExtensionName -Option Constant -Value "DA-Extension"
+$extensionVmDefaultUpgradeSettings = @{
+    DisableAutoUpgradeMinorVersion = $True
+    EnableAutomaticUpgrade = $True 
+}
 
 Set-Variable -Name unknownExceptionVirtualMachineConsequentCounterLimit -Option Constant -Value 3
 Set-Variable -Name unknownExceptionVirtualMachineScaleSetConsequentCounterLimit -Option Constant -Value 3
@@ -316,6 +320,7 @@ function PrintSummaryMessage {
     Write-Host "Summary :"
     Write-Host "Total VM/VMSS to be processed : $($OnboardingCounters.Total)"
     Write-Host "Succeeded : $($OnboardingCounters.Succeeded)"
+    Write-Host "Skipped : $($OnboardingCounters.Skipped)"
     Write-Host "Failed : $($OnboardingCounters.Total - $OnboardingCounters.Skipped - $OnboardingCounters.Succeeded)"
 }
 
@@ -450,7 +455,7 @@ function PopulateRgHashTableVm {
         $VMObject
     )
 
-    $rgTableElemObject = UtilPopulateRgHashTable -Rghashtable $Rghashtable -ResourceGroupName $VMObject.ResourceGroupName
+    $rgTableElemObject = GetRgObject -Rghashtable $Rghashtable -ResourceGroupName $VMObject.ResourceGroupName
     $rgTableElemObject.VirtualMachineList.Add($VMObject)  > $null
 }
 
@@ -468,7 +473,7 @@ function PopulateRgHashTableVmss {
         $VMssObject
     )
 
-    $rgTableElemObject = UtilPopulateRgHashTable -Rghashtable $Rghashtable -ResourceGroupName $VMssObject.ResourceGroupName
+    $rgTableElemObject = GetRgObject -Rghashtable $Rghashtable -ResourceGroupName $VMssObject.ResourceGroupName
     $rgTableElemObject.VirtualMachineScaleSetList.Add($VMssObject)  > $null
 }
 
@@ -505,7 +510,7 @@ function GetVMExtension {
         if ($errorCode -eq "ResourceGroupNotFound") {
             throw [ResourceGroupDoesNotExist]::new($($VMObject.ResourceGroupName),$_.Exception)   
         }    
-        throw [VirtualMachineUnknownException]::new($VMObject, "Failed to locate extension with type = $extensionType.$publisher", $_.Exception)
+        throw [VirtualMachineUnknownException]::new($VMObject, "Failed to locate extension with type = $publisher.$extensionType", $_.Exception)
     }
     
     return $null
@@ -739,6 +744,25 @@ function NewDCRAssociationVmss {
     }
 }
 
+function RetainExtensionUpgradeSettings {
+    <#
+	.SYNOPSIS
+	Retain extension upgrade settings
+	#>
+    param
+    (
+        [Parameter(mandatory = $True)]
+        [Microsoft.Azure.Commands.Compute.Models.PSVirtualMachineExtension]
+        $Extension,
+        [Parameter(mandatory = $True)]
+        [hashtable]
+        $ExtUpgradeSettings
+    )
+
+    $ExtUpgradeSettings.EnableAutomaticUpgrade = $Extension.EnableAutomaticUpgrade
+    $ExtUpgradeSettings.DisableAutoUpgradeMinorVersion = !($Extension.AutoUpgradeMinorVersion)
+}
+
 function OnboardDaVm {
     <#
 	.SYNOPSIS
@@ -751,22 +775,25 @@ function OnboardDaVm {
         $VMObject,
         [Parameter(mandatory = $True)]
         [hashtable]
-        $InstallParameters
+        $ExtensionSettings
     )
 
     $extensionName = $daDefaultExtensionName
+    $extUpgradeSettings = $extensionVmDefaultUpgradeSettings.clone()
     $daExtensionConstantProperties = $daExtensionConstantsMap[$VMObject.StorageProfile.OsDisk.OsType.ToString()]
     $extension = GetVMExtension -VMObject $VMObject -ExtensionProperties $daExtensionConstantProperties
     # Use supplied name unless already deployed, use same name.
     if ($extension) {
         $extensionName = $extension.Name
+        RetainExtensionUpgradeSettings -Extension $extension -ExtUpgradeSettings $extUpgradeSettings
         Write-Host "$(FormatVmIdentifier -VMObject $VMObject) : Extension $extensionName, type $($daExtensionConstantProperties.ExtensionType).$($daExtensionConstantProperties.Publisher) already installed. Provisioning State : $($extension.ProvisioningState)"
     }
     
     return SetVMExtension -VMObject $VMObject `
                           -ExtensionName $extensionName `
                           @daExtensionConstantProperties `
-                          -InstallParameters $InstallParameters
+                          -ExtensionUpgradeSettings $extUpgradeSettings `
+                          -ExtensionSettings $ExtensionSettings
 }
 
 function OnboardAmaVm {
@@ -781,22 +808,25 @@ function OnboardAmaVm {
         $VMObject,
         [Parameter(mandatory = $True)]
         [hashtable]
-        $InstallParameters
+        $ExtensionSettings
     )
     
     $amaExtensionConstantProperties = $amaExtensionConstantMap[$VMObject.StorageProfile.OsDisk.OsType.ToString()]
     $extensionName = $amaDefaultExtensionName
+    $extUpgradeSettings = $extensionVmDefaultUpgradeSettings.clone()
     $extension = GetVMExtension -VMObject $VMObject -ExtensionProperties $amaExtensionConstantProperties
     # Use supplied name unless already deployed, use same name.
     if ($extension) {
         $extensionName = $extension.Name
-        Write-Host "$(FormatVmIdentifier -VMObject $VMObject) : Extension $extensionName, type $($amaExtensionConstantProperties.ExtensionType).$($amaExtensionConstantProperties.Publisher) already installed. Provisioning State : $($extension.ProvisioningState)"
+        RetainExtensionUpgradeSettings -Extension $extension -ExtUpgradeSettings $extUpgradeSettings
+        Write-Host "$(FormatVmIdentifier -VMObject $VMObject) : Extension $extensionName, type = $($amaExtensionConstantProperties.ExtensionType).$($amaExtensionConstantProperties.Publisher) already installed. Provisioning State : $($extension.ProvisioningState)"
     }
     
     return SetVMExtension -VMObject $VMObject `
                           -ExtensionName $extensionName `
                           @amaExtensionConstantProperties `
-                          -InstallParameters $InstallParameters
+                          -ExtensionUpgradeSettings $extUpgradeSettings `
+                          -ExtensionSettings $ExtensionSettings
 }
 
 function OnboardLaVmWithReInstall {
@@ -811,7 +841,7 @@ function OnboardLaVmWithReInstall {
         $VMObject,
         [Parameter(mandatory = $True)]
         [hashtable]
-        $InstallParameters
+        $ExtensionSettings
     )
 
     $osType = $VMObject.StorageProfile.OsDisk.OsType.ToString()
@@ -819,15 +849,17 @@ function OnboardLaVmWithReInstall {
     # Use supplied name unless already deployed, use same name.
     $extensionName = $laDefaultExtensionName
     $vmlogheader = FormatVmIdentifier -VMObject $VMObject
-    
+    $extUpgradeSettings = $extensionVmDefaultUpgradeSettings.clone()
+
     $extension = GetVMExtension -VMObject $VMObject -ExtensionProperties $laExtensionConstantProperties
     # Use supplied name unless already deployed, use same name.
     if ($extension) {
         $extensionName = $extension.Name
+        RetainExtensionUpgradeSettings -Extension $extension -ExtUpgradeSettings $extUpgradeSettings
         Write-Host "$vmlogheader : Extension $extensionName, type $($laExtensionConstantProperties.ExtensionType).$($laExtensionConstantProperties.Publisher) already installed. Provisioning State : $($extension.ProvisioningState)"
         if ($osType -eq "Linux" -and $extension.PublicSettings) {
             $extensionPublicSettingsJson = $extension.PublicSettings | ConvertFrom-Json
-            if ($extensionPublicSettingsJson.workspaceId -ne $InstallParameters.Settings.workspaceId) {
+            if ($extensionPublicSettingsJson.workspaceId -ne $ExtensionSettings.Settings.workspaceId) {
                 Write-Host "$vmlogheader : OmsAgentForLinux requires an uninstall followed by a re-install to change the workspace."
                 RemoveVMExtension -VMObject $VMObject `
                                   -ExtensionName $extensionName `
@@ -839,7 +871,8 @@ function OnboardLaVmWithReInstall {
     return SetVMExtension -VMObject $VMObject `
                           -ExtensionName $extensionName `
                           @laExtensionConstantProperties `
-                          -InstallParameters $InstallParameters
+                          -ExtensionUpgradeSettings $extUpgradeSettings `
+                          -ExtensionSettings $ExtensionSettings
 }
 
 function OnboardLaVmWithoutReInstall {
@@ -854,21 +887,24 @@ function OnboardLaVmWithoutReInstall {
         $VMObject,
         [Parameter(mandatory = $True)]
         [hashtable]
-        $InstallParameters
+        $ExtensionSettings
     )
 
     $osType = $VMObject.StorageProfile.OsDisk.OsType.ToString()
     $laExtensionConstantProperties = $laExtensionMap[$osType]
     $extensionName = $laDefaultExtensionName
+    $extUpgradeSettings = $extensionVmDefaultUpgradeSettings.clone()
+
     $extension = GetVMExtension -VMObject $VMObject -ExtensionProperties $laExtensionConstantProperties
     $vmlogheader = FormatVmIdentifier -VMObject $VMObject
     # Use supplied name unless already deployed, use same name
     if ($extension) {
         $extensionName = $extension.Name
+        RetainExtensionUpgradeSettings -Extension $extension -ExtUpgradeSettings $extUpgradeSettings
         Write-Host "$vmlogheader : Extension $extensionName, type $($laExtensionConstantProperties.ExtensionType).$($laExtensionConstantProperties.Publisher) already installed. Provisioning State : $($extension.ProvisioningState)"
         if ($osType -eq "Linux" -and $extension.PublicSettings) {
             $extensionPublicSettingsJson = $extension.PublicSettings | ConvertFrom-Json 
-            if ($extensionPublicSettingsJson.workspaceId -ne $InstallParameters.Settings.workspaceId) {
+            if ($extensionPublicSettingsJson.workspaceId -ne $ExtensionSettings.Settings.workspaceId) {
                 Write-Host "$vmlogheader : OmsAgentForLinux does not support changing the workspace. Use the -Reinstall flag to make the change."
                 return $VMObject
             }
@@ -878,7 +914,8 @@ function OnboardLaVmWithoutReInstall {
     return SetVMExtension -VMObject $VMObject `
                           -ExtensionName $extensionName `
                           @laExtensionConstantProperties `
-                          -InstallParameters $InstallParameters
+                          -ExtensionUpgradeSettings $extUpgradeSettings `
+                          -ExtensionSettings $ExtensionSettings
 }
 
 function OnboardVmiWithAmaVm {
@@ -893,12 +930,12 @@ function OnboardVmiWithAmaVm {
         $VMObject,
         [Parameter(mandatory = $True)]
         [hashtable]
-        $InstallParameters
+        $ExtensionSettings
     )
 
     $VMObject = AssignVmUserManagedIdentity -VMObject $VMObject
     NewDCRAssociationVm -VMObject $VMObject
-    return OnboardAmaVm -VMObject $VMObject -InstallParameters $InstallParameters
+    return OnboardAmaVm -VMObject $VMObject -ExtensionSettings $ExtensionSettings
 }
 
 function OnboardVmiWithAmaVmss {
@@ -913,7 +950,7 @@ function OnboardVmiWithAmaVmss {
         $VMssObject,
         [Parameter(mandatory = $True)]
         [hashtable]
-        $InstallParameters
+        $ExtensionSettings
     )
             
     $VMssObject = AssignVmssUserManagedIdentity -VMssObject $VMssObject
@@ -921,7 +958,7 @@ function OnboardVmiWithAmaVmss {
     return OnboardVMssExtension -VMssObject $VMssObject `
                                 -ExtensionName $amaDefaultExtensionName `
                                 -ExtensionConstantMap $amaExtensionConstantMap `
-                                -InstallParameters $InstallParameters
+                                -ExtensionSettings $ExtensionSettings
 }
 
 function SetManagedIdentityRoles {
@@ -992,28 +1029,32 @@ function OnboardVMssExtension {
         $ExtensionConstantMap,
         [Parameter(mandatory = $True)]
         [Hashtable]
-        $InstallParameters
+        $ExtensionSettings
     )
 
     $extensionConstantProperties = $ExtensionConstantMap[$VMssObject.VirtualMachineProfile.StorageProfile.OsDisk.OsType.ToString()]
     $extensionType = $extensionConstantProperties.ExtensionType
     $publisher = $extensionConstantProperties.Publisher
     $typeHandlerVersion = $extensionConstantProperties.TypeHandlerVersion
-
+    $extensionUpgradeSettings = @{
+        AutoUpgradeMinorVersion = $True
+        EnableAutomaticUpgrade = $True 
+    }
     $extension = GetVMssExtension -VMssObject $VMssObject -ExtensionType $extensionType -Publisher $publisher
     $vmsslogheader = FormatVmssIdentifier -VMssObject $VMssObject
 
     if ($extension) {
-        if (!($PSCmdlet.ShouldProcess($vmsslogheader, "Update extension $($extension.Name), type $extensionType.$publisher"))) {
+        if (!($PSCmdlet.ShouldProcess($vmsslogheader, "Update extension $($extension.Name), type = $publisher.$extensionType"))) {
             throw [CustomerSkip]::new()
         }
-        Write-Host "$vmsslogheader : Extension $($extension.Name), type $extensionType.$publisher already installed."
-        $InstallParameters.GetEnumerator() | ForEach-Object { $extension.($_.Key) = $_.Value }
+        Write-Host "$vmsslogheader : Extension $($extension.Name), type = $publisher.$extensionType already installed."
+        $ExtensionSettings.GetEnumerator() | ForEach-Object { $extension.($_.Key) = $_.Value }
+        $extensionUpgradeSettings.GetEnumerator() | ForEach-Object { $extension.($_.Key) = $_.Value }
         $extension.TypeHandlerVersion = $typeHandlerVersion
         return $VMssObject
     } 
 
-    if (!($PSCmdlet.ShouldProcess($vmsslogheader, "Install extension $ExtensionName, type $extensionType.$publisher"))) {
+    if (!($PSCmdlet.ShouldProcess($vmsslogheader, "Install extension $ExtensionName, type = $publisher.$extensionType"))) {
         throw [CustomerSkip]::new()
     }
     
@@ -1022,12 +1063,12 @@ function OnboardVMssExtension {
                                       -Type $extensionType `
                                       -Publisher $publisher `
                                       -TypeHandlerVersion $typeHandlerVersion `
-                                      -AutoUpgradeMinorVersion $True `
-                                      @InstallParameters `
+                                      @extensionUpgradeSettings `
+                                      @ExtensionSettings `
                                       -Confirm:$false
 
 
-    Write-Host "$vmsslogheader : Extension $ExtensionName, type $extensionType.$publisher added."
+    Write-Host "$vmsslogheader : Extension $ExtensionName, type = $publisher.$extensionType added."
     return $VMssObject
 }
 
@@ -1056,16 +1097,19 @@ function SetVMExtension {
         $TypeHandlerVersion,
         [Parameter(mandatory = $True)]
         [Hashtable]
-        $InstallParameters
+        $ExtensionUpgradeSettings,
+        [Parameter(mandatory = $True)]
+        [Hashtable]
+        $ExtensionSettings
     )
     
     $vmlogheader = $(FormatVmIdentifier -VMObject $VMObject)
     
-    if (!($PSCmdlet.ShouldProcess($vmlogheader, "Install/Update extension $ExtensionName, type $ExtensionType.$Publisher"))) {
+    if (!($PSCmdlet.ShouldProcess($vmlogheader, "Install/Update extension $ExtensionName, type = $Publisher.$ExtensionType"))) {
         throw [CustomerSkip]::new()
     }
 
-    Write-Host "$vmlogheader : Installing/Updating extension $ExtensionName, type $ExtensionType.$Publisher"
+    Write-Host "$vmlogheader : Installing/Updating extension $ExtensionName, type = $Publisher.$ExtensionType"
     
     try {
         $result = Set-AzVMExtension -ResourceGroupName $($VMObject.ResourceGroupName) `
@@ -1074,13 +1118,14 @@ function SetVMExtension {
                                     -ExtensionType $ExtensionType `
                                     -Publisher $Publisher `
                                     -TypeHandlerVersion $TypeHandlerVersion `
-                                    @InstallParameters -ForceRerun $True
+                                    @ExtensionUpgradeSettings `
+                                    @ExtensionSettings -ForceRerun $True
 
         if (!$result.IsSuccessStatusCode) {
             throw [VirtualMachineOperationFailed]::new($VMObject, "Failed to update extension. StatusCode = $($result.StatusCode). ReasonPhrase = $($result.ReasonPhrase)")
         }
     
-        Write-Host "$vmlogheader : Successfully installed/updated extension $ExtensionName, type $ExtensionType.$Publisher"
+        Write-Host "$vmlogheader : Successfully installed/updated extension $ExtensionName, type = $Publisher.$ExtensionType"
         return $VMObject
     } catch [Microsoft.Azure.Commands.Compute.Common.ComputeCloudException] {
         $errorMessage = ExtractCloudExceptionErrorMessage -ErrorRecord $_
@@ -1097,7 +1142,7 @@ function SetVMExtension {
             throw [ResourceGroupDoesNotExist]::new($VMObject.ResourceGroupName, $_.Exception)       
         } 
         
-        throw [VirtualMachineUnknownException]::new($VMObject, "Failed to install/update extension $ExtensionName, type $ExtensionType.$Publisher", $_.Exception)
+        throw [VirtualMachineUnknownException]::new($VMObject, "Failed to install/update extension $ExtensionName, type = $Publisher.$ExtensionType", $_.Exception)
     }
 }
 
@@ -1394,24 +1439,24 @@ try {
     
     if (!$isAma) {
         #Cannot validate Workspace existence with WorkspaceId, WorkspaceKey parameters.
-        Set-Variable -Name laInstallParameters -Option Constant -Value `
+        Set-Variable -Name laExtensionSettings -Option Constant -Value `
             @{"Settings" = @{"workspaceId" = $WorkspaceId; "stopOnMultipleConnections" = "true"};
               "ProtectedSettings" = @{"workspaceKey" = $WorkspaceKey}
              }
-        Set-Variable -Name daInstallParameters -Option Constant -Value `
+        Set-Variable -Name daExtensionSettings -Option Constant -Value `
             @{"Settings" = @{"enableAMA" = "false"}}
         
         if ($ReInstall) {
             Set-Variable -Name sb_vm -Option Constant -Value { `
                 param([Microsoft.Azure.Commands.Compute.Models.PSVirtualMachine]$vmObj) `
                 OnboardLaVmWithReInstall -VMObject $vmObj `
-                                         -InstallParameters $laInstallParameters 
+                                         -ExtensionSettings $laExtensionSettings 
             }
         } else {
             Set-Variable -Name sb_vm -Option Constant -Value { `
                 param([Microsoft.Azure.Commands.Compute.Models.PSVirtualMachine]$vmObj) `
                 OnboardLaVmWithoutReInstall -VMObject $vmObj `
-                                            -InstallParameters $laInstallParameters
+                                            -ExtensionSettings $laExtensionSettings
             }
         }
         
@@ -1420,12 +1465,12 @@ try {
             OnboardVMssExtension -VMssObject $vmssObj `
                                  -ExtensionName $laDefaultExtensionName `
                                  -ExtensionConstantMap $laExtensionMap `
-                                 -InstallParameters $laInstallParameters
+                                 -ExtensionSettings $laExtensionSettings
         }
         
         Set-Variable -Name sb_da -Option Constant -Value { `
             param([Microsoft.Azure.Commands.Compute.Models.PSVirtualMachine]$vmObj) `
-            OnboardDaVm -VMObject $vmObj -InstallParameters $daInstallParameters
+            OnboardDaVm -VMObject $vmObj -ExtensionSettings $daExtensionSettings
         }
 
         Set-Variable -Name sb_da_vmss -Option Constant -Value { `
@@ -1433,7 +1478,7 @@ try {
             OnboardVMssExtension -VMssObject $vmssObj `
                                  -ExtensionName $daDefaultExtensionName `
                                  -ExtensionConstantMap $daExtensionConstantsMap `
-                                 -InstallParameters $daInstallParameters
+                                 -ExtensionSettings $daExtensionSettings
         }
 
         Set-Variable -Name sb_roles -Option Constant -Value $sb_nop_block_roles
@@ -1456,7 +1501,7 @@ try {
                 throw [UserAssignedManagedIdentityUnknownException]::new("($UserAssignedManagedIdentityResourceGroup) $UserAssignedManagedIdentityName : Unable to locate User Assigned Managed Identity.", $_.Exception)
             }
         
-        Set-Variable -Name amaInstallParameters -Option Constant -Value `
+        Set-Variable -Name amaExtensionSettings -Option Constant -Value `
             @{"Settings" = @{
                         'authentication' = @{ 
                             'managedIdentity' = @{
@@ -1468,21 +1513,21 @@ try {
             }
         Set-Variable -Name sb_vm -Option Constant -Value { `
             param([Microsoft.Azure.Commands.Compute.Models.PSVirtualMachine]$vmObj) `
-            OnboardVmiWithAmaVm -VMObject $vmObj -InstallParameters $amaInstallParameters
+            OnboardVmiWithAmaVm -VMObject $vmObj -ExtensionSettings $amaExtensionSettings
         }
         Set-Variable -Name sb_vmss -Option Constant -Value { `
             param([Microsoft.Azure.Commands.Compute.Automation.Models.PSVirtualMachineScaleSet]$vmssObj) `
-            OnboardVmiWithAmaVmss -VMssObject $vmssObj -InstallParameters $amaInstallParameters
+            OnboardVmiWithAmaVmss -VMssObject $vmssObj -ExtensionSettings $amaExtensionSettings
         }
         
         if (!$ProcessAndDependencies) {
             Set-Variable -Name sb_da -Option Constant -Value $sb_nop_block
             Set-Variable -Name sb_da_vmss -Option Constant -Value $sb_nop_block
         } else {
-            Set-Variable -Name daInstallParameters -Option Constant -Value @{"Settings" = @{"enableAMA" = "true"}}
+            Set-Variable -Name daExtensionSettings -Option Constant -Value @{"Settings" = @{"enableAMA" = "true"}}
             Set-Variable -Name sb_da -Option Constant -Value { `
                 param([Microsoft.Azure.Commands.Compute.Models.PSVirtualMachine]$vmObj) `
-                OnboardDaVm -VMObject $vmObj -InstallParameters $daInstallParameters
+                OnboardDaVm -VMObject $vmObj -ExtensionSettings $daExtensionSettings
             }
 
             Set-Variable -Name sb_da_vmss -Option Constant -Value { `
@@ -1490,7 +1535,7 @@ try {
                 OnboardVMssExtension -VMssObject $vmssObj `
                                      -ExtensionName $daDefaultExtensionName `
                                      -ExtensionConstantMap $daExtensionConstantsMap `
-                                     -InstallParameters $daInstallParameters
+                                     -ExtensionSettings $daExtensionSettings
             }
         }
     
