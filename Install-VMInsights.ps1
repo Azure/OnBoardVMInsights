@@ -157,6 +157,10 @@ param(
 
 $ErrorActionPreference = "Stop"
 
+class CustomerSkip : System.Exception {
+    CustomerSkip() : base () {}
+}
+
 class FatalException : System.Exception {
     FatalException([String]$errorMessage, [Exception]$innerException) : base($errorMessage, $innerException) {}
 }
@@ -234,7 +238,6 @@ class UserAssignedManagedIdentityResourceGroupDoesNotExist : FatalException {
     UserAssignedManagedIdentityResourceGroupDoesNotExist($uamiResourceGroup,
                                             [Exception]$innerException) : base("$uamiResourceGroup : User Assigned Managed Identity does not exist.", $innerException) {}
 }
-
 class UserAssignedManagedIdentityUnknownException : FatalException {
     UserAssignedManagedIdentityUnknownException([String]$errorMessage,
                                                 [Exception]$innerException) : base($errorMessage, $innerException) {}
@@ -248,6 +251,7 @@ class ResourceGroupTableElement {
 class OnboardingCounters {
     [Decimal]$Succeeded = 0
     [Decimal]$Total = 0
+    [Decimal]$Skipped = 0
 }
 
 # Log Analytics Extension constants
@@ -312,7 +316,7 @@ function PrintSummaryMessage {
     Write-Host "Summary :"
     Write-Host "Total VM/VMSS to be processed : $($OnboardingCounters.Total)"
     Write-Host "Succeeded : $($OnboardingCounters.Succeeded)"
-    Write-Host "Failed : $($OnboardingCounters.Total - $OnboardingCounters.Succeeded)"
+    Write-Host "Failed : $($OnboardingCounters.Total - $OnboardingCounters.Skipped - $OnboardingCounters.Succeeded)"
 }
 
 function ExtractCloudExceptionErrorMessage {
@@ -558,9 +562,9 @@ function RemoveVMExtension {
     $vmlogheader = FormatVmIdentifier -VMObject $VMObject
     $extensionType = $ExtensionProperties.ExtensionType
     $extensionPublisher = $ExtensionProperties.Publisher
-
+    
     if (!$PSCmdlet.ShouldProcess($vmlogheader, "Remove $ExtensionName, type $extensionType.$extensionPublisher")) {
-        return $False
+        throw [CustomerSkip]::new()
     }
 
     try {
@@ -579,7 +583,6 @@ function RemoveVMExtension {
     
     if ($removeResult.IsSuccessStatusCode) {
          Write-Host "$vmlogheader : Successfully removed extension $ExtensionName, type $extensionType.$extensionPublisher"
-        return $True
     }
 
     throw [VirtualMachineOperationFailed]::new($VMObject, "Failed to remove extension $ExtensionName, type $extensionType.$extensionPublisher. StatusCode = $($removeResult.StatusCode). ReasonPhrase = $($removeResult.ReasonPhrase)")
@@ -618,7 +621,7 @@ function NewDCRAssociationVm {
     }
 
     if (!($PSCmdlet.ShouldProcess($vmlogheader, "Install Data Collection Rule Association"))) {
-        return
+        throw [CustomerSkip]::new()
     }
 
     #Customer can associate multiple DCRs to a VM.
@@ -694,7 +697,7 @@ function NewDCRAssociationVmss {
     }
 
     if (!($PSCmdlet.ShouldProcess($vmsslogheader, "Install Data Collection Rule Association"))) {
-        return
+        throw [CustomerSkip]::new()
     }
 
     #Customer can associate multiple DCRs to a VMSS.
@@ -826,14 +829,9 @@ function OnboardLaVmWithReInstall {
             $extensionPublicSettingsJson = $extension.PublicSettings | ConvertFrom-Json
             if ($extensionPublicSettingsJson.workspaceId -ne $InstallParameters.Settings.workspaceId) {
                 Write-Host "$vmlogheader : OmsAgentForLinux requires an uninstall followed by a re-install to change the workspace."
-
-                if (!(RemoveVMExtension -VMObject $VMObject `
-                                        -ExtensionName $extensionName `
-                                        -ExtensionProperties $laExtensionConstantProperties)) {
-                    #since there is no data loss, this is counted as a success.
-                    Write-Host "$vmlogheader : Extension $extensionName was not removed. Skipping replacement."
-                    return $VMObject
-                }
+                RemoveVMExtension -VMObject $VMObject `
+                                  -ExtensionName $extensionName `
+                                  -ExtensionProperties $laExtensionConstantProperties
             }
         }
     }
@@ -921,10 +919,9 @@ function OnboardVmiWithAmaVmss {
     $VMssObject = AssignVmssUserManagedIdentity -VMssObject $VMssObject
     NewDCRAssociationVmss -VMssObject $VMssObject
     return OnboardVMssExtension -VMssObject $VMssObject `
-                            -ExtensionName $amaDefaultExtensionName `
-                            -ExtensionConstantProperties `
-                              $amaExtensionConstantMap[$VMssObject.VirtualMachineProfile.StorageProfile.OsDisk.OsType.ToString()] `
-                            -InstallParameters $InstallParameters
+                                -ExtensionName $amaDefaultExtensionName `
+                                -ExtensionConstantMap $amaExtensionConstantMap `
+                                -InstallParameters $InstallParameters
 }
 
 function SetManagedIdentityRoles {
@@ -948,7 +945,7 @@ function SetManagedIdentityRoles {
 
     $uamiName = $UserAssignedManagedIdentity.Name
     if (!($PSCmdlet.ShouldProcess($ResourceGroupId, "Assign $Roles to User Assigned Managed Identity $uamiName"))) {
-        return
+        throw [CustomerSkip]::new()
     }
 
     Write-Host "$ResourceGroupId : Assigning roles"
@@ -991,47 +988,46 @@ function OnboardVMssExtension {
         [String]
         $ExtensionName,
         [Parameter(mandatory = $True)]
-        [String]
-        $ExtensionType,
-        [Parameter(mandatory = $True)]
-        [String]
-        $TypeHandlerVersion,
-        [Parameter(mandatory = $True)]
-        [String]
-        $Publisher,
+        [Hashtable]
+        $ExtensionConstantMap,
         [Parameter(mandatory = $True)]
         [Hashtable]
         $InstallParameters
     )
 
-    $extension = GetVMssExtension -VMssObject $VMssObject -ExtensionType $ExtensionType -Publisher $Publisher
+    $extensionConstantProperties = $ExtensionConstantMap[$VMssObject.VirtualMachineProfile.StorageProfile.OsDisk.OsType.ToString()]
+    $extensionType = $extensionConstantProperties.ExtensionType
+    $publisher = $extensionConstantProperties.Publisher
+    $typeHandlerVersion = $extensionConstantProperties.TypeHandlerVersion
+
+    $extension = GetVMssExtension -VMssObject $VMssObject -ExtensionType $extensionType -Publisher $publisher
     $vmsslogheader = FormatVmssIdentifier -VMssObject $VMssObject
 
     if ($extension) {
-        if (!($PSCmdlet.ShouldProcess($vmsslogheader, "Update extension $($extension.Name), type $ExtensionType.$Publisher"))) {
-            return $VMssObject
+        if (!($PSCmdlet.ShouldProcess($vmsslogheader, "Update extension $($extension.Name), type $extensionType.$publisher"))) {
+            throw [CustomerSkip]::new()
         }
-        Write-Host "$vmsslogheader : Extension $($extension.Name), type $ExtensionType.$Publisher already installed."
+        Write-Host "$vmsslogheader : Extension $($extension.Name), type $extensionType.$publisher already installed."
         $InstallParameters.GetEnumerator() | ForEach-Object { $extension.($_.Key) = $_.Value }
-        $extension.TypeHandlerVersion = $TypeHandlerVersion
+        $extension.TypeHandlerVersion = $typeHandlerVersion
         return $VMssObject
     } 
 
-    if (!($PSCmdlet.ShouldProcess($vmsslogheader, "Install extension $ExtensionName, type $ExtensionType.$Publisher"))) {
-        return $VMssObject
+    if (!($PSCmdlet.ShouldProcess($vmsslogheader, "Install extension $ExtensionName, type $extensionType.$publisher"))) {
+        throw [CustomerSkip]::new()
     }
     
     $VMssObject = Add-AzVmssExtension -VirtualMachineScaleSet $VMssObject `
                                       -Name $ExtensionName `
-                                      -Type $ExtensionType `
-                                      -Publisher $Publisher `
-                                      -TypeHandlerVersion $TypeHandlerVersion `
+                                      -Type $extensionType `
+                                      -Publisher $publisher `
+                                      -TypeHandlerVersion $typeHandlerVersion `
                                       -AutoUpgradeMinorVersion $True `
                                       @InstallParameters `
                                       -Confirm:$false
 
 
-    Write-Host "$vmsslogheader : Extension $ExtensionName, type $ExtensionType.$Publisher added."
+    Write-Host "$vmsslogheader : Extension $ExtensionName, type $extensionType.$publisher added."
     return $VMssObject
 }
 
@@ -1066,7 +1062,7 @@ function SetVMExtension {
     $vmlogheader = $(FormatVmIdentifier -VMObject $VMObject)
     
     if (!($PSCmdlet.ShouldProcess($vmlogheader, "Install/Update extension $ExtensionName, type $ExtensionType.$Publisher"))) {
-        return $VMObject
+        throw [CustomerSkip]::new()
     }
 
     Write-Host "$vmlogheader : Installing/Updating extension $ExtensionName, type $ExtensionType.$Publisher"
@@ -1167,7 +1163,6 @@ function UpgradeVmssExtensionManualUpdateEnabled {
                                             -Confirm:$false
             if ($result.Status -ne "Succeeded") {
                 Write-Host "$vmsslogheader : Failed to upgrade VMSS instance name $scaleSetInstanceName, $i of $instanceCount. $($result.Status)"
-
             } else {
                 Write-Verbose "$vmsslogheader : Upgrade VMSS instance name $scaleSetInstanceName, $i of $instanceCount"
             }
@@ -1187,7 +1182,7 @@ function UpgradeVmssExtensionManualUpdateEnabled {
                 throw [VirtualMachineScaleSetUnknownException]::new($VMssObject, "Failed to upgrade VMSS instance name $scaleSetInstanceName", $_.Exception)
             }
             Write-Host "$vmsslogheader : Failed to upgrade VMSS instance name $scaleSetInstanceName, $i of $instanceCount. ErrorCode $errorCode. Continuing ..." 
-            $unexpectedUpgradeExceptionCounter+=1
+            $unexpectedUpgradeExceptionCounter+=1 
         }
     }
     
@@ -1209,7 +1204,7 @@ function UpdateVMssExtension {
     $vmsslogheader = FormatVMssIdentifier -VMssObject $VMssObject
 
     if (!($PSCmdlet.ShouldProcess($vmsslogheader, "Update VMSS"))) {
-        return $VMssObject
+        throw [CustomerSkip]::new()
     }
 
     Write-Host "$vmsslogheader : Updating VMSS"
@@ -1254,7 +1249,7 @@ function AssignVmssUserManagedIdentity {
     $vmsslogheader = FormatVmssIdentifier -VMssObject $VmssObject
     
     if (!($PSCmdlet.ShouldProcess($vmsslogheader, "Assign User Assigned Managed Identity $userAssignedManagedIdentityName"))) {
-        return $VMssObject
+        throw [CustomerSkip]::new()
     }
 
     Write-Host "$vmsslogheader : Assigning User Assigned Managed Identity $userAssignedManagedIdentityName"
@@ -1304,7 +1299,7 @@ function AssignVmUserManagedIdentity {
     $vmlogheader = FormatVmIdentifier -VMObject $VMObject
     
     if (!($PSCmdlet.ShouldProcess($vmlogheader, "Assign User Assigned Managed Identity $userAssignedManagedIdentityName"))) {
-        return $VMObject
+        throw [CustomerSkip]::new()
     }
 
     Write-Host "$vmlogheader : Assigning User Assigned Managed Identity $userAssignedManagedIdentityName"
@@ -1423,10 +1418,9 @@ try {
         Set-Variable -Name sb_vmss -Option Constant -Value { `
             param([Microsoft.Azure.Commands.Compute.Automation.Models.PSVirtualMachineScaleSet]$vmssObj) `
             OnboardVMssExtension -VMssObject $vmssObj `
-                             -ExtensionName $laDefaultExtensionName `
-                             -ExtensionConstantProperties `
-                                $laExtensionMap[$vmssObj.VirtualMachineProfile.StorageProfile.OsDisk.OsType.ToString()] `
-                             -InstallParameters $laInstallParameters
+                                 -ExtensionName $laDefaultExtensionName `
+                                 -ExtensionConstantMap $laExtensionMap `
+                                 -InstallParameters $laInstallParameters
         }
         
         Set-Variable -Name sb_da -Option Constant -Value { `
@@ -1437,10 +1431,9 @@ try {
         Set-Variable -Name sb_da_vmss -Option Constant -Value { `
             param([Microsoft.Azure.Commands.Compute.Automation.Models.PSVirtualMachineScaleSet]$vmssObj) `
             OnboardVMssExtension -VMssObject $vmssObj `
-                             -ExtensionName $daDefaultExtensionName `
-                             -ExtensionConstantProperties `
-                                $daExtensionConstantsMap[$vmssObj.VirtualMachineProfile.StorageProfile.OsDisk.OsType.ToString()] `
-                             -InstallParameters $daInstallParameters
+                                 -ExtensionName $daDefaultExtensionName `
+                                 -ExtensionConstantMap $daExtensionConstantsMap `
+                                 -InstallParameters $daInstallParameters
         }
 
         Set-Variable -Name sb_roles -Option Constant -Value $sb_nop_block_roles
@@ -1495,10 +1488,9 @@ try {
             Set-Variable -Name sb_da_vmss -Option Constant -Value { `
                 param([Microsoft.Azure.Commands.Compute.Automation.Models.PSVirtualMachineScaleSet]$vmssObj) `
                 OnboardVMssExtension -VMssObject $vmssObj `
-                                 -ExtensionName $daDefaultExtensionName `
-                                 -ExtensionConstantProperties `
-                                    $daExtensionConstantsMap[$vmssObj.VirtualMachineProfile.StorageProfile.OsDisk.OsType.ToString()] `
-                                 -InstallParameters $daInstallParameters
+                                     -ExtensionName $daDefaultExtensionName `
+                                     -ExtensionConstantMap $daExtensionConstantsMap `
+                                     -InstallParameters $daInstallParameters
             }
         }
     
@@ -1558,11 +1550,12 @@ try {
         } catch {} 
     }
 
-    $rgList = Sort-Object -InputObject $Rghashtable.Keys
+    $rgList = $Rghashtable.GetEnumerator() | Sort-Object -Property Key
     Write-Host "VM's and VMSS matching selection criteria :"
     $ManualUpgrade = 0
-    Foreach ($rg in $rgList) {
-        $rgTableObj  = $Rghashtable[$rg]
+    Foreach ($entry in $rgList) {
+        $rg = $entry.Key
+        $rgTableObj = $entry.Value
         $vmList = $rgTableObj.VirtualMachineList
         $vmssList = $rgTableObj.VirtualMachineScaleSetList
         Write-Host "" "ResourceGroup : $rg"
@@ -1597,9 +1590,10 @@ try {
         exit 1
     }
     
-    ForEach ($rg in $rgList) {
+    ForEach ($entry in $rgList) {
+        $rg = $entry.Key
+        $rgTableObj = $entry.Value
         try {
-            $rgTableObj  = $Rghashtable[$rg]
             &$sb_roles -rgName $rg
             
             foreach ($vm in $rgTableObj.VirtualMachineList) {
@@ -1625,6 +1619,10 @@ try {
                     Write-Host "VM Exception :"
                     DisplayException -ErrorRecord $_
                     Write-Host "Continuing to the next VM ..."
+                } catch [CustomerSkip] {
+                    Write-Host "Onboarding operation aborted"
+                    Write-Host "Continuing to the next VM ..."
+                    $onboardingCounters.Skipped +=1
                 }
             }
 
@@ -1656,12 +1654,19 @@ try {
                     Write-Host "VMSS Exception :"
                     DisplayException -ErrorRecord $_
                     Write-Host "Continuing to the next VMSS ..."
+                } catch [CustomerSkip] {
+                    Write-Host "Onboarding operation aborted"
+                    Write-Host "Continuing to the next VMSS ..."
+                    $onboardingCounters.Skipped +=1
                 }
             }
         } catch [ResourceGroupDoesNotExist] {
             Write-Host "Resource Group Exception :"
             DisplayException -ErrorRecord $_
             Write-Host "Continuing to the next Resource Group ..."
+        } catch [CustomerSkip] {
+            Write-Host "Onboarding operation aborted"
+            $onboardingCounters.Skipped += $rgTableObj.VirtualMachineList.Length + $rgTableObj.VirtualMachineScaleSetList.Length
         }
     }
 }
