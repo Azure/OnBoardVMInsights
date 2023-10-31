@@ -226,8 +226,18 @@ class DataCollectionRuleIncorrect : FatalException {
 }
 
 class UserAssignedManagedIdentityDoesNotExist : FatalException {
-    UserAssignedManagedIdentityDoesNotExist($uamiobj,
-                                            [Exception]$innerException) : base("$($uamiobj.Name) : User Assigned Managed Identity does not exist.", $innerException) {}
+    UserAssignedManagedIdentityDoesNotExist($uamiName,
+                                            [Exception]$innerException) : base("$uamiName : User Assigned Managed Identity does not exist.", $innerException) {}
+}
+
+class UserAssignedManagedIdentityResourceGroupDoesNotExist : FatalException {
+    UserAssignedManagedIdentityResourceGroupDoesNotExist($uamiResourceGroup,
+                                            [Exception]$innerException) : base("$uamiResourceGroup : User Assigned Managed Identity does not exist.", $innerException) {}
+}
+
+class UserAssignedManagedIdentityUnknownException : FatalException {
+    UserAssignedManagedIdentityUnknownException([String]$errorMessage,
+                                                [Exception]$innerException) : base($errorMessage, $innerException) {}
 }
 
 class ResourceGroupTableElement {
@@ -242,40 +252,40 @@ class OnboardingCounters {
 
 # Log Analytics Extension constants
 Set-Variable -Name laExtensionMap -Option Constant -Value @{ 
-    "Windows" = @{ ExtensionType = "MicrosoftMonitoringAgent"
-                   TypeHandlerVersion = "1.0"
-                   Publisher = "Microsoft.EnterpriseCloud.Monitoring"
+    "Windows" = @{  ExtensionType = "MicrosoftMonitoringAgent"
+                    TypeHandlerVersion = "1.0"
+                    Publisher = "Microsoft.EnterpriseCloud.Monitoring"
                 }
-    "Linux" =  @{  ExtensionType = "OmsAgentForLinux"
-                   TypeHandlerVersion = "1.6"
-                   Publisher = "Microsoft.EnterpriseCloud.Monitoring"
+    "Linux" =  @{   ExtensionType  = "OmsAgentForLinux"
+                    TypeHandlerVersion  = "1.6"
+                    Publisher = "Microsoft.EnterpriseCloud.Monitoring"
                 }
 }
 Set-Variable -Name laDefaultExtensionName -Option Constant -Value "MMAExtension"
 
 # Azure Monitoring Agent Extension constants
 Set-Variable -Name amaExtensionConstantMap -Option Constant -Value @{ 
-       "Windows" = @{ ExtensionType = "AzureMonitorWindowsAgent"
-                      TypeHandlerVersion = "1.16"
-                      Publisher = "Microsoft.Azure.Monitor" 
+       "Windows" = @{  ExtensionType = "AzureMonitorWindowsAgent"
+                       TypeHandlerVersion = "1.16"
+                       Publisher = "Microsoft.Azure.Monitor" 
                     }
-       "Linux" =   @{ ExtensionType = "AzureMonitorLinuxAgent" 
-                      TypeHandlerVersion = "1.16"
-                      Publisher = "Microsoft.Azure.Monitor"
+       "Linux" =   @{  ExtensionType = "AzureMonitorLinuxAgent" 
+                       TypeHandlerVersion = "1.16"
+                       Publisher = "Microsoft.Azure.Monitor"
                     }
 }
 Set-Variable -Name amaDefaultExtensionName -Option Constant -Value "AzureMonitoringAgent"
 
 # Dependency Agent Extension constants
 Set-Variable -Name daExtensionConstantsMap -Option Constant -Value @{
-    "Windows" = @{ExtensionType = "DependencyAgentWindows"
-                  TypeHandlerVersion = "9.10"
-                  Publisher = "Microsoft.Azure.Monitoring.DependencyAgent"
+    "Windows" = @{ ExtensionType = "DependencyAgentWindows"
+                   TypeHandlerVersion = "9.10"
+                   Publisher = "Microsoft.Azure.Monitoring.DependencyAgent"
                 }
-    "Linux" = @{ExtensionType = "DependencyAgentLinux"
-                TypeHandlerVersion = "9.10"
-                Publisher = "Microsoft.Azure.Monitoring.DependencyAgent"
-            }
+    "Linux" = @{ ExtensionType = "DependencyAgentLinux"
+                 TypeHandlerVersion = "9.10"
+                 Publisher = "Microsoft.Azure.Monitoring.DependencyAgent"
+               }
 }
 Set-Variable -Name daDefaultExtensionName -Option Constant -Value "DA-Extension"
 
@@ -300,7 +310,7 @@ function PrintSummaryMessage {
         $OnboardingCounters
     )
     Write-Host "Summary :"
-    Write-Host "Total VM/VMSS should be processed : $($OnboardingCounters.Total)"
+    Write-Host "Total VM/VMSS to be processed : $($OnboardingCounters.Total)"
     Write-Host "Succeeded : $($OnboardingCounters.Succeeded)"
     Write-Host "Failed : $($OnboardingCounters.Total - $OnboardingCounters.Succeeded)"
 }
@@ -312,7 +322,7 @@ function ExtractCloudExceptionErrorMessage {
 	#>
     param
     (
-        [Parameter(Mandatory=$True,Position=0)]
+        [Parameter(Mandatory=$True)]
         [System.Management.Automation.ErrorRecord]
         $ErrorRecord
     )
@@ -324,14 +334,14 @@ function ExtractCloudExceptionErrorMessage {
     return $null
 }
 
-function ExtractCloudExceptionErrorCode {
+function ExtractExceptionErrorCode {
     <#
 	.SYNOPSIS
 	Extract error code from the Cloud Exception. 
 	#>
     param
     (
-        [Parameter(Mandatory=$True,Position=0)]
+        [Parameter(Mandatory=$True)]
         [System.Management.Automation.ErrorRecord]
         $ErrorRecord
     )
@@ -483,7 +493,7 @@ function GetVMExtension {
             }
         }
     } catch [Microsoft.Azure.Commands.Compute.Common.ComputeCloudException] {
-        $errorCode = ExtractCloudExceptionErrorCode $_
+        $errorCode = ExtractExceptionErrorCode -ErrorRecord $_
         if ($errorCode -eq "ParentResourceNotFound") {
             throw [VirtualMachineDoesNotExist]::new($VMObject, $_.Exception)
         }
@@ -558,7 +568,7 @@ function RemoveVMExtension {
                                              -VMName $VMObject.Name `
                                              -Name $ExtensionName -Confirm:$false -Force
     } catch [Microsoft.Azure.Commands.Compute.Common.ComputeCloudException] {
-        $errorCode = ExtractCloudExceptionErrorCode $_
+        $errorCode = ExtractExceptionErrorCode -ErrorRecord $_
         if ($errorCode -eq "ResourceGroupNotFound") {
             throw [ResourceGroupDoesNotExist]::new($VMObject.ResourceGroupName,$_.Exception)       
         } 
@@ -751,8 +761,8 @@ function OnboardDaVm {
     
     return SetVMExtension -VMObject $VMObject `
                           -ExtensionName $extensionName `
-                          -InstallParameters $InstallParameters `
-                          @($daExtensionConstantProperties)
+                          @daExtensionConstantProperties `
+                          -InstallParameters $InstallParameters
 }
 
 function OnboardAmaVm {
@@ -778,11 +788,11 @@ function OnboardAmaVm {
         $extensionName = $extension.Name
         Write-Host "$(FormatVmIdentifier -VMObject $VMObject) : Extension $extensionName, type $($amaExtensionConstantProperties.ExtensionType).$($amaExtensionConstantProperties.Publisher) already installed. Provisioning State : $($extension.ProvisioningState)"
     }
-
+    
     return SetVMExtension -VMObject $VMObject `
                           -ExtensionName $extensionName `
-                          -InstallParameters $InstallParameters `
-                          @($amaExtensionConstantProperties)
+                          @amaExtensionConstantProperties `
+                          -InstallParameters $InstallParameters
 }
 
 function OnboardLaVmWithReInstall {
@@ -829,8 +839,8 @@ function OnboardLaVmWithReInstall {
     
     return SetVMExtension -VMObject $VMObject `
                           -ExtensionName $extensionName `
-                          -InstallParameters $InstallParameters `
-                          @($laExtensionConstantProperties)
+                          @laExtensionConstantProperties `
+                          -InstallParameters $InstallParameters
 }
 
 function OnboardLaVmWithoutReInstall {
@@ -868,8 +878,8 @@ function OnboardLaVmWithoutReInstall {
 
     return SetVMExtension -VMObject $VMObject `
                           -ExtensionName $extensionName `
-                          -InstallParameters $InstallParameters `
-                          @($laExtensionConstantProperties)
+                          @laExtensionConstantProperties `
+                          -InstallParameters $InstallParameters
 }
 
 function OnboardVmiWithAmaVm {
@@ -983,10 +993,10 @@ function SetVMssExtension {
         $ExtensionType,
         [Parameter(mandatory = $True)]
         [String]
-        $Publisher,
+        $TypeHandlerVersion,
         [Parameter(mandatory = $True)]
         [String]
-        $TypeHandlerVersion,
+        $Publisher,
         [Parameter(mandatory = $True)]
         [Hashtable]
         $InstallParameters
@@ -1075,8 +1085,8 @@ function SetVMExtension {
         Write-Host "$vmlogheader : Successfully installed/updated extension $ExtensionName, type $ExtensionType.$Publisher"
         return $VMObject
     } catch [Microsoft.Azure.Commands.Compute.Common.ComputeCloudException] {
-        $errorMessage = ExtractCloudExceptionErrorMessage $_
-        $errorCode = ExtractCloudExceptionErrorCode $_
+        $errorMessage = ExtractCloudExceptionErrorMessage -ErrorRecord $_
+        $errorCode = ExtractExceptionErrorCode -ErrorRecord $_
         if ($errorMessage -eq "Cannot modify extensions in the VM when the VM is not running") {
             throw [VirtualMachinePoweredDown]::new($VMObject, $_.Exception)
         }
@@ -1114,7 +1124,7 @@ function UpgradeVmssExtensionManualUpdateEnabled {
     try {
         $scaleSetInstances = Get-AzVmssVm -ResourceGroupName $vmssResourceGroupName -VMScaleSetName $vmssName -InstanceView
     } catch [Microsoft.Azure.Commands.Compute.Common.ComputeCloudException] {
-        $errorCode = ExtractCloudExceptionErrorCode($_)
+        $errorCode = ExtractExceptionErrorCode -ErrorRecord $_
         if ($errorCode -eq "ParentResourceNotFound") {
             throw [VirtualMachineScaleSetDoesNotExist]::new($VMssObject, $_.Exception)
         }
@@ -1160,7 +1170,7 @@ function UpgradeVmssExtensionManualUpdateEnabled {
                 Write-Verbose "$vmsslogheader : Upgrade VMSS instance name $scaleSetInstanceName, $i of $instanceCount"
             }
         } catch [Microsoft.Azure.Commands.Compute.Common.ComputeCloudException] {
-            $errorCode = ExtractCloudExceptionErrorCode($_)
+            $errorCode = ExtractExceptionErrorCode -ErrorRecord $_
             if ($errorCode -eq "ResourceNotFound") {
                 throw [VirtualMachineScaleSetDoesNotExist]::new($VMssObject, $_.Exception)
             }
@@ -1212,7 +1222,7 @@ function UpdateVMssExtension {
         Write-Host "$vmsslogheader : Successfully updated scale set with extension"
         return $VMssObject                           
     } catch [Microsoft.Azure.Commands.Compute.Common.ComputeCloudException] {
-        $errorCode = ExtractCloudExceptionErrorCode($_)
+        $errorCode = ExtractExceptionErrorCode -ErrorRecord $_
         if ($errorCode -eq "ParentResourceNotFound") {
             throw [VirtualMachineScaleSetDoesNotExist]::new($VMssObject, $_.Exception)
         } 
@@ -1260,9 +1270,9 @@ function AssignVmssUserManagedIdentity {
         Write-Host "$vmsslogheader : Successfully assigned User Assigned Managed Identity $userAssignedManagedIdentityName"
         return $VMssObject
     } catch [Microsoft.Azure.Commands.Compute.Common.ComputeCloudException] {
-        $errorCode = ExtractCloudExceptionErrorCode($_)
+        $errorCode = ExtractExceptionErrorCode -ErrorRecord $_
         if ($errorCode -eq "FailedIdentityOperation") {
-            throw [UserAssignedManagedIdentityDoesNotExist]::new($UserAssignedManagedIdentityObject, $_.Exception)
+            throw [UserAssignedManagedIdentityDoesNotExist]::new($userAssignedManagedIdentityName, $_.Exception)
         }
         if ($errorCode -eq "ResourceGroupNotFound") {
             throw [ResourceGroupDoesNotExist]::new($VMssObject.ResourceGroupName, $_.Exception)       
@@ -1304,7 +1314,7 @@ function AssignVmUserManagedIdentity {
                                 -IdentityID $UserAssignedManagedIdentityObject.Id `
                                 -Confirm:$false
     } catch [Microsoft.Azure.Commands.Compute.Common.ComputeCloudException] {
-        $errorCode = ExtractCloudExceptionErrorCode($_)
+        $errorCode = ExtractExceptionErrorCode -ErrorRecord $_
         if ($errorCode -eq "FailedIdentityOperation") {
             throw [UserAssignedManagedIdentityDoesNotExist]::new($userAssignedManagedIdentityName, $_.Exception)
         }
@@ -1384,8 +1394,6 @@ try {
     Set-Variable -Name sb_nop_block_upgrade -Option Constant -Value { param($obj)}
     Set-Variable -Name sb_nop_block -Option Constant -Value { param($obj) $obj}
     $Rghashtable = @{}
-
-    Write-Host("Performing script input parameter validation")
     
     if (!$isAma) {
         #Cannot validate Workspace existence with WorkspaceId, WorkspaceKey parameters.
@@ -1400,13 +1408,13 @@ try {
             Set-Variable -Name sb_vm -Option Constant -Value { `
                 param([Microsoft.Azure.Commands.Compute.Models.PSVirtualMachine]$vmObj) `
                 OnboardLaVmWithReInstall -VMObject $vmObj `
-                              -InstallParameters $laInstallParameters 
+                                         -InstallParameters $laInstallParameters 
             }
         } else {
             Set-Variable -Name sb_vm -Option Constant -Value { `
                 param([Microsoft.Azure.Commands.Compute.Models.PSVirtualMachine]$vmObj) `
                 OnboardLaVmWithoutReInstall -VMObject $vmObj `
-                              -InstallParameters $laInstallParameters
+                                            -InstallParameters $laInstallParameters
             }
         }
         
@@ -1435,15 +1443,23 @@ try {
 
         Set-Variable -Name sb_roles -Option Constant -Value $sb_nop_block_roles
     } else {
-        try {
-            Write-Verbose "Validating ($UserAssignedManagedIdentityResourceGroup, $UserAssignedManagedIdentityName)"
-            Set-Variable -Name UserAssignedManagedIdentityObject -Option Constant -Value `
-                        $(Get-AzUserAssignedIdentity -Name $UserAssignedManagedIdentityName `
-                                                     -ResourceGroupName $UserAssignedManagedIdentityResourceGroup)
+            try {
+                Write-Verbose "Validating ($UserAssignedManagedIdentityResourceGroup, $UserAssignedManagedIdentityName)"
+                Set-Variable -Name UserAssignedManagedIdentityObject -Option Constant -Value `
+                                    $(Get-AzUserAssignedIdentity -Name $UserAssignedManagedIdentityName `
+                                                                 -ResourceGroupName $UserAssignedManagedIdentityResourceGroup)
+            } catch {
+                $errorCode = ExtractExceptionErrorCode -ErrorRecord $_
+                if ($errorCode -eq "ResourceNotFound") {
+                    throw [UserAssignedManagedIdentityDoesNotExist]::new($UserAssignedManagedIdentityName, $_.Exception)
+                }
+                
+                if ($errorCode -eq "ResourceGroupNotFound") {
+                    throw [UserAssignedManagedIdentityResourceGroupDoesNotExist]::new($UserAssignedManagedIdentityResourceGroup, $_.Exception)
+                }
 
-        } catch {
-            throw [FatalException]::new($_.Exception.Message, $_.Exception)
-        }
+                throw [UserAssignedManagedIdentityUnknownException]::new("($UserAssignedManagedIdentityResourceGroup) $UserAssignedManagedIdentityName : Unable to locate User Assigned Managed Identity.", $_.Exception)
+            }
         
         Set-Variable -Name amaInstallParameters -Option Constant -Value `
             @{"Settings" = @{
@@ -1520,7 +1536,7 @@ try {
         Write-Host "Getting list of VMs or VM Scale Sets matching specified criteria."
         
         Get-AzVM -ResourceGroupName $ResourceGroup
-            | Where-Object {$_.Name -eq $Name -and !($_.VirtualMachineScaleSet) -and $_.Name -like $Name}
+            | Where-Object {$_.Name -like $Name -and !($_.VirtualMachineScaleSet) -and $_.Name -like $Name}
             | ForEach-Object { 
                 $onboardingCounters.Total +=1 ; 
                 PopulateRgHashTableVm -Rghashtable $Rghashtable -VMObject $_
@@ -1528,7 +1544,7 @@ try {
         
         #VMI does not support VMSS with flexible orchestration.
         Get-AzVmss -ResourceGroupName $ResourceGroup
-            | Where-Object {$_.Name -eq $Name -and $_.OrchestrationMode -ne 'Flexible'}
+            | Where-Object {$_.Name -like $Name -and $_.OrchestrationMode -ne 'Flexible'}
             | ForEach-Object {
                 $onboardingCounters.Total +=1 ; 
                 PopulateRgHashTableVmss -RgHashTable $Rghashtable -VMssObject $_
