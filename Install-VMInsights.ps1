@@ -408,7 +408,8 @@ function DisplayException {
     }
 }
 
-function UtilPopulateRgHashTable {
+function GetRgObject {
+
     <#
     .SYNOPSIS
     PopulateRgHashTableVMs/VMss util function
