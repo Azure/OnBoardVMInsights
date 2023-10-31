@@ -1393,7 +1393,16 @@ function SetManagedIdentityRolesAma {
     try { 
         $rgObj = Get-AzResourceGroup -Name $ResourceGroupName
     } catch { 
-        throw [ResourceGroupDoesNotExist]::new($ResourceGroupName)
+        $errorCode = ExtractExceptionErrorCode -ErrorRecord $_
+        if ($errorCode -eq "ResourceGroupNotFound") {
+            throw [FatalException]::new("$ResourceGroupName : Not found.")
+        }
+         
+        throw [FatalException]::new("Unable to lookup Resource Group.")
+    }
+
+    if ($null -eq $rgObj) {
+        throw [FatalException]::new("No Resource Group matched for $ResourceGroupName")
     }
 
     $roles = @("Virtual Machine Contributor", "Azure Connected Machine Resource Administrator", "Log Analytics Contributor")
@@ -1573,7 +1582,14 @@ try {
                     $onboardingCounters.Total +=1 ;
                     PopulateRgHashTableVm -Rghashtable $Rghashtable -VMObject $_
                 }
-        } catch {} 
+        } catch {
+            $errorCode = ExtractExceptionErrorCode -ErrorRecord $_
+            if ($errorCode -eq "ResourceGroupNotFound" -or $errorCode -eq "ResourceNotFound") {
+                #queitly do nothing.
+            }
+
+            throw [FatalException]::new("Unable to lookup VMs", $_.Exception)
+        } 
     } else {
         Write-Host "Getting list of VMs or VM Scale Sets matching specified criteria."
         try {
@@ -1583,7 +1599,14 @@ try {
                     $onboardingCounters.Total +=1 ; 
                     PopulateRgHashTableVm -Rghashtable $Rghashtable -VMObject $_
                 }
-        } catch {}
+        } catch {
+            $errorCode = ExtractExceptionErrorCode -ErrorRecord $_
+            if ($errorCode -eq "ResourceGroupNotFound" -or $errorCode -eq "ResourceNotFound") {
+                #queitly do nothing.
+            }
+
+            throw [FatalException]::new("Unable to lookup VMs", $_.Exception)
+        }
 
         try {
             #VMI does not support VMSS with flexible orchestration.
@@ -1593,7 +1616,14 @@ try {
                     $onboardingCounters.Total +=1 ; 
                     PopulateRgHashTableVmss -RgHashTable $Rghashtable -VMssObject $_
                 }
-        } catch {} 
+        } catch {
+            $errorCode = ExtractExceptionErrorCode -ErrorRecord $_
+            if ($errorCode -eq "ResourceGroupNotFound" -or $errorCode -eq "ResourceNotFound") {
+                #queitly do nothing.
+            }
+
+            throw [FatalException]::new("Unable to lookup VMSS", $_.Exception)
+        } 
     }
 
     $rgList = $Rghashtable.GetEnumerator() | Sort-Object -Property Key
