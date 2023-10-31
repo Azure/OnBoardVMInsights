@@ -1525,30 +1525,35 @@ try {
                 $policyAssignmentNameResources.Add($_.ResourceId, $True)
               }
 
-        #Virtual Machines part of a VMSS will be skipped.
-        Get-AzVM -ResourceGroupName $ResourceGroup
-            | Where-Object {$_.Name -eq $Name -and !($_.VirtualMachineScaleSet) -and $policyAssignmentNameResources.ContainsKey($_.Id)}
-            | ForEach-Object {
-                $onboardingCounters.Total +=1 ;
-                PopulateRgHashTableVm -Rghashtable $Rghashtable -VMObject $_
-              }
+        try {
+            #Virtual Machines part of a VMSS will be skipped.
+            Get-AzVM -ResourceGroupName $ResourceGroup -Name $Name
+                | Where-Object {!($_.VirtualMachineScaleSet) -and $policyAssignmentNameResources.ContainsKey($_.Id)}
+                | ForEach-Object {
+                    $onboardingCounters.Total +=1 ;
+                    PopulateRgHashTableVm -Rghashtable $Rghashtable -VMObject $_
+                }
+        } catch {} 
     } else {
         Write-Host "Getting list of VMs or VM Scale Sets matching specified criteria."
-        
-        Get-AzVM -ResourceGroupName $ResourceGroup
-            | Where-Object {$_.Name -like $Name -and !($_.VirtualMachineScaleSet) -and $_.Name -like $Name}
-            | ForEach-Object { 
-                $onboardingCounters.Total +=1 ; 
-                PopulateRgHashTableVm -Rghashtable $Rghashtable -VMObject $_
-              }
-        
-        #VMI does not support VMSS with flexible orchestration.
-        Get-AzVmss -ResourceGroupName $ResourceGroup
-            | Where-Object {$_.Name -like $Name -and $_.OrchestrationMode -ne 'Flexible'}
-            | ForEach-Object {
-                $onboardingCounters.Total +=1 ; 
-                PopulateRgHashTableVmss -RgHashTable $Rghashtable -VMssObject $_
-              }
+        try {
+            Get-AzVM -ResourceGroupName $ResourceGroup -Name $Name
+                | Where-Object {!($_.VirtualMachineScaleSet)}
+                | ForEach-Object { 
+                    $onboardingCounters.Total +=1 ; 
+                    PopulateRgHashTableVm -Rghashtable $Rghashtable -VMObject $_
+                }
+        } catch {#if resourceNotFound Exception not found then ignore it.}
+
+        try {
+            #VMI does not support VMSS with flexible orchestration.
+            Get-AzVmss -ResourceGroupName $ResourceGroup -Name $Name
+                | Where-Object {$_.OrchestrationMode -ne 'Flexible'}
+                | ForEach-Object {
+                    $onboardingCounters.Total +=1 ; 
+                    PopulateRgHashTableVmss -RgHashTable $Rghashtable -VMssObject $_
+                }
+        } catch {} 
     }
 
     $rgList = Sort-Object -InputObject $Rghashtable.Keys
