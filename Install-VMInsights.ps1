@@ -336,7 +336,7 @@ function ExtractCloudExceptionErrorMessage {
         $ErrorRecord
     )
 
-    if ($ErrorRecord.Exception.Message -match 'ErrorMessage : ([^\s]+)') {
+    if ($ErrorRecord.Exception.Message -match 'ErrorMessage *: ([^\s]+)') {
         return $matches[1]
     }
 
@@ -355,7 +355,7 @@ function ExtractExceptionErrorCode {
         $ErrorRecord
     )
 
-    if ($ErrorRecord.Exception.Message -match 'ErrorCode : ([^\s]+)') {
+    if ($ErrorRecord.Exception.Message -match 'ErrorCode *: ([^\s]+)') {
         return $matches[1]
     }
 
@@ -510,7 +510,7 @@ function GetVMExtension {
         if ($errorCode -eq "ResourceGroupNotFound") {
             throw [ResourceGroupDoesNotExist]::new($($VMObject.ResourceGroupName),$_.Exception)   
         }    
-        throw [VirtualMachineUnknownException]::new($VMObject, "Failed to locate extension with type = $publisher.$extensionType", $_.Exception)
+        throw [VirtualMachineUnknownException]::new($VMObject, "Failed to locate extension with type = $($publisher).$($extensionType)", $_.Exception)
     }
     
     return $null
@@ -1044,17 +1044,17 @@ function OnboardVMssExtension {
     $vmsslogheader = FormatVmssIdentifier -VMssObject $VMssObject
 
     if ($extension) {
-        if (!($PSCmdlet.ShouldProcess($vmsslogheader, "Update extension $($extension.Name), type = $publisher.$extensionType"))) {
+        if (!($PSCmdlet.ShouldProcess($vmsslogheader, "Update extension $($extension.Name), type = $($publisher).$($extensionType)"))) {
             throw [CustomerSkip]::new()
         }
-        Write-Host "$vmsslogheader : Extension $($extension.Name), type = $publisher.$extensionType already installed."
+        Write-Host "$vmsslogheader : Extension $($extension.Name), type = $($publisher).$($extensionType) already installed."
         $ExtensionSettings.GetEnumerator() | ForEach-Object { $extension.($_.Key) = $_.Value }
         $extensionUpgradeSettings.GetEnumerator() | ForEach-Object { $extension.($_.Key) = $_.Value }
         $extension.TypeHandlerVersion = $typeHandlerVersion
         return $VMssObject
     } 
 
-    if (!($PSCmdlet.ShouldProcess($vmsslogheader, "Install extension $ExtensionName, type = $publisher.$extensionType"))) {
+    if (!($PSCmdlet.ShouldProcess($vmsslogheader, "Install extension $ExtensionName, type = $($publisher).$($extensionType)"))) {
         throw [CustomerSkip]::new()
     }
     
@@ -1068,7 +1068,7 @@ function OnboardVMssExtension {
                                       -Confirm:$false
 
 
-    Write-Host "$vmsslogheader : Extension $ExtensionName, type = $publisher.$extensionType added."
+    Write-Host "$vmsslogheader : Extension $ExtensionName, type = $($publisher).$($extensionType) added."
     return $VMssObject
 }
 
@@ -1105,11 +1105,11 @@ function SetVMExtension {
     
     $vmlogheader = $(FormatVmIdentifier -VMObject $VMObject)
     
-    if (!($PSCmdlet.ShouldProcess($vmlogheader, "Install/Update extension $ExtensionName, type = $Publisher.$ExtensionType"))) {
+    if (!($PSCmdlet.ShouldProcess($vmlogheader, "Install/Update extension $ExtensionName, type = $($Publisher).$($ExtensionType)"))) {
         throw [CustomerSkip]::new()
     }
 
-    Write-Host "$vmlogheader : Installing/Updating extension $ExtensionName, type = $Publisher.$ExtensionType"
+    Write-Host "$vmlogheader : Installing/Updating extension $ExtensionName, type = $($Publisher).$($ExtensionType)"
     
     try {
         $result = Set-AzVMExtension -ResourceGroupName $($VMObject.ResourceGroupName) `
@@ -1125,7 +1125,7 @@ function SetVMExtension {
             throw [VirtualMachineOperationFailed]::new($VMObject, "Failed to update extension. StatusCode = $($result.StatusCode). ReasonPhrase = $($result.ReasonPhrase)")
         }
     
-        Write-Host "$vmlogheader : Successfully installed/updated extension $ExtensionName, type = $Publisher.$ExtensionType"
+        Write-Host "$vmlogheader : Successfully installed/updated extension $ExtensionName, type = $($Publisher).$($ExtensionType)"
         return $VMObject
     } catch [Microsoft.Azure.Commands.Compute.Common.ComputeCloudException] {
         $errorMessage = ExtractCloudExceptionErrorMessage -ErrorRecord $_
@@ -1142,7 +1142,7 @@ function SetVMExtension {
             throw [ResourceGroupDoesNotExist]::new($VMObject.ResourceGroupName, $_.Exception)       
         } 
         
-        throw [VirtualMachineUnknownException]::new($VMObject, "Failed to install/update extension $ExtensionName, type = $Publisher.$ExtensionType", $_.Exception)
+        throw [VirtualMachineUnknownException]::new($VMObject, "Failed to install/update extension $ExtensionName, type = $($Publisher).$($ExtensionType)", $_.Exception)
     }
 }
 
@@ -1584,11 +1584,11 @@ try {
                 }
         } catch {
             $errorCode = ExtractExceptionErrorCode -ErrorRecord $_
-            if ($errorCode -eq "ResourceGroupNotFound" -or $errorCode -eq "ResourceNotFound") {
-                #queitly do nothing.
+            if (!($errorCode -eq "ResourceGroupNotFound" -or $errorCode -eq "ResourceNotFound")) {
+                throw [FatalException]::new("Unable to lookup VMs", $_.Exception)
             }
 
-            throw [FatalException]::new("Unable to lookup VMs", $_.Exception)
+            #queitly do nothing.
         } 
     } else {
         Write-Host "Getting list of VMs or VM Scale Sets matching specified criteria."
@@ -1601,11 +1601,11 @@ try {
                 }
         } catch {
             $errorCode = ExtractExceptionErrorCode -ErrorRecord $_
-            if ($errorCode -eq "ResourceGroupNotFound" -or $errorCode -eq "ResourceNotFound") {
-                #queitly do nothing.
+            if (!($errorCode -eq "ResourceGroupNotFound" -or $errorCode -eq "ResourceNotFound")) {
+                throw [FatalException]::new("Unable to lookup VMs", $_.Exception)
             }
 
-            throw [FatalException]::new("Unable to lookup VMs", $_.Exception)
+            #queitly do nothing.
         }
 
         try {
@@ -1618,11 +1618,11 @@ try {
                 }
         } catch {
             $errorCode = ExtractExceptionErrorCode -ErrorRecord $_
-            if ($errorCode -eq "ResourceGroupNotFound" -or $errorCode -eq "ResourceNotFound") {
-                #queitly do nothing.
+            if (!($errorCode -eq "ResourceGroupNotFound" -or $errorCode -eq "ResourceNotFound")) {
+                throw [FatalException]::new("Unable to lookup VMSS", $_.Exception)
             }
 
-            throw [FatalException]::new("Unable to lookup VMSS", $_.Exception)
+            #queitly do nothing.
         } 
     }
 
