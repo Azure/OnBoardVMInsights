@@ -824,12 +824,12 @@ function OnboardLaVmWithReInstall {
         if ($osType -eq "Linux" -and $extension.PublicSettings) {
             $extensionPublicSettingsJson = $extension.PublicSettings | ConvertFrom-Json
             if ($extensionPublicSettingsJson.workspaceId -ne $InstallParameters.Settings.workspaceId) {
-                Write-Host "$vmlogheader : OmsAgentForLinux requires a uninstall followed by a re-install to change the workspace."
-
+                Write-Host "$vmlogheader : OmsAgentForLinux requires an uninstall followed by a re-install to change the workspace."
 
                 if (!(RemoveVMExtension -VMObject $VMObject `
                                         -ExtensionName $extensionName `
                                         -ExtensionProperties $laExtensionConstantProperties)) {
+                    #since there is no data loss, this is counted as a success.
                     Write-Host "$vmlogheader : Extension $extensionName was not removed. Skipping replacement."
                     return $VMObject
                 }
@@ -919,7 +919,7 @@ function OnboardVmiWithAmaVmss {
             
     $VMssObject = AssignVmssUserManagedIdentity -VMssObject $VMssObject
     NewDCRAssociationVmss -VMssObject $VMssObject
-    return SetVMssExtension -VMssObject $VMssObject `
+    return OnboardVMssExtension -VMssObject $VMssObject `
                             -ExtensionName $amaDefaultExtensionName `
                             -ExtensionConstantProperties `
                               $amaExtensionConstantMap[$VMssObject.VirtualMachineProfile.StorageProfile.OsDisk.OsType.ToString()] `
@@ -950,8 +950,9 @@ function SetManagedIdentityRoles {
         return
     }
 
+    Write-Host "$ResourceGroupId : Assigning roles"
     foreach ($role in $Roles) {
-        Write-Host "$ResourceGroupId : Assigning role $role"
+        Write-Verbose "Assigning role $role"
         try {
             New-AzRoleAssignment -ObjectId $($UserAssignedManagedIdentity.principalId) `
                                  -RoleDefinitionName $role `
@@ -973,7 +974,7 @@ function SetManagedIdentityRoles {
     }
 }
 
-function SetVMssExtension {
+function OnboardVMssExtension {
     <#
 	.SYNOPSIS
 	Install/Update Extension VMSS, handling if already installed
@@ -1420,7 +1421,7 @@ try {
         
         Set-Variable -Name sb_vmss -Option Constant -Value { `
             param([Microsoft.Azure.Commands.Compute.Automation.Models.PSVirtualMachineScaleSet]$vmssObj) `
-            SetVMssExtension -VMssObject $vmssObj `
+            OnboardVMssExtension -VMssObject $vmssObj `
                              -ExtensionName $laDefaultExtensionName `
                              -ExtensionConstantProperties `
                                 $laExtensionMap[$vmssObj.VirtualMachineProfile.StorageProfile.OsDisk.OsType.ToString()] `
@@ -1434,7 +1435,7 @@ try {
 
         Set-Variable -Name sb_da_vmss -Option Constant -Value { `
             param([Microsoft.Azure.Commands.Compute.Automation.Models.PSVirtualMachineScaleSet]$vmssObj) `
-            SetVMssExtension -VMssObject $vmssObj `
+            OnboardVMssExtension -VMssObject $vmssObj `
                              -ExtensionName $daDefaultExtensionName `
                              -ExtensionConstantProperties `
                                 $daExtensionConstantsMap[$vmssObj.VirtualMachineProfile.StorageProfile.OsDisk.OsType.ToString()] `
@@ -1492,7 +1493,7 @@ try {
 
             Set-Variable -Name sb_da_vmss -Option Constant -Value { `
                 param([Microsoft.Azure.Commands.Compute.Automation.Models.PSVirtualMachineScaleSet]$vmssObj) `
-                SetVMssExtension -VMssObject $vmssObj `
+                OnboardVMssExtension -VMssObject $vmssObj `
                                  -ExtensionName $daDefaultExtensionName `
                                  -ExtensionConstantProperties `
                                     $daExtensionConstantsMap[$vmssObj.VirtualMachineProfile.StorageProfile.OsDisk.OsType.ToString()] `
