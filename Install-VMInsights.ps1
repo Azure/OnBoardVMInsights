@@ -1183,13 +1183,14 @@ function UpgradeVmssExtensionManualUpdateEnabled {
     $unexpectedUpgradeExceptionCounter = 0
     $unexpectedUpgradeExceptionLimit = 5 
     Foreach ($scaleSetInstance in $scaleSetInstances) {
+        $i++
+
         if ($scaleSetInstance.InstanceView.Statuses.DisplayStatus -contains "VM deallocated") {
             Write-Host "VMSS instance $scaleSetInstanceName, $i of $instanceCount deallocated"
             Write-Host "Continuing ..."
             continue
         }
 
-        $i++
         Write-Host "Upgrading $scaleSetInstanceName, $i of $instanceCount"
 
         $scaleSetInstanceName = $($scaleSetInstance.Name)
@@ -1483,23 +1484,23 @@ try {
 
         Set-Variable -Name sb_roles -Option Constant -Value $sb_nop_block_roles
     } else {
-            try {
-                Write-Verbose "Validating ($UserAssignedManagedIdentityResourceGroup, $UserAssignedManagedIdentityName)"
-                Set-Variable -Name UserAssignedManagedIdentityObject -Option Constant -Value `
-                                    $(Get-AzUserAssignedIdentity -Name $UserAssignedManagedIdentityName `
-                                                                 -ResourceGroupName $UserAssignedManagedIdentityResourceGroup)
-            } catch {
-                $errorCode = ExtractExceptionErrorCode -ErrorRecord $_
-                if ($errorCode -eq "ResourceNotFound") {
-                    throw [UserAssignedManagedIdentityDoesNotExist]::new($UserAssignedManagedIdentityName, $_.Exception)
-                }
-                
-                if ($errorCode -eq "ResourceGroupNotFound") {
-                    throw [UserAssignedManagedIdentityResourceGroupDoesNotExist]::new($UserAssignedManagedIdentityResourceGroup, $_.Exception)
-                }
-
-                throw [UserAssignedManagedIdentityUnknownException]::new("($UserAssignedManagedIdentityResourceGroup) $UserAssignedManagedIdentityName : Unable to locate User Assigned Managed Identity.", $_.Exception)
+        try {
+            Write-Verbose "Validating ($UserAssignedManagedIdentityResourceGroup, $UserAssignedManagedIdentityName)"
+            Set-Variable -Name UserAssignedManagedIdentityObject -Option Constant -Value `
+                                $(Get-AzUserAssignedIdentity -Name $UserAssignedManagedIdentityName `
+                                                                -ResourceGroupName $UserAssignedManagedIdentityResourceGroup)
+        } catch {
+            $errorCode = ExtractExceptionErrorCode -ErrorRecord $_
+            if ($errorCode -eq "ResourceNotFound") {
+                throw [UserAssignedManagedIdentityDoesNotExist]::new($UserAssignedManagedIdentityName, $_.Exception)
             }
+            
+            if ($errorCode -eq "ResourceGroupNotFound") {
+                throw [UserAssignedManagedIdentityResourceGroupDoesNotExist]::new($UserAssignedManagedIdentityResourceGroup, $_.Exception)
+            }
+
+            throw [UserAssignedManagedIdentityUnknownException]::new("($UserAssignedManagedIdentityResourceGroup) $UserAssignedManagedIdentityName : Unable to locate User Assigned Managed Identity.", $_.Exception)
+        }
         
         Set-Variable -Name amaExtensionSettings -Option Constant -Value `
             @{"Settings" = @{
@@ -1555,7 +1556,7 @@ try {
 
     if ($PolicyAssignmentName) {
         #this section is only for VMs
-        Write-Host "Looking up Virtual Machines in policy assingment $PolicyAssignmentName"
+        Write-Host "Looking up Virtual Machines in policy assignment $PolicyAssignmentName"
 
         $policyAssignmentNameResources = @{}
         Get-AzPolicyState `
@@ -1621,7 +1622,8 @@ try {
     }
 
     if ($ManualUpgrade -gt 0 -and !$TriggerVmssManualVMUpdate) {
-        Write-Host "Found VMSS with Manaual upgrade. Please provide 'TriggerVmssManualVMUpdate' to perform upgrade." 
+        Write-Host "Found $ManualUpgrade VMSS with upgrade mode 'Manual'."
+        Write-Host "'-TriggerVmssManualVMUpdate' was not provided. Upgrade will not be performed." 
     }
 
     Write-Host ""
@@ -1645,7 +1647,7 @@ try {
                 try {
                     $vm = &$sb_vm -vmObj $vm
                     $vm = &$sb_da -vmObj $vm
-                    Write-Host "$(FormatVmIdentifier -VMObject $vm) : Successfully onboarded VMInsights"
+                    Write-Host "$(FormatVmIdentifier -VMObject $vm) : Successfully onboarded VM insights"
                     $onboardingCounters.Succeeded +=1
                     $unknownExceptionVirtualMachineConsequentCounter = 0
                 } catch [VirtualMachineUnknownException] {
@@ -1680,7 +1682,7 @@ try {
                     if ($vmss.UpgradePolicy.Mode -eq 'Manual') {
                         &$sb_upgrade -vmssObj $vmss  
                     }
-                    Write-Host "$vmsslogheader : Successfully onboarded VMInsights"
+                    Write-Host "$vmsslogheader : Successfully onboarded VM insights"
                     $onboardingCounters.Succeeded +=1
                     $unknownExceptionVirtualMachineScaleSetConsequentCounter = 0
                 } catch [VirtualMachineScaleSetUnknownException] {
