@@ -1544,7 +1544,7 @@ try {
                     $onboardingCounters.Total +=1 ; 
                     PopulateRgHashTableVm -Rghashtable $Rghashtable -VMObject $_
                 }
-        } catch {#if resourceNotFound Exception not found then ignore it.}
+        } catch {}
 
         try {
             #VMI does not support VMSS with flexible orchestration.
