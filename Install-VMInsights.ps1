@@ -1161,7 +1161,7 @@ function UpgradeVmssExtensionManualUpdateEnabled {
     
     $vmssResourceGroupName = $VMssObject.ResourceGroupName
     $vmssName = $VMssObject.Name
-    $vmsslogheader =  FormatVmssIdentifier -VMssObject $VMssObject
+    $vmsslogheader = FormatVmssIdentifier -VMssObject $VMssObject
     
     $scaleSetInstances = @()
     try {
@@ -1184,9 +1184,11 @@ function UpgradeVmssExtensionManualUpdateEnabled {
     $unexpectedUpgradeExceptionLimit = 5 
     Foreach ($scaleSetInstance in $scaleSetInstances) {
         $i++
-
-        if ($scaleSetInstance.InstanceView.Statuses.DisplayStatus -contains "VM deallocated") {
-            Write-Host "VMSS instance $scaleSetInstanceName, $i of $instanceCount deallocated"
+        $healthstatus = $scaleSetInstance.InstanceView.Statuses.DisplayStatus
+        $provisioningState = $healthstatus[0] | format-List | Select-Object $_.Code
+        $powerState = $healthstatus[1] | format-List | Select-Object $_.Code
+        if (!($provisioningState -eq 'ProvisioningState/succeeded' -and $powerState -eq 'PowerState/running')) {
+            Write-Host "VMSS instance $scaleSetInstanceName, $i of $instanceCount not healthy."
             Write-Host "Continuing ..."
             continue
         }
