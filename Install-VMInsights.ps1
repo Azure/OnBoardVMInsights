@@ -1239,7 +1239,7 @@ function UpgradeVmssExtensionManualUpdateEnabled {
             $unexpectedUpgradeExceptionCounter+=1 
         }
     }
-    $InstanceUpgradeFailCounter = $unexpectedUpgradeExceptionCounter
+    $InstanceUpgradeFailCounter.Value = $unexpectedUpgradeExceptionCounter
 }
 
 function UpdateVMssExtension {
@@ -1560,8 +1560,8 @@ try {
 
     if ($TriggerVmssManualVMUpdate) {
         Set-Variable -Name sb_upgrade -Option Constant -Value { `
-            param([Microsoft.Azure.Commands.Compute.Automation.Models.PSVirtualMachineScaleSet]$vmssObj) `
-            UpgradeVmssExtensionManualUpdateEnabled -VMssObject $vmssObj
+            param([Microsoft.Azure.Commands.Compute.Automation.Models.PSVirtualMachineScaleSet]$vmssObj, [ref]$instanceUpgradeFailCounter) `
+            UpgradeVmssExtensionManualUpdateEnabled -VMssObject $vmssObj -InstanceUpgradeFailCounter $instanceUpgradeFailCounter
         }
     } else {
         Set-Variable -Name sb_upgrade -Option Constant -Value $sb_nop_block_upgrade
@@ -1713,12 +1713,12 @@ try {
                     $vmss = &$sb_vmss -vmssObj $vmss
                     $vmss = &$sb_da_vmss -vmssObj $vmss
                     $vmss = UpdateVMssExtension -VMssObject $vmss
-                    $instanceUpgradeFailCounter = [ref]0
+                    $instanceUpgradeFailCounter = 0
                     if ($vmss.UpgradePolicy.Mode -eq 'Manual') {
-                        &$sb_upgrade -vmssObj $vmss -InstanceUpgradeFailCounter $instanceUpgradeFailCounter
+                        &$sb_upgrade -vmssObj $vmss -InstanceUpgradeFailCounter ([ref]$instanceUpgradeFailCounter)
                     }
                     Write-Host "$vmsslogheader : Successfully onboarded VM insights"
-                    if ($instanceUpgradeFailCounter == 0) {
+                    if ($instanceUpgradeFailCounter -eq 0) {
                         $onboardingCounters.Succeeded +=1
                     }
                     $unknownExceptionVirtualMachineScaleSetConsequentCounter = 0
