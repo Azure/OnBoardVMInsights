@@ -587,15 +587,16 @@ function RemoveVMExtension {
             throw [ResourceGroupDoesNotExist]::new($VMObject.ResourceGroupName,$_.Exception)       
         } 
         
-        throw [VirtualMachineUnknownException]::new($VMObject, "Failed to remove extension $ExtensionName, type $extensionType.$extensionPublisher", $_.Exception)
+        throw [VirtualMachineUnknownException]::new($VMObject, "Failed to remove extension $ExtensionName, type $($extensionPublisher).$($extensionType)", $_.Exception)
     }
     
     if ($removeResult.IsSuccessStatusCode) {
-        Write-Host "$vmlogheader : Successfully removed extension $ExtensionName, type $extensionType.$extensionPublisher"
+        Write-Host "$vmlogheader : Successfully removed extension $ExtensionName, type $($extensionPublisher).$($extensionType)"
 
     }
 
-    throw [VirtualMachineOperationFailed]::new($VMObject, "Failed to remove extension $ExtensionName, type $extensionType.$extensionPublisher. StatusCode = $($removeResult.StatusCode). ReasonPhrase = $($removeResult.ReasonPhrase)")
+    throw [VirtualMachineOperationFailed]::new($VMObject, 
+            "Failed to remove extension $ExtensionName, type $($extensionPublisher).$($extensionType). StatusCode = $($removeResult.StatusCode). ReasonPhrase = $($removeResult.ReasonPhrase)")
 }
 
 #VMI supports Customers onboarding DCR from different subscription to which it has access to.
@@ -1190,14 +1191,15 @@ function UpgradeVmssExtensionManualUpdateEnabled {
     $instanceCount = $scaleSetInstances.Length
     $unexpectedUpgradeExceptionCounter = 0
     $unexpectedUpgradeExceptionLimit = 5 
+    
     Foreach ($scaleSetInstance in $scaleSetInstances) {
         $i++
-        $healthstatus = $scaleSetInstance.InstanceView.Statuses.DisplayStatus
-        $provisioningState = $healthstatus[0] | format-List | Select-Object $_.Code
-        $powerState = $healthstatus[1] | format-List | Select-Object $_.Code
-        if (!($provisioningState -eq 'ProvisioningState/succeeded' -and $powerState -eq 'PowerState/running')) {
-            Write-Host "VMSS instance $scaleSetInstanceName, $i of $instanceCount not healthy."
+        $healthstatus = $scaleSetInstance.InstanceView.Statuses.Code
+
+        if (!($healthstatus -contains 'ProvisioningState/succeeded' -and $healthstatus -contains 'PowerState/running')) {
+            Write-Host "VMSS instance $scaleSetInstanceName, $i of $instanceCount is not operational."
             Write-Host "Continuing ..."
+            $InstanceUpgradeFailCounter.Value += 1
             continue
         }
 
@@ -1208,9 +1210,7 @@ function UpgradeVmssExtensionManualUpdateEnabled {
             Write-Verbose "$vmsslogheader : Latest model already applied for $scaleSetInstanceName, $i of $instanceCount"
             continue
         }
-        if (!($PSCmdlet.ShouldProcess($vmsslogheader, "Upgrade VMSS instance name $scaleSetInstanceName"))) {
-            continue
-        }
+        
         Write-Verbose "$vmsslogheader : Upgrading VMSS instance name $scaleSetInstanceName, $i of $instanceCount"
         try {
             $result = Update-AzVmssInstance -ResourceGroupName $vmssResourceGroupName `
@@ -1219,31 +1219,28 @@ function UpgradeVmssExtensionManualUpdateEnabled {
                                             -Confirm:$false
             if ($result.Status -ne "Succeeded") {
                 Write-Host "$vmsslogheader : Failed to upgrade VMSS instance name $scaleSetInstanceName, $i of $instanceCount. $($result.Status)"
+                $InstanceUpgradeFailCounter.Value += 1
             } else {
                 Write-Verbose "$vmsslogheader : Upgrade VMSS instance name $scaleSetInstanceName, $i of $instanceCount"
             }
         } catch [Microsoft.Azure.Commands.Compute.Common.ComputeCloudException] {
             $errorCode = ExtractExceptionErrorCode -ErrorRecord $_
-            if ($errorCode -eq "ResourceNotFound") {
-                $InstanceUpgradeFailCounter.Value += $instanceCount - $i 
+            if ($errorCode -eq "ResourceNotFound") { 
                 throw [VirtualMachineScaleSetDoesNotExist]::new($VMssObject, $_.Exception)
             }
             if ($errorCode -eq "ResourceGroupNotFound") {
-                $InstanceUpgradeFailCounter.Value += $instanceCount - $i
                 throw [ResourceGroupDoesNotExist]::new($VMssObject.ResourceGroupName ,$_.Exception)  
             }
             if ($errorCode -eq "OperationNotAllowed") {
-                $InstanceUpgradeFailCounter.Value += $instanceCount - $i
-                Write-Host "$vmsslogheader : Unable to locate VMSS instance name $scaleSetInstanceName. Continuing ..."
                 DisplayException -ErrorRecord $_
-            } 
+                Write-Host "$vmsslogheader : Unable to locate VMSS instance name $scaleSetInstanceName. Continuing ..."
+            }
             if ($unexpectedUpgradeExceptionCounter -lt $unexpectedUpgradeExceptionLimit) {
-                $InstanceUpgradeFailCounter.Value += $instanceCount - $i
                 throw [VirtualMachineScaleSetUnknownException]::new($VMssObject, "Failed to upgrade VMSS instance name $scaleSetInstanceName", $_.Exception)
             } 
             Write-Host "$vmsslogheader : Failed to upgrade VMSS instance name $scaleSetInstanceName, $i of $instanceCount. ErrorCode $errorCode. Continuing ..." 
             $unexpectedUpgradeExceptionCounter += 1
-            $InstanceUpgradeFailCounter.Value += 1 
+            $InstanceUpgradeFailCounter.Value += 1
         }
     }
 }
@@ -1455,6 +1452,7 @@ try {
     Set-Variable -Name sb_nop_block_roles -Option Constant -Value { param($obj, $rg)} 
     Set-Variable -Name sb_nop_block_upgrade -Option Constant -Value { param($obj)}
     Set-Variable -Name sb_nop_block -Option Constant -Value { param($obj) $obj}
+    
     $Rghashtable = @{}
     
     if (!$isAma) {
@@ -1598,7 +1596,7 @@ try {
                 throw [FatalException]::new("Unable to lookup VMs", $_.Exception)
             }
 
-            #queitly do nothing.
+            #quietly do nothing.
         } 
     } else {
         Write-Host "Getting list of VMs or VM Scale Sets matching specified criteria."
@@ -1615,7 +1613,7 @@ try {
                 throw [FatalException]::new("Unable to lookup VMs", $_.Exception)
             }
 
-            #queitly do nothing.
+            #quietly do nothing.
         }
 
         try {
@@ -1632,7 +1630,7 @@ try {
                 throw [FatalException]::new("Unable to lookup VMSS", $_.Exception)
             }
 
-            #queitly do nothing.
+            #quietly do nothing.
         } 
     }
 
@@ -1724,11 +1722,10 @@ try {
                     if ($vmss.UpgradePolicy.Mode -eq 'Manual') {
                         &$sb_upgrade -vmssObj $vmss -InstanceUpgradeFailCounter ([ref]$instanceUpgradeFailCounter)
                     }
-                    Write-Host "$vmsslogheader : Successfully onboarded VM insights"
+                    $onboardingCounters.VMSSInstanceUpgradeFailure += $instanceUpgradeFailCounter
                     if ($instanceUpgradeFailCounter -eq 0) {
+                        Write-Host "$vmsslogheader : Successfully onboarded VM insights"
                         $onboardingCounters.Succeeded +=1
-                    } else {
-                        $onboardingCounters.VMSSInstanceUpgradeFailure += $instanceUpgradeFailCounter
                     }
                     $unknownExceptionVirtualMachineScaleSetConsequentCounter = 0
                 } catch [VirtualMachineScaleSetUnknownException] {
