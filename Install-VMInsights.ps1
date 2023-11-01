@@ -60,7 +60,8 @@ If using PolicyAssignmentName parameter, VMs part of the parameter SubscriptionI
 <Optional> Name of the Resource Group of VMs or VMSS. It accepts wildcard characters. The default behavior is to match all.
 
 .PARAMETER PolicyAssignmentName
-<Optional> Name of policy assignment to onboard VMI for VMs part of its scope with Azure Monitoring Agent (AMA)/Log Analytics Agent (LA)
+<Optional> Only include VMs associated with this policy.
+
 
 .PARAMETER Name
 <Optional> Name qualifier to match on VM/VMSS's name in the scope. It accepts wildcard characters. The default behavior is to match all.
@@ -75,7 +76,8 @@ If using PolicyAssignmentName parameter, VMs part of the parameter SubscriptionI
 <Optional> Set this flag to get info about expected effect of the commands in the script.
 
 .PARAMETER Confirm
-<Optional> Set this flag to confirm every command in the script.
+<Optional> Set this flag to confirm each VM / VMSS.
+
 
 
 .PARAMETER WorkspaceId
@@ -587,7 +589,8 @@ function RemoveVMExtension {
     }
     
     if ($removeResult.IsSuccessStatusCode) {
-         Write-Host "$vmlogheader : Successfully removed extension $ExtensionName, type $extensionType.$extensionPublisher"
+        Write-Host "$vmlogheader : Successfully removed extension $ExtensionName, type $extensionType.$extensionPublisher"
+
     }
 
     throw [VirtualMachineOperationFailed]::new($VMObject, "Failed to remove extension $ExtensionName, type $extensionType.$extensionPublisher. StatusCode = $($removeResult.StatusCode). ReasonPhrase = $($removeResult.ReasonPhrase)")
