@@ -1644,7 +1644,8 @@ try {
         $rgTableObj = $entry.Value
         $vmList = $rgTableObj.VirtualMachineList
         $vmssList = $rgTableObj.VirtualMachineScaleSetList
-        Write-Host "" "ResourceGroup : $rg"
+        Write-Host "ResourceGroup : $rg"
+
 
         if ($vmList.Length -gt 0) {
             $vmList = Sort-Object -Property Name -InputObject $vmList
