@@ -254,6 +254,7 @@ class OnboardingCounters {
     [Decimal]$Succeeded = 0
     [Decimal]$Total = 0
     [Decimal]$Skipped = 0
+    [Decimal]$VMSSInstanceUpgradeFailure = 0
 }
 
 # Log Analytics Extension constants
@@ -324,6 +325,7 @@ function PrintSummaryMessage {
     Write-Host "Succeeded : $($OnboardingCounters.Succeeded)"
     Write-Host "Skipped : $($OnboardingCounters.Skipped)"
     Write-Host "Failed : $($OnboardingCounters.Total - $OnboardingCounters.Skipped - $OnboardingCounters.Succeeded)"
+    Write-Host "VMSS Instance Upgrade Failures : $($OnboardingCounters.VMSSInstanceUpgradeFailure)"
 }
 
 function ExtractCloudExceptionErrorMessage {
@@ -1223,23 +1225,27 @@ function UpgradeVmssExtensionManualUpdateEnabled {
         } catch [Microsoft.Azure.Commands.Compute.Common.ComputeCloudException] {
             $errorCode = ExtractExceptionErrorCode -ErrorRecord $_
             if ($errorCode -eq "ResourceNotFound") {
+                $InstanceUpgradeFailCounter.Value += $instanceCount - $i 
                 throw [VirtualMachineScaleSetDoesNotExist]::new($VMssObject, $_.Exception)
             }
             if ($errorCode -eq "ResourceGroupNotFound") {
+                $InstanceUpgradeFailCounter.Value += $instanceCount - $i
                 throw [ResourceGroupDoesNotExist]::new($VMssObject.ResourceGroupName ,$_.Exception)  
             }
             if ($errorCode -eq "OperationNotAllowed") {
+                $InstanceUpgradeFailCounter.Value += $instanceCount - $i
                 Write-Host "$vmsslogheader : Unable to locate VMSS instance name $scaleSetInstanceName. Continuing ..."
                 DisplayException -ErrorRecord $_
             } 
             if ($unexpectedUpgradeExceptionCounter -lt $unexpectedUpgradeExceptionLimit) {
+                $InstanceUpgradeFailCounter.Value += $instanceCount - $i
                 throw [VirtualMachineScaleSetUnknownException]::new($VMssObject, "Failed to upgrade VMSS instance name $scaleSetInstanceName", $_.Exception)
             } 
             Write-Host "$vmsslogheader : Failed to upgrade VMSS instance name $scaleSetInstanceName, $i of $instanceCount. ErrorCode $errorCode. Continuing ..." 
-            $unexpectedUpgradeExceptionCounter+=1 
+            $unexpectedUpgradeExceptionCounter += 1
+            $InstanceUpgradeFailCounter.Value += 1 
         }
     }
-    $InstanceUpgradeFailCounter.Value = $unexpectedUpgradeExceptionCounter
 }
 
 function UpdateVMssExtension {
@@ -1720,6 +1726,8 @@ try {
                     Write-Host "$vmsslogheader : Successfully onboarded VM insights"
                     if ($instanceUpgradeFailCounter -eq 0) {
                         $onboardingCounters.Succeeded +=1
+                    } else {
+                        $onboardingCounters.VMSSInstanceUpgradeFailure += $instanceUpgradeFailCounter
                     }
                     $unknownExceptionVirtualMachineScaleSetConsequentCounter = 0
                 } catch [VirtualMachineScaleSetUnknownException] {
