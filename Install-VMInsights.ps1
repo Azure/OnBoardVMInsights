@@ -60,7 +60,8 @@ If using PolicyAssignmentName parameter, VMs part of the parameter SubscriptionI
 <Optional> Name of the Resource Group of VMs or VMSS. It accepts wildcard characters. The default behavior is to match all.
 
 .PARAMETER PolicyAssignmentName
-<Optional> Name of policy assignment to onboard VMI for VMs part of its scope with Azure Monitoring Agent (AMA)/Log Analytics Agent (LA)
+<Optional> Only include VMs associated with this policy.
+
 
 .PARAMETER Name
 <Optional> Name qualifier to match on VM/VMSS's name in the scope. It accepts wildcard characters. The default behavior is to match all.
