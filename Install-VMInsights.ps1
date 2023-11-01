@@ -633,7 +633,7 @@ function NewDCRAssociationVm {
     $dcrAssociationName = "VM-Insights-DCR-Association-$(New-Guid)"
     Write-Host "$vmlogheader : Deploying Data Collection Rule Association $dcrAssociationName"
     try {
-        #TBF by AMCS team - New-AzDataCollectionRuleAssociation allows creating multiple DCRAs for the same {DCR,VMSS} combination.
+        #BUG! To be fixed by AMCS team - New-AzDataCollectionRuleAssociation allows creating multiple DCRAs for the same {DCR,VMSS} combination.
         $dcrAssociation = New-AzDataCollectionRuleAssociation -TargetResourceId $vmId `
                                                               -AssociationName $dcrAssociationName `
                                                               -RuleId $DcrResourceId `
@@ -1156,7 +1156,10 @@ function UpgradeVmssExtensionManualUpdateEnabled {
     (
         [Parameter(mandatory = $True)]
         [Microsoft.Azure.Commands.Compute.Automation.Models.PSVirtualMachineScaleSet]
-        $VMssObject
+        $VMssObject,
+        [Parameter(mandatory = $True)]
+        [ref]
+        $InstanceUpgradeFailCounter
     )
     
     $vmssResourceGroupName = $VMssObject.ResourceGroupName
@@ -1228,12 +1231,12 @@ function UpgradeVmssExtensionManualUpdateEnabled {
             } 
             if ($unexpectedUpgradeExceptionCounter -lt $unexpectedUpgradeExceptionLimit) {
                 throw [VirtualMachineScaleSetUnknownException]::new($VMssObject, "Failed to upgrade VMSS instance name $scaleSetInstanceName", $_.Exception)
-            }
+            } 
             Write-Host "$vmsslogheader : Failed to upgrade VMSS instance name $scaleSetInstanceName, $i of $instanceCount. ErrorCode $errorCode. Continuing ..." 
             $unexpectedUpgradeExceptionCounter+=1 
         }
     }
-    
+    $InstanceUpgradeFailCounter = $unexpectedUpgradeExceptionCounter
 }
 
 function UpdateVMssExtension {
@@ -1401,10 +1404,6 @@ function SetManagedIdentityRolesAma {
         }
          
         throw [FatalException]::new("Unable to lookup Resource Group.")
-    }
-
-    if ($null -eq $rgObj) {
-        throw [FatalException]::new("No Resource Group matched for $ResourceGroupName")
     }
 
     $roles = @("Virtual Machine Contributor", "Azure Connected Machine Resource Administrator", "Log Analytics Contributor")
@@ -1711,11 +1710,14 @@ try {
                     $vmss = &$sb_vmss -vmssObj $vmss
                     $vmss = &$sb_da_vmss -vmssObj $vmss
                     $vmss = UpdateVMssExtension -VMssObject $vmss
+                    $instanceUpgradeFailCounter = [ref]0
                     if ($vmss.UpgradePolicy.Mode -eq 'Manual') {
-                        &$sb_upgrade -vmssObj $vmss  
+                        &$sb_upgrade -vmssObj $vmss -InstanceUpgradeFailCounter $instanceUpgradeFailCounter
                     }
                     Write-Host "$vmsslogheader : Successfully onboarded VM insights"
-                    $onboardingCounters.Succeeded +=1
+                    if ($instanceUpgradeFailCounter == 0) {
+                        $onboardingCounters.Succeeded +=1
+                    }
                     $unknownExceptionVirtualMachineScaleSetConsequentCounter = 0
                 } catch [VirtualMachineScaleSetUnknownException] {
                     if ($unknownExceptionVirtualMachineScaleSetConsequentCounter -gt $unknownExceptionVirtualMachineScaleSetConsequentCounterLimit) {
