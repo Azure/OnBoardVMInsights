@@ -75,7 +75,8 @@ If using PolicyAssignmentName parameter, VMs part of the parameter SubscriptionI
 <Optional> Set this flag to get info about expected effect of the commands in the script.
 
 .PARAMETER Confirm
-<Optional> Set this flag to confirm every command in the script.
+<Optional> Set this flag to confirm each VM / VMSS.
+
 
 
 .PARAMETER WorkspaceId
