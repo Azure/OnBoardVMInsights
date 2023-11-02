@@ -296,7 +296,6 @@ Set-Variable -WhatIf:$False -Name daExtensionConstantsMap -Option Constant -Valu
 }
 Set-Variable -WhatIf:$False -Name daDefaultExtensionName -Option Constant -Value "DA-Extension"
 $extensionVmDefaultUpgradeSettings = @{
-    DisableAutoUpgradeMinorVersion = $True
     EnableAutomaticUpgrade = $True 
 }
 
@@ -766,7 +765,6 @@ function RetainExtensionUpgradeSettings {
     )
 
     $ExtUpgradeSettings.EnableAutomaticUpgrade = $Extension.EnableAutomaticUpgrade
-    $ExtUpgradeSettings.DisableAutoUpgradeMinorVersion = !($Extension.AutoUpgradeMinorVersion)
 }
 
 function OnboardDaVm {
@@ -1043,7 +1041,6 @@ function OnboardVMssExtension {
     $publisher = $extensionConstantProperties.Publisher
     $typeHandlerVersion = $extensionConstantProperties.TypeHandlerVersion
     $extensionUpgradeSettings = @{
-        AutoUpgradeMinorVersion = $True
         EnableAutomaticUpgrade = $True 
     }
     $extension = GetVMssExtension -VMssObject $VMssObject -ExtensionType $extensionType -Publisher $publisher
@@ -1054,7 +1051,12 @@ function OnboardVMssExtension {
             throw [CustomerSkip]::new()
         }
         Write-Host "$vmsslogheader : Extension $($extension.Name), type = $($publisher).$($extensionType) already installed."
-        $ExtensionSettings.GetEnumerator() | ForEach-Object { $extension.($_.Key) = $_.Value }
+        if ($ExtensionSettings.ContainsKey("Setting")) {
+            $extension.Settings = $ExtensionSettings.Setting
+        }
+        if ($ExtensionSettings.ContainsKey("ProtectedSetting")) {
+            $extension.ProtectedSettings = $ExtensionSettings.ProtectedSetting
+        }
         $extensionUpgradeSettings.GetEnumerator() | ForEach-Object { $extension.($_.Key) = $_.Value }
         $extension.TypeHandlerVersion = $typeHandlerVersion
         return $VMssObject
@@ -1203,9 +1205,9 @@ function UpgradeVmssExtensionManualUpdateEnabled {
             continue
         }
 
+        $scaleSetInstanceName = $($scaleSetInstance.Name)
         Write-Host "Upgrading $scaleSetInstanceName, $i of $instanceCount"
 
-        $scaleSetInstanceName = $($scaleSetInstance.Name)
         if ($scaleSetInstance.LatestModelApplied) {
             Write-Verbose "$vmsslogheader : Latest model already applied for $scaleSetInstanceName, $i of $instanceCount"
             continue
@@ -1457,24 +1459,31 @@ try {
     
     if (!$isAma) {
         #Cannot validate Workspace existence with WorkspaceId, WorkspaceKey parameters.
-        Set-Variable -WhatIf:$False -Name laExtensionSettings -Option Constant -Value `
-            @{"Settings" = @{"workspaceId" = $WorkspaceId; "stopOnMultipleConnections" = "true"};
-              "ProtectedSettings" = @{"workspaceKey" = $WorkspaceKey}
-             }
-        Set-Variable -WhatIf:$False -Name daExtensionSettings -Option Constant -Value `
+        Set-Variable -WhatIf:$False -Name laExtensionPublicSetting -Option Constant -Value `
+            @{"workspaceId" = $WorkspaceId; "stopOnMultipleConnections" = "true"}
+        Set-Variable -WhatIf:$False -Name laExtensionProtectedSetting -Option Constant -Value `
+            @{"workspaceKey" = $WorkspaceKey}
+             
+        Set-Variable -WhatIf:$False -Name daExtensionSetting -Option Constant -Value `
             @{"Settings" = @{"enableAMA" = "false"}}
         
         if ($ReInstall) {
             Set-Variable -WhatIf:$False -Name sb_vm -Option Constant -Value { `
                 param([Microsoft.Azure.Commands.Compute.Models.PSVirtualMachine]$vmObj) `
                 OnboardLaVmWithReInstall -VMObject $vmObj `
-                                         -ExtensionSettings $laExtensionSettings 
+                                         -ExtensionSettings @{
+                                            "Settings" = $laExtensionPublicSetting
+                                            "ProtectedSettings" = $laExtensionProtectedSetting
+                                         }
             }
         } else {
             Set-Variable -WhatIf:$False -Name sb_vm -Option Constant -Value { `
                 param([Microsoft.Azure.Commands.Compute.Models.PSVirtualMachine]$vmObj) `
                 OnboardLaVmWithoutReInstall -VMObject $vmObj `
-                                            -ExtensionSettings $laExtensionSettings
+                                            -ExtensionSettings @{
+                                                "Settings" = $laExtensionPublicSetting
+                                                "ProtectedSettings" = $laExtensionProtectedSetting
+                                             }
             }
         }
         
@@ -1483,12 +1492,15 @@ try {
             OnboardVMssExtension -VMssObject $vmssObj `
                                  -ExtensionName $laDefaultExtensionName `
                                  -ExtensionConstantMap $laExtensionMap `
-                                 -ExtensionSettings $laExtensionSettings
+                                 -ExtensionSettings @{
+                                    "Setting" = $laExtensionPublicSetting
+                                    "ProtectedSetting" = $laExtensionProtectedSetting
+                                 }
         }
         
         Set-Variable -WhatIf:$False -Name sb_da -Option Constant -Value { `
             param([Microsoft.Azure.Commands.Compute.Models.PSVirtualMachine]$vmObj) `
-            OnboardDaVm -VMObject $vmObj -ExtensionSettings $daExtensionSettings
+            OnboardDaVm -VMObject $vmObj -ExtensionSettings @{"Settings" = $daExtensionSetting}
         }
 
         Set-Variable -WhatIf:$False -Name sb_da_vmss -Option Constant -Value { `
@@ -1496,7 +1508,7 @@ try {
             OnboardVMssExtension -VMssObject $vmssObj `
                                  -ExtensionName $daDefaultExtensionName `
                                  -ExtensionConstantMap $daExtensionConstantsMap `
-                                 -ExtensionSettings $daExtensionSettings
+                                 -ExtensionSettings @{"Setting" = $daExtensionSetting}
         }
 
         Set-Variable -WhatIf:$False -Name sb_roles -Option Constant -Value $sb_nop_block_roles
@@ -1519,33 +1531,33 @@ try {
             throw [UserAssignedManagedIdentityUnknownException]::new("($UserAssignedManagedIdentityResourceGroup) $UserAssignedManagedIdentityName : Unable to locate User Assigned Managed Identity.", $_.Exception)
         }
         
-        Set-Variable -WhatIf:$False -Name amaExtensionSettings -Option Constant -Value `
-            @{"Settings" = @{
-                        'authentication' = @{ 
-                            'managedIdentity' = @{
-                                'identifier-name' = 'mi_res_id'
-                                'identifier-value' = $($UserAssignedManagedIdentityObject.Id) 
-                            }
-                        }
+        Set-Variable -WhatIf:$False -Name amaExtensionSetting -Option Constant -Value `
+            @{
+                'authentication' = @{ 
+                    'managedIdentity' = @{
+                        'identifier-name' = 'mi_res_id'
+                        'identifier-value' = $($UserAssignedManagedIdentityObject.Id) 
                     }
+                }
             }
+            
         Set-Variable -WhatIf:$False -Name sb_vm -Option Constant -Value { `
             param([Microsoft.Azure.Commands.Compute.Models.PSVirtualMachine]$vmObj) `
-            OnboardVmiWithAmaVm -VMObject $vmObj -ExtensionSettings $amaExtensionSettings
+            OnboardVmiWithAmaVm -VMObject $vmObj -ExtensionSettings @{"Settings" = $amaExtensionSetting}
         }
         Set-Variable -WhatIf:$False -Name sb_vmss -Option Constant -Value { `
             param([Microsoft.Azure.Commands.Compute.Automation.Models.PSVirtualMachineScaleSet]$vmssObj) `
-            OnboardVmiWithAmaVmss -VMssObject $vmssObj -ExtensionSettings $amaExtensionSettings
+            OnboardVmiWithAmaVmss -VMssObject $vmssObj -ExtensionSettings @{"Setting" = $amaExtensionSetting}
         }
         
         if (!$ProcessAndDependencies) {
             Set-Variable -WhatIf:$False -Name sb_da -Option Constant -Value $sb_nop_block
             Set-Variable -WhatIf:$False -Name sb_da_vmss -Option Constant -Value $sb_nop_block
         } else {
-            Set-Variable -WhatIf:$False -Name daExtensionSettings -Option Constant -Value @{"Settings" = @{"enableAMA" = "true"}}
+            Set-Variable -WhatIf:$False -Name daExtensionSetting -Option Constant -Value @{"enableAMA" = "true"}
             Set-Variable -WhatIf:$False -Name sb_da -Option Constant -Value { `
                 param([Microsoft.Azure.Commands.Compute.Models.PSVirtualMachine]$vmObj) `
-                OnboardDaVm -VMObject $vmObj -ExtensionSettings $daExtensionSettings
+                OnboardDaVm -VMObject $vmObj -ExtensionSettings @{"Settings" = $daExtensionSetting}
             }
 
             Set-Variable -WhatIf:$False -Name sb_da_vmss -Option Constant -Value { `
@@ -1553,7 +1565,7 @@ try {
                 OnboardVMssExtension -VMssObject $vmssObj `
                                      -ExtensionName $daDefaultExtensionName `
                                      -ExtensionConstantMap $daExtensionConstantsMap `
-                                     -ExtensionSettings $daExtensionSettings
+                                     -ExtensionSettings @{"Setting" = $daExtensionSetting}
             }
         }
     
