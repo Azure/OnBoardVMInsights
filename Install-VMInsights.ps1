@@ -258,7 +258,7 @@ class OnboardingCounters {
 }
 
 # Log Analytics Extension constants
-Set-Variable -WhatIf:$False -Name laExtensionMap -Option Constant -Value @{ 
+Set-Variable -WhatIf:$False -Confirm:$False -Name laExtensionMap -Option Constant -Value @{ 
     "Windows" = @{  ExtensionType = "MicrosoftMonitoringAgent"
                     TypeHandlerVersion = "1.0"
                     Publisher = "Microsoft.EnterpriseCloud.Monitoring"
@@ -268,10 +268,10 @@ Set-Variable -WhatIf:$False -Name laExtensionMap -Option Constant -Value @{
                     Publisher = "Microsoft.EnterpriseCloud.Monitoring"
                 }
 }
-Set-Variable -WhatIf:$False -Name laDefaultExtensionName -Option Constant -Value "MMAExtension"
+Set-Variable -WhatIf:$False -Confirm:$False -Name laDefaultExtensionName -Option Constant -Value "MMAExtension"
 
 # Azure Monitoring Agent Extension constants
-Set-Variable -WhatIf:$False -Name amaExtensionConstantMap -Option Constant -Value @{ 
+Set-Variable -WhatIf:$False -Confirm:$False -Name amaExtensionConstantMap -Option Constant -Value @{ 
        "Windows" = @{  ExtensionType = "AzureMonitorWindowsAgent"
                        TypeHandlerVersion = "1.16"
                        Publisher = "Microsoft.Azure.Monitor" 
@@ -281,10 +281,10 @@ Set-Variable -WhatIf:$False -Name amaExtensionConstantMap -Option Constant -Valu
                        Publisher = "Microsoft.Azure.Monitor"
                     }
 }
-Set-Variable -WhatIf:$False -Name amaDefaultExtensionName -Option Constant -Value "AzureMonitoringAgent"
+Set-Variable -WhatIf:$False -Confirm:$False -Name amaDefaultExtensionName -Option Constant -Value "AzureMonitoringAgent"
 
 # Dependency Agent Extension constants
-Set-Variable -WhatIf:$False -Name daExtensionConstantsMap -Option Constant -Value @{
+Set-Variable -WhatIf:$False -Confirm:$False -Name daExtensionConstantsMap -Option Constant -Value @{
     "Windows" = @{ ExtensionType = "DependencyAgentWindows"
                    TypeHandlerVersion = "9.10"
                    Publisher = "Microsoft.Azure.Monitoring.DependencyAgent"
@@ -294,14 +294,14 @@ Set-Variable -WhatIf:$False -Name daExtensionConstantsMap -Option Constant -Valu
                  Publisher = "Microsoft.Azure.Monitoring.DependencyAgent"
                }
 }
-Set-Variable -WhatIf:$False -Name daDefaultExtensionName -Option Constant -Value "DA-Extension"
+Set-Variable -WhatIf:$False -Confirm:$False -Name daDefaultExtensionName -Option Constant -Value "DA-Extension"
 $extensionVmDefaultUpgradeSettings = @{
     EnableAutomaticUpgrade = $True 
 }
 
-Set-Variable -WhatIf:$False -Name unknownExceptionVirtualMachineConsequentCounterLimit -Option Constant -Value 3
-Set-Variable -WhatIf:$False -Name unknownExceptionVirtualMachineScaleSetConsequentCounterLimit -Option Constant -Value 3
-Set-Variable -WhatIf:$False -Name unknownExceptionTotalCounterLimit -Option Constant -Value 6
+Set-Variable -WhatIf:$False -Confirm:$False -Name unknownExceptionVirtualMachineConsequentCounterLimit -Option Constant -Value 3
+Set-Variable -WhatIf:$False -Confirm:$False -Name unknownExceptionVirtualMachineScaleSetConsequentCounterLimit -Option Constant -Value 3
+Set-Variable -WhatIf:$False -Confirm:$False -Name unknownExceptionTotalCounterLimit -Option Constant -Value 6
 
 #Presence of DCR Resource Id indicates AMA onboarding.
 $isAma = "" -ne $DcrResourceId
@@ -1451,24 +1451,24 @@ try {
     }
 
     #script block
-    Set-Variable -WhatIf:$False -Name sb_nop_block_roles -Option Constant -Value { param($obj, $rg)} 
-    Set-Variable -WhatIf:$False -Name sb_nop_block_upgrade -Option Constant -Value { param($obj)}
-    Set-Variable -WhatIf:$False -Name sb_nop_block -Option Constant -Value { param($obj) $obj}
+    Set-Variable -WhatIf:$False -Confirm:$False -Name sb_nop_block_roles -Option Constant -Value { param($obj, $rg)} 
+    Set-Variable -WhatIf:$False -Confirm:$False -Name sb_nop_block_upgrade -Option Constant -Value { param($obj)}
+    Set-Variable -WhatIf:$False -Confirm:$False -Name sb_nop_block -Option Constant -Value { param($obj) $obj}
     
     $Rghashtable = @{}
     
     if (!$isAma) {
         #Cannot validate Workspace existence with WorkspaceId, WorkspaceKey parameters.
-        Set-Variable -WhatIf:$False -Name laExtensionPublicSetting -Option Constant -Value `
+        Set-Variable -WhatIf:$False -Confirm:$False -Name laExtensionPublicSetting -Option Constant -Value `
             @{"workspaceId" = $WorkspaceId; "stopOnMultipleConnections" = "true"}
-        Set-Variable -WhatIf:$False -Name laExtensionProtectedSetting -Option Constant -Value `
+        Set-Variable -WhatIf:$False -Confirm:$False -Name laExtensionProtectedSetting -Option Constant -Value `
             @{"workspaceKey" = $WorkspaceKey}
              
-        Set-Variable -WhatIf:$False -Name daExtensionSetting -Option Constant -Value `
+        Set-Variable -WhatIf:$False -Confirm:$False -Name daExtensionSetting -Option Constant -Value `
             @{"Settings" = @{"enableAMA" = "false"}}
         
         if ($ReInstall) {
-            Set-Variable -WhatIf:$False -Name sb_vm -Option Constant -Value { `
+            Set-Variable -WhatIf:$False -Confirm:$False -Name sb_vm -Option Constant -Value { `
                 param([Microsoft.Azure.Commands.Compute.Models.PSVirtualMachine]$vmObj) `
                 OnboardLaVmWithReInstall -VMObject $vmObj `
                                          -ExtensionSettings @{
@@ -1477,7 +1477,7 @@ try {
                                          }
             }
         } else {
-            Set-Variable -WhatIf:$False -Name sb_vm -Option Constant -Value { `
+            Set-Variable -WhatIf:$False -Confirm:$False -Name sb_vm -Option Constant -Value { `
                 param([Microsoft.Azure.Commands.Compute.Models.PSVirtualMachine]$vmObj) `
                 OnboardLaVmWithoutReInstall -VMObject $vmObj `
                                             -ExtensionSettings @{
@@ -1487,7 +1487,7 @@ try {
             }
         }
         
-        Set-Variable -WhatIf:$False -Name sb_vmss -Option Constant -Value { `
+        Set-Variable -WhatIf:$False -Confirm:$False -Name sb_vmss -Option Constant -Value { `
             param([Microsoft.Azure.Commands.Compute.Automation.Models.PSVirtualMachineScaleSet]$vmssObj) `
             OnboardVMssExtension -VMssObject $vmssObj `
                                  -ExtensionName $laDefaultExtensionName `
@@ -1498,12 +1498,12 @@ try {
                                  }
         }
         
-        Set-Variable -WhatIf:$False -Name sb_da -Option Constant -Value { `
+        Set-Variable -WhatIf:$False -Confirm:$False -Name sb_da -Option Constant -Value { `
             param([Microsoft.Azure.Commands.Compute.Models.PSVirtualMachine]$vmObj) `
             OnboardDaVm -VMObject $vmObj -ExtensionSettings @{"Settings" = $daExtensionSetting}
         }
 
-        Set-Variable -WhatIf:$False -Name sb_da_vmss -Option Constant -Value { `
+        Set-Variable -WhatIf:$False -Confirm:$False -Name sb_da_vmss -Option Constant -Value { `
             param([Microsoft.Azure.Commands.Compute.Automation.Models.PSVirtualMachineScaleSet]$vmssObj) `
             OnboardVMssExtension -VMssObject $vmssObj `
                                  -ExtensionName $daDefaultExtensionName `
@@ -1511,11 +1511,11 @@ try {
                                  -ExtensionSettings @{"Setting" = $daExtensionSetting}
         }
 
-        Set-Variable -WhatIf:$False -Name sb_roles -Option Constant -Value $sb_nop_block_roles
+        Set-Variable -WhatIf:$False -Confirm:$False -Name sb_roles -Option Constant -Value $sb_nop_block_roles
     } else {
         try {
             Write-Verbose "Validating ($UserAssignedManagedIdentityResourceGroup, $UserAssignedManagedIdentityName)"
-            Set-Variable -WhatIf:$False -Name UserAssignedManagedIdentityObject -Option Constant -Value `
+            Set-Variable -WhatIf:$False -Confirm:$False -Name UserAssignedManagedIdentityObject -Option Constant -Value `
                                 $(Get-AzUserAssignedIdentity -Name $UserAssignedManagedIdentityName `
                                                                 -ResourceGroupName $UserAssignedManagedIdentityResourceGroup)
         } catch {
@@ -1531,7 +1531,7 @@ try {
             throw [UserAssignedManagedIdentityUnknownException]::new("($UserAssignedManagedIdentityResourceGroup) $UserAssignedManagedIdentityName : Unable to locate User Assigned Managed Identity.", $_.Exception)
         }
         
-        Set-Variable -WhatIf:$False -Name amaExtensionSetting -Option Constant -Value `
+        Set-Variable -WhatIf:$False -Confirm:$False -Name amaExtensionSetting -Option Constant -Value `
             @{
                 'authentication' = @{ 
                     'managedIdentity' = @{
@@ -1541,26 +1541,26 @@ try {
                 }
             }
             
-        Set-Variable -WhatIf:$False -Name sb_vm -Option Constant -Value { `
+        Set-Variable -WhatIf:$False -Confirm:$False -Name sb_vm -Option Constant -Value { `
             param([Microsoft.Azure.Commands.Compute.Models.PSVirtualMachine]$vmObj) `
             OnboardVmiWithAmaVm -VMObject $vmObj -ExtensionSettings @{"Settings" = $amaExtensionSetting}
         }
-        Set-Variable -WhatIf:$False -Name sb_vmss -Option Constant -Value { `
+        Set-Variable -WhatIf:$False -Confirm:$False -Name sb_vmss -Option Constant -Value { `
             param([Microsoft.Azure.Commands.Compute.Automation.Models.PSVirtualMachineScaleSet]$vmssObj) `
             OnboardVmiWithAmaVmss -VMssObject $vmssObj -ExtensionSettings @{"Setting" = $amaExtensionSetting}
         }
         
         if (!$ProcessAndDependencies) {
-            Set-Variable -WhatIf:$False -Name sb_da -Option Constant -Value $sb_nop_block
-            Set-Variable -WhatIf:$False -Name sb_da_vmss -Option Constant -Value $sb_nop_block
+            Set-Variable -WhatIf:$False -Confirm:$False -Name sb_da -Option Constant -Value $sb_nop_block
+            Set-Variable -WhatIf:$False -Confirm:$False -Name sb_da_vmss -Option Constant -Value $sb_nop_block
         } else {
-            Set-Variable -WhatIf:$False -Name daExtensionSetting -Option Constant -Value @{"enableAMA" = "true"}
-            Set-Variable -WhatIf:$False -Name sb_da -Option Constant -Value { `
+            Set-Variable -WhatIf:$False -Confirm:$False -Name daExtensionSetting -Option Constant -Value @{"enableAMA" = "true"}
+            Set-Variable -WhatIf:$False -Confirm:$False -Name sb_da -Option Constant -Value { `
                 param([Microsoft.Azure.Commands.Compute.Models.PSVirtualMachine]$vmObj) `
                 OnboardDaVm -VMObject $vmObj -ExtensionSettings @{"Settings" = $daExtensionSetting}
             }
 
-            Set-Variable -WhatIf:$False -Name sb_da_vmss -Option Constant -Value { `
+            Set-Variable -WhatIf:$False -Confirm:$False -Name sb_da_vmss -Option Constant -Value { `
                 param([Microsoft.Azure.Commands.Compute.Automation.Models.PSVirtualMachineScaleSet]$vmssObj) `
                 OnboardVMssExtension -VMssObject $vmssObj `
                                      -ExtensionName $daDefaultExtensionName `
@@ -1569,18 +1569,18 @@ try {
             }
         }
     
-        Set-Variable -WhatIf:$False -Name sb_roles -Option Constant -Value { `
+        Set-Variable -WhatIf:$False -Confirm:$False -Name sb_roles -Option Constant -Value { `
             param([String]$rgName) SetManagedIdentityRolesAma -ResourceGroupName $rgName
         }
     }
 
     if ($TriggerVmssManualVMUpdate) {
-        Set-Variable -WhatIf:$False -Name sb_upgrade -Option Constant -Value { `
+        Set-Variable -WhatIf:$False -Confirm:$False -Name sb_upgrade -Option Constant -Value { `
             param([Microsoft.Azure.Commands.Compute.Automation.Models.PSVirtualMachineScaleSet]$vmssObj, [ref]$instanceUpgradeFailCounter) `
             UpgradeVmssExtensionManualUpdateEnabled -VMssObject $vmssObj -InstanceUpgradeFailCounter $instanceUpgradeFailCounter
         }
     } else {
-        Set-Variable -WhatIf:$False -Name sb_upgrade -Option Constant -Value $sb_nop_block_upgrade
+        Set-Variable -WhatIf:$False -Confirm:$False -Name sb_upgrade -Option Constant -Value $sb_nop_block_upgrade
     }
 
     if ($PolicyAssignmentName) {
