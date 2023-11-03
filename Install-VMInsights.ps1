@@ -296,7 +296,8 @@ Set-Variable -WhatIf:$False -Confirm:$False -Name daExtensionConstantsMap -Optio
 }
 Set-Variable -WhatIf:$False -Confirm:$False -Name daDefaultExtensionName -Option Constant -Value "DA-Extension"
 $extensionVmDefaultUpgradeSettings = @{
-    EnableAutomaticUpgrade = $True 
+    EnableAutomaticUpgrade = $True
+    DisableAutoUpgradeMinorVersion = $False
 }
 
 Set-Variable -WhatIf:$False -Confirm:$False -Name unknownExceptionVirtualMachineConsequentCounterLimit -Option Constant -Value 3
@@ -572,6 +573,10 @@ function RemoveVMExtension {
     $extensionPublisher = $ExtensionProperties.Publisher
     
     if (!$PSCmdlet.ShouldProcess($vmlogheader, "Remove $ExtensionName, type $extensionType.$extensionPublisher")) {
+        #-WhatIf skip processing here, return to the caller as we have completed our work.
+        if ($WhatIfPreference) {
+            return
+        }
         throw [CustomerSkip]::new()
     }
 
@@ -622,7 +627,6 @@ function NewDCRAssociationVm {
         foreach ($dcra in $dcrAssociationList) {
             if ($dcra.DataCollectionRuleId -eq $DcrResourceId) {
                 Write-Host "$vmlogheader : Data Collection Rule Id $DcrResourceId already associated with the VM."
-
                 return
             }
         }
@@ -631,6 +635,10 @@ function NewDCRAssociationVm {
     }
 
     if (!($PSCmdlet.ShouldProcess($vmlogheader, "Install Data Collection Rule Association"))) {
+        #-WhatIf skip processing here, return to the caller as we have completed our work.
+        if ($WhatIfPreference) {
+            return
+        }
         throw [CustomerSkip]::new()
     }
 
@@ -698,7 +706,6 @@ function NewDCRAssociationVmss {
         foreach ($dcra in $dcrAssociationList) {
             if ($dcra.DataCollectionRuleId -eq $DcrResourceId) {
                 Write-Host "$vmsslogheader : Data Collection Rule Id $DcrResourceId already associated with the VMSS."
-
                 return
             }
         }
@@ -707,6 +714,10 @@ function NewDCRAssociationVmss {
     }
 
     if (!($PSCmdlet.ShouldProcess($vmsslogheader, "Install Data Collection Rule Association"))) {
+        #-WhatIf skip processing here, return to the caller as we have completed our work.
+        if ($WhatIfPreference) {
+            return
+        }
         throw [CustomerSkip]::new()
     }
 
@@ -764,6 +775,7 @@ function RetainExtensionUpgradeSettings {
         $ExtUpgradeSettings
     )
 
+    $ExtUpgradeSettings.DisableAutoUpgradeMinorVersion = !($Extension.AutoUpgradeMinorVersion)
     $ExtUpgradeSettings.EnableAutomaticUpgrade = $Extension.EnableAutomaticUpgrade
 }
 
@@ -986,6 +998,10 @@ function SetManagedIdentityRoles {
 
     $uamiName = $UserAssignedManagedIdentity.Name
     if (!($PSCmdlet.ShouldProcess($ResourceGroupId, "Assign $Roles to User Assigned Managed Identity $uamiName"))) {
+        #-WhatIf skip processing here, return to the caller as we have completed our work.
+        if ($WhatIfPreference) {
+            return
+        }
         throw [CustomerSkip]::new()
     }
 
@@ -1041,6 +1057,7 @@ function OnboardVMssExtension {
     $publisher = $extensionConstantProperties.Publisher
     $typeHandlerVersion = $extensionConstantProperties.TypeHandlerVersion
     $extensionUpgradeSettings = @{
+        AutoUpgradeMinorVersion = $True
         EnableAutomaticUpgrade = $True 
     }
     $extension = GetVMssExtension -VMssObject $VMssObject -ExtensionType $extensionType -Publisher $publisher
@@ -1048,21 +1065,31 @@ function OnboardVMssExtension {
 
     if ($extension) {
         if (!($PSCmdlet.ShouldProcess($vmsslogheader, "Update extension $($extension.Name), type = $($publisher).$($extensionType)"))) {
+            #-WhatIf skip processing here, return to the caller as we have completed our work.
+            if ($WhatIfPreference) {
+                return $VMssObject
+            }
             throw [CustomerSkip]::new()
         }
         Write-Host "$vmsslogheader : Extension $($extension.Name), type = $($publisher).$($extensionType) already installed."
+        #VMSS extension has field "Settings" but Add-AzVmssExtension supports 'Setting'
         if ($ExtensionSettings.ContainsKey("Setting")) {
             $extension.Settings = $ExtensionSettings.Setting
         }
+        #VMSS extension has field "ProtectedSettings" but Add-AzVmssExtension supports 'ProtectedSetting'
         if ($ExtensionSettings.ContainsKey("ProtectedSetting")) {
             $extension.ProtectedSettings = $ExtensionSettings.ProtectedSetting
         }
         $extensionUpgradeSettings.GetEnumerator() | ForEach-Object { $extension.($_.Key) = $_.Value }
         $extension.TypeHandlerVersion = $typeHandlerVersion
         return $VMssObject
-    } 
+    }
 
     if (!($PSCmdlet.ShouldProcess($vmsslogheader, "Install extension $ExtensionName, type = $($publisher).$($extensionType)"))) {
+        #-WhatIf skip processing here, return to the caller as we have completed our work.
+        if ($WhatIfPreference) {
+            return $VMssObject
+        }
         throw [CustomerSkip]::new()
     }
     
@@ -1114,6 +1141,10 @@ function SetVMExtension {
     $vmlogheader = $(FormatVmIdentifier -VMObject $VMObject)
     
     if (!($PSCmdlet.ShouldProcess($vmlogheader, "Install/Update extension $ExtensionName, type = $($Publisher).$($ExtensionType)"))) {
+        #-WhatIf skip processing here, return to the caller as we have completed our work.
+        if ($WhatIfPreference) {
+            return $VMObject
+        }
         throw [CustomerSkip]::new()
     }
 
@@ -1263,6 +1294,10 @@ function UpdateVMssExtension {
     $vmsslogheader = FormatVMssIdentifier -VMssObject $VMssObject
 
     if (!($PSCmdlet.ShouldProcess($vmsslogheader, "Update VMSS"))) {
+        #-WhatIf skip processing here, return to the caller as we have completed our work.
+        if ($WhatIfPreference) {
+            return $VMssObject
+        }
         throw [CustomerSkip]::new()
     }
 
@@ -1308,6 +1343,10 @@ function AssignVmssUserManagedIdentity {
     $vmsslogheader = FormatVmssIdentifier -VMssObject $VmssObject
     
     if (!($PSCmdlet.ShouldProcess($vmsslogheader, "Assign User Assigned Managed Identity $userAssignedManagedIdentityName"))) {
+        #-WhatIf skip processing here, return to the caller as we have completed our work.
+        if ($WhatIfPreference) {
+            return $VMssObject
+        }
         throw [CustomerSkip]::new()
     }
 
@@ -1358,6 +1397,10 @@ function AssignVmUserManagedIdentity {
     $vmlogheader = FormatVmIdentifier -VMObject $VMObject
     
     if (!($PSCmdlet.ShouldProcess($vmlogheader, "Assign User Assigned Managed Identity $userAssignedManagedIdentityName"))) {
+        #-WhatIf skip processing here, return to the caller as we have completed our work.
+        if ($WhatIfPreference) {
+            return $VMObject
+        } 
         throw [CustomerSkip]::new()
     }
 
@@ -1435,7 +1478,7 @@ try {
     $account =  Get-AzContext
     if ($null -eq $account.Account) {
         Write-Host "Account Context not found, please login"
-        Connect-AzAccount -subscriptionid $SubscriptionId
+        Connect-AzAccount -WhatIf:$False -Confirm:$False -subscriptionid $SubscriptionId
     }
     else {
         if ($account.Subscription.Id -eq $SubscriptionId) {
@@ -1446,44 +1489,62 @@ try {
             Write-Host "Current Subscription :"
             $account
             Write-Host "Changing to subscription : $SubscriptionId"
-            Select-AzSubscription -SubscriptionId $SubscriptionId
+            Select-AzSubscription -WhatIf:$False -Confirm:$False -SubscriptionId $SubscriptionId
         }
     }
 
     #script block
-    Set-Variable -WhatIf:$False -Confirm:$False -Name sb_nop_block_roles -Option Constant -Value { param($obj, $rg)} 
-    Set-Variable -WhatIf:$False -Confirm:$False -Name sb_nop_block_upgrade -Option Constant -Value { param($obj)}
-    Set-Variable -WhatIf:$False -Confirm:$False -Name sb_nop_block -Option Constant -Value { param($obj) $obj}
+    Set-Variable -WhatIf:$False -Confirm:$False -Name sb_nop_block_roles -Option Constant -Value { param([String]$rgName)} 
+    Set-Variable -WhatIf:$False -Confirm:$False -Name sb_nop_block_upgrade -Option Constant -Value { `
+        param([Microsoft.Azure.Commands.Compute.Automation.Models.PSVirtualMachineScaleSet]$vmssObj, [ref]$instanceUpgradeFailCounter)
+    }
+    Set-Variable -WhatIf:$False -Confirm:$False -Name sb_nop_block_vm -Option Constant -Value { `
+        param([Microsoft.Azure.Commands.Compute.Models.PSVirtualMachine]$vmObj) $vmObj
+    }
+    Set-Variable -WhatIf:$False -Confirm:$False -Name sb_nop_block_vmss -Option Constant -Value { `
+        param([Microsoft.Azure.Commands.Compute.Automation.Models.PSVirtualMachineScaleSet]$vmssObj) $vmssObj
+    }
     
     $Rghashtable = @{}
     
     if (!$isAma) {
         #Cannot validate Workspace existence with WorkspaceId, WorkspaceKey parameters.
-        Set-Variable -WhatIf:$False -Confirm:$False -Name laExtensionPublicSetting -Option Constant -Value `
-            @{"workspaceId" = $WorkspaceId; "stopOnMultipleConnections" = "true"}
-        Set-Variable -WhatIf:$False -Confirm:$False -Name laExtensionProtectedSetting -Option Constant -Value `
-            @{"workspaceKey" = $WorkspaceKey}
-             
-        Set-Variable -WhatIf:$False -Confirm:$False -Name daExtensionSetting -Option Constant -Value `
-            @{"Settings" = @{"enableAMA" = "false"}}
+        $local:laSettings = @{"workspaceId" = $WorkspaceId; "stopOnMultipleConnections" = "true"}
+        $local:laProtectedSettings = @{"workspaceKey" = $WorkspaceKey}
+        Set-Variable -WhatIf:$False -Confirm:$False -Name laExtensionSettingsVm -Option Constant -Value `
+        @{
+            "Settings" = $local:laSettings
+            "ProtectedSettings" = $local:laProtectedSettings
+        }
+        
+        Set-Variable -WhatIf:$False -Confirm:$False -Name laExtensionSettingsVmss -Option Constant -Value `
+        @{ 
+            "Setting" = $local:laSettings
+            "ProtectedSetting" = $local:laProtectedSettings
+        }
+            
+        $local:daSettings = @{"enableAMA" = "false"}
+        Set-Variable -WhatIf:$False -Confirm:$False -Name daExtensionSettingsVm -Option Constant -Value `
+        @{
+            "Settings" = $local:daSettings
+        }
+        Set-Variable -WhatIf:$False -Confirm:$False -Name daExtensionSettingsVmss -Option Constant -Value `
+        @{  
+            "Setting" = $local:daSettings
+        }
+        
         
         if ($ReInstall) {
             Set-Variable -WhatIf:$False -Confirm:$False -Name sb_vm -Option Constant -Value { `
                 param([Microsoft.Azure.Commands.Compute.Models.PSVirtualMachine]$vmObj) `
                 OnboardLaVmWithReInstall -VMObject $vmObj `
-                                         -ExtensionSettings @{
-                                            "Settings" = $laExtensionPublicSetting
-                                            "ProtectedSettings" = $laExtensionProtectedSetting
-                                         }
+                                         -ExtensionSettings $laExtensionSettingsVm
             }
         } else {
             Set-Variable -WhatIf:$False -Confirm:$False -Name sb_vm -Option Constant -Value { `
                 param([Microsoft.Azure.Commands.Compute.Models.PSVirtualMachine]$vmObj) `
                 OnboardLaVmWithoutReInstall -VMObject $vmObj `
-                                            -ExtensionSettings @{
-                                                "Settings" = $laExtensionPublicSetting
-                                                "ProtectedSettings" = $laExtensionProtectedSetting
-                                             }
+                                            -ExtensionSettings $laExtensionSettingsVm
             }
         }
         
@@ -1492,15 +1553,12 @@ try {
             OnboardVMssExtension -VMssObject $vmssObj `
                                  -ExtensionName $laDefaultExtensionName `
                                  -ExtensionConstantMap $laExtensionMap `
-                                 -ExtensionSettings @{
-                                    "Setting" = $laExtensionPublicSetting
-                                    "ProtectedSetting" = $laExtensionProtectedSetting
-                                 }
+                                 -ExtensionSettings $laExtensionSettingsVmss
         }
         
         Set-Variable -WhatIf:$False -Confirm:$False -Name sb_da -Option Constant -Value { `
             param([Microsoft.Azure.Commands.Compute.Models.PSVirtualMachine]$vmObj) `
-            OnboardDaVm -VMObject $vmObj -ExtensionSettings @{"Settings" = $daExtensionSetting}
+            OnboardDaVm -VMObject $vmObj -ExtensionSettings $daExtensionSettingsVm
         }
 
         Set-Variable -WhatIf:$False -Confirm:$False -Name sb_da_vmss -Option Constant -Value { `
@@ -1508,11 +1566,12 @@ try {
             OnboardVMssExtension -VMssObject $vmssObj `
                                  -ExtensionName $daDefaultExtensionName `
                                  -ExtensionConstantMap $daExtensionConstantsMap `
-                                 -ExtensionSettings @{"Setting" = $daExtensionSetting}
+                                 -ExtensionSettings $daExtensionSettingsVmss
         }
 
         Set-Variable -WhatIf:$False -Confirm:$False -Name sb_roles -Option Constant -Value $sb_nop_block_roles
     } else {
+        
         try {
             Write-Verbose "Validating ($UserAssignedManagedIdentityResourceGroup, $UserAssignedManagedIdentityName)"
             Set-Variable -WhatIf:$False -Confirm:$False -Name UserAssignedManagedIdentityObject -Option Constant -Value `
@@ -1531,33 +1590,51 @@ try {
             throw [UserAssignedManagedIdentityUnknownException]::new("($UserAssignedManagedIdentityResourceGroup) $UserAssignedManagedIdentityName : Unable to locate User Assigned Managed Identity.", $_.Exception)
         }
         
-        Set-Variable -WhatIf:$False -Confirm:$False -Name amaExtensionSetting -Option Constant -Value `
-            @{
-                'authentication' = @{ 
-                    'managedIdentity' = @{
-                        'identifier-name' = 'mi_res_id'
-                        'identifier-value' = $($UserAssignedManagedIdentityObject.Id) 
-                    }
+        $local:amaSettings = @{
+            'authentication' = @{ 
+                'managedIdentity' = @{
+                    'identifier-name' = 'mi_res_id'
+                    'identifier-value' = $($UserAssignedManagedIdentityObject.Id) 
                 }
             }
-            
+        }
+        
+        Set-Variable -WhatIf:$False -Confirm:$False -Name amaExtensionSettingsVm -Option Constant -Value `
+        @{
+            "Settings" = $local:amaSettings
+        }
+
+        Set-Variable -WhatIf:$False -Confirm:$False -Name amaExtensionSettingsVmss -Option Constant -Value `
+        @{
+            "Setting" = $local:amaSettings
+        }
+        
         Set-Variable -WhatIf:$False -Confirm:$False -Name sb_vm -Option Constant -Value { `
             param([Microsoft.Azure.Commands.Compute.Models.PSVirtualMachine]$vmObj) `
-            OnboardVmiWithAmaVm -VMObject $vmObj -ExtensionSettings @{"Settings" = $amaExtensionSetting}
+            OnboardVmiWithAmaVm -VMObject $vmObj -ExtensionSettings $amaExtensionSettingsVm
         }
         Set-Variable -WhatIf:$False -Confirm:$False -Name sb_vmss -Option Constant -Value { `
             param([Microsoft.Azure.Commands.Compute.Automation.Models.PSVirtualMachineScaleSet]$vmssObj) `
-            OnboardVmiWithAmaVmss -VMssObject $vmssObj -ExtensionSettings @{"Setting" = $amaExtensionSetting}
+            OnboardVmiWithAmaVmss -VMssObject $vmssObj -ExtensionSettings $amaExtensionSettingsVmss
         }
         
         if (!$ProcessAndDependencies) {
-            Set-Variable -WhatIf:$False -Confirm:$False -Name sb_da -Option Constant -Value $sb_nop_block
-            Set-Variable -WhatIf:$False -Confirm:$False -Name sb_da_vmss -Option Constant -Value $sb_nop_block
+            Set-Variable -WhatIf:$False -Confirm:$False -Name sb_da -Option Constant -Value $sb_nop_block_vm
+            Set-Variable -WhatIf:$False -Confirm:$False -Name sb_da_vmss -Option Constant -Value $sb_nop_block_vmss
         } else {
-            Set-Variable -WhatIf:$False -Confirm:$False -Name daExtensionSetting -Option Constant -Value @{"enableAMA" = "true"}
+            $local:daSettings = @{"enableAMA" = "true"}
+            Set-Variable -WhatIf:$False -Confirm:$False -Name daExtensionSettingsVm -Option Constant -Value `
+            @{
+                "Settings" = $local:daSettings
+            }
+            Set-Variable -WhatIf:$False -Confirm:$False -Name daExtensionSettingsVmss -Option Constant -Value `
+            @{  
+                "Setting" = $local:daSettings
+            }
+            
             Set-Variable -WhatIf:$False -Confirm:$False -Name sb_da -Option Constant -Value { `
                 param([Microsoft.Azure.Commands.Compute.Models.PSVirtualMachine]$vmObj) `
-                OnboardDaVm -VMObject $vmObj -ExtensionSettings @{"Settings" = $daExtensionSetting}
+                OnboardDaVm -VMObject $vmObj -ExtensionSettings $daExtensionSettingsVm
             }
 
             Set-Variable -WhatIf:$False -Confirm:$False -Name sb_da_vmss -Option Constant -Value { `
@@ -1565,7 +1642,7 @@ try {
                 OnboardVMssExtension -VMssObject $vmssObj `
                                      -ExtensionName $daDefaultExtensionName `
                                      -ExtensionConstantMap $daExtensionConstantsMap `
-                                     -ExtensionSettings @{"Setting" = $daExtensionSetting}
+                                     -ExtensionSettings $daExtensionSettingsVmss
             }
         }
     
@@ -1680,7 +1757,7 @@ try {
     Write-Host ""
 
     # Validate customer wants to continue
-    if ($Approve -or $PSCmdlet.ShouldContinue("Continue?", "")) {
+    if ($Approve -or $WhatIfPreference -or $PSCmdlet.ShouldContinue("Continue?", "")) {
         Write-Host ""
     } else {
         Write-Host "You selected No - exiting"
