@@ -99,7 +99,7 @@ Name of User Assigned Managed Identity (UAMI) resource group.
 .PARAMETER UserAssignedManagedIdentityName
 Name of User Assigned Managed Identity (UAMI).
 
-.PARAMETER ProcessAndDependencies
+.PARAMETER c
 <Optional> Set this flag to onboard Dependency Agent with Azure Monitoring Agent (AMA) settings.
 
 .EXAMPLE
@@ -596,7 +596,7 @@ function RemoveVMExtension {
     
     if ($removeResult.IsSuccessStatusCode) {
         Write-Host "$vmlogheader : Successfully removed extension $ExtensionName, type $($extensionPublisher).$($extensionType)"
-
+        return
     }
 
     throw [VirtualMachineOperationFailed]::new($VMObject, 
