@@ -572,7 +572,7 @@ function RemoveVMExtension {
     $extensionType = $ExtensionProperties.ExtensionType
     $extensionPublisher = $ExtensionProperties.Publisher
     
-    if (!$PSCmdlet.ShouldProcess($vmlogheader, "Remove $ExtensionName, type $extensionType.$extensionPublisher")) {
+    if (!$PSCmdlet.ShouldProcess($vmlogheader, "Remove $ExtensionName, type $($extensionPublisher).$($extensionType)")) {
         #-WhatIf skip processing here, return to the caller as we have completed our work.
         if ($WhatIfPreference) {
             return
@@ -802,7 +802,7 @@ function OnboardDaVm {
     if ($extension) {
         $extensionName = $extension.Name
         RetainExtensionUpgradeSettings -Extension $extension -ExtUpgradeSettings $extUpgradeSettings
-        Write-Host "$(FormatVmIdentifier -VMObject $VMObject) : Extension $extensionName, type $($daExtensionConstantProperties.ExtensionType).$($daExtensionConstantProperties.Publisher) already installed. Provisioning State : $($extension.ProvisioningState)"
+        Write-Host "$(FormatVmIdentifier -VMObject $VMObject) : Extension $extensionName, type $($daExtensionConstantProperties.Publisher).$($daExtensionConstantProperties.ExtensionType) already installed. Provisioning State : $($extension.ProvisioningState)"
     }
     
     return SetVMExtension -VMObject $VMObject `
@@ -835,7 +835,7 @@ function OnboardAmaVm {
     if ($extension) {
         $extensionName = $extension.Name
         RetainExtensionUpgradeSettings -Extension $extension -ExtUpgradeSettings $extUpgradeSettings
-        Write-Host "$(FormatVmIdentifier -VMObject $VMObject) : Extension $extensionName, type = $($amaExtensionConstantProperties.ExtensionType).$($amaExtensionConstantProperties.Publisher) already installed. Provisioning State : $($extension.ProvisioningState)"
+        Write-Host "$(FormatVmIdentifier -VMObject $VMObject) : Extension $extensionName, type = $($amaExtensionConstantProperties.Publisher).$($amaExtensionConstantProperties.ExtensionType) already installed. Provisioning State : $($extension.ProvisioningState)"
     }
     
     return SetVMExtension -VMObject $VMObject `
@@ -872,7 +872,7 @@ function OnboardLaVmWithReInstall {
     if ($extension) {
         $extensionName = $extension.Name
         RetainExtensionUpgradeSettings -Extension $extension -ExtUpgradeSettings $extUpgradeSettings
-        Write-Host "$vmlogheader : Extension $extensionName, type $($laExtensionConstantProperties.ExtensionType).$($laExtensionConstantProperties.Publisher) already installed. Provisioning State : $($extension.ProvisioningState)"
+        Write-Host "$vmlogheader : Extension $extensionName, type $($laExtensionConstantProperties.Publisher).$($laExtensionConstantProperties.ExtensionType) already installed. Provisioning State : $($extension.ProvisioningState)"
         if ($osType -eq "Linux" -and $extension.PublicSettings) {
             $extensionPublicSettingsJson = $extension.PublicSettings | ConvertFrom-Json
             if ($extensionPublicSettingsJson.workspaceId -ne $ExtensionSettings.Settings.workspaceId) {
@@ -917,7 +917,7 @@ function OnboardLaVmWithoutReInstall {
     if ($extension) {
         $extensionName = $extension.Name
         RetainExtensionUpgradeSettings -Extension $extension -ExtUpgradeSettings $extUpgradeSettings
-        Write-Host "$vmlogheader : Extension $extensionName, type $($laExtensionConstantProperties.ExtensionType).$($laExtensionConstantProperties.Publisher) already installed. Provisioning State : $($extension.ProvisioningState)"
+        Write-Host "$vmlogheader : Extension $extensionName, type $($laExtensionConstantProperties.Publisher).$($laExtensionConstantProperties.ExtensionType) already installed. Provisioning State : $($extension.ProvisioningState)"
         if ($osType -eq "Linux" -and $extension.PublicSettings) {
             $extensionPublicSettingsJson = $extension.PublicSettings | ConvertFrom-Json 
             if ($extensionPublicSettingsJson.workspaceId -ne $ExtensionSettings.Settings.workspaceId) {
@@ -1158,7 +1158,8 @@ function SetVMExtension {
                                     -Publisher $Publisher `
                                     -TypeHandlerVersion $TypeHandlerVersion `
                                     @ExtensionUpgradeSettings `
-                                    @ExtensionSettings -ForceRerun $True
+                                    @ExtensionSettings -ForceRerun $True `
+                                    -Confirm:$false
 
         if (!$result.IsSuccessStatusCode) {
             throw [VirtualMachineOperationFailed]::new($VMObject, "Failed to update extension. StatusCode = $($result.StatusCode). ReasonPhrase = $($result.ReasonPhrase)")
