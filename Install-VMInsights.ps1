@@ -197,7 +197,7 @@ class VirtualMachineOperationFailed : VirtualMachineException {
 
 class VirtualMachinePoweredDown : VirtualMachineException {
     VirtualMachinePoweredDown([Microsoft.Azure.Commands.Compute.Models.PSVirtualMachine]$vmObject,
-                              [String]$errorMessage) : base($vmObject, "VM is powered down", $null) {}
+                              [Exception]$innerException) : base($vmObject, "VM is powered down", $innerException) {}
 }
 
 class VirtualMachineScaleSetUnknownException : VirtualMachineScaleSetException {
@@ -710,7 +710,7 @@ function NewDCRAssociationVm {
 
     #Tmp fix task :- 21191002
     if (($null -eq $dcrAssociation) -or ($dcrAssociation -is [Microsoft.Azure.Management.Monitor.Models.ErrorResponseCommonV2Exception])) {
-        throw [VirtualMachineUnknownException]::new($VMObject, "Failed to create Data Collection Rule Association with $DcrResourceId", $_.Exception)
+        throw [VirtualMachineUnknownException]::new($VMObject, "Unable to create Data Collection Rule Association with $DcrResourceId", $_.Exception)
     }
 
     Write-Host "$vmlogheader : Successfully created Data Collection Rule Association"
@@ -788,7 +788,7 @@ function NewDCRAssociationVmss {
     }
     #Tmp fix task :- 21191002
     if (($null -eq $dcrAssociation) -or ($dcrAssociation -is [Microsoft.Azure.Management.Monitor.Models.ErrorResponseCommonV2Exception])) {
-        throw [VirtualMachineScaleSetDoesNotExist]::new($VMssObject, "Failed to create Data Collection Rule Association with $DcrResourceId", $_.Exception)
+        throw [VirtualMachineScaleSetDoesNotExist]::new($VMssObject, "Unable to create Data Collection Rule Association with $DcrResourceId", $_.Exception)
     }
 }
 
