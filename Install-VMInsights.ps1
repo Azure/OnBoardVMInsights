@@ -99,7 +99,7 @@ Name of User Assigned Managed Identity (UAMI) resource group.
 .PARAMETER UserAssignedManagedIdentityName
 Name of User Assigned Managed Identity (UAMI).
 
-.PARAMETER c
+.PARAMETER ProcessAndDependencies
 <Optional> Set this flag to onboard Dependency Agent with Azure Monitoring Agent (AMA) settings.
 
 .EXAMPLE
@@ -238,7 +238,7 @@ class UserAssignedManagedIdentityDoesNotExist : FatalException {
 
 class UserAssignedManagedIdentityResourceGroupDoesNotExist : FatalException {
     UserAssignedManagedIdentityResourceGroupDoesNotExist($uamiResourceGroup,
-                                            [Exception]$innerException) : base("$uamiResourceGroup : User Assigned Managed Identity Resource-Group does not exist.", $innerException) {}
+                                            [Exception]$innerException) : base("$uamiResourceGroup : User Assigned Managed Identity Resource Group does not exist.", $innerException) {}
 }
 
 class UserAssignedManagedIdentityUnknownException : FatalException {
@@ -478,7 +478,7 @@ function GetRgObject {
 function PopulateRgHashTableVm {
     <#
     .SYNOPSIS
-    Populate Resource-group hash table for VMs
+    Populate Resource Group hash table for VMs
     #>
     param(
         [Parameter(Mandatory=$True)]
@@ -496,7 +496,7 @@ function PopulateRgHashTableVm {
 function PopulateRgHashTableVmss {
     <#
     .SYNOPSIS
-    Populate Resource-group hash table for VMSS
+    Populate Resource Group hash table for VMSS
     #>
     param(
         [Parameter(Mandatory=$True)]
@@ -1042,6 +1042,7 @@ function SetManagedIdentityRoles {
                                  -RoleDefinitionName $role `
                                  -Scope $ResourceGroupId `
                                  -Confirm:$false
+            Write-Verbose "$ResourceGroupId : $role has been successfully assigned to $uamiName"
         } catch {
             $excepMessage = $_.Exception.Message
             if ($excepMessage.Contains('Conflict')) {
@@ -1054,7 +1055,7 @@ function SetManagedIdentityRoles {
                 throw [ResourceGroupDoesNotExist]::new($($VMObject.ResourceGroupName), $_.Exception)
             }
         }
-        Write-Verbose "$ResourceGroupId : $role has been successfully assigned to $uamiName"
+        
     }
 }
 
