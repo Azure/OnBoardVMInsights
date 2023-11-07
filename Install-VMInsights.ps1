@@ -1203,7 +1203,7 @@ function SetVMExtension {
         $errorMessage = ExtractCloudExceptionErrorMessage -ErrorRecord $_
         $errorCode = ExtractExceptionErrorCode -ErrorRecord $_
         #Found by experimentation. 
-        if ($errorCode -eq "OperationNotAllowed" -and $errorMessage -eq "Cannot modify extensions in the VM when the VM is not running") {
+        if ($errorCode -eq "OperationNotAllowed" -and $errorMessage -eq "Cannot modify extensions in the VM when the VM is not running.") {
             throw [VirtualMachinePoweredDown]::new($VMObject, $_.Exception)
         }
         
