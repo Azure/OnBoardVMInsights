@@ -238,7 +238,7 @@ class UserAssignedManagedIdentityDoesNotExist : FatalException {
 
 class UserAssignedManagedIdentityResourceGroupDoesNotExist : FatalException {
     UserAssignedManagedIdentityResourceGroupDoesNotExist($uamiResourceGroup,
-                                            [Exception]$innerException) : base("$uamiResourceGroup : User Assigned Managed Identity does not exist.", $innerException) {}
+                                            [Exception]$innerException) : base("$uamiResourceGroup : User Assigned Managed Identity Resource-Group does not exist.", $innerException) {}
 }
 
 class UserAssignedManagedIdentityUnknownException : FatalException {
@@ -321,6 +321,7 @@ function PrintSummaryMessage {
         [OnboardingCounters]
         $OnboardingCounters
     )
+    Write-Host ""
     Write-Host "Summary :"
     Write-Host "Total VM/VMSS to be processed : $($OnboardingCounters.Total)"
     Write-Host "Succeeded : $($OnboardingCounters.Succeeded)"
@@ -617,7 +618,7 @@ function RemoveVMExtension {
     } catch [Microsoft.Azure.Commands.Compute.Common.ComputeCloudException] {
         $errorCode = ExtractExceptionErrorCode -ErrorRecord $_
         if ($errorCode -eq "ResourceGroupNotFound") {
-            throw [ResourceGroupDoesNotExist]::new($VMObject.ResourceGroupName,$_.Exception)       
+            throw [ResourceGroupDoesNotExist]::new($VMObject.ResourceGroupName, $_.Exception)       
         } 
         
         throw [VirtualMachineUnknownException]::new($VMObject, "Failed to remove extension $ExtensionName, type $($extensionPublisher).$($extensionType)", $_.Exception)
@@ -684,7 +685,7 @@ function NewDCRAssociationVm {
         $exceptionMessage = $_.Exception.Message
         
         if ($exceptionMessage.Contains('Invalid format of the resource identifier')) {
-            throw [DataCollectionRuleIncorrect]::new($DcrResourceId)
+            throw [DataCollectionRuleIncorrect]::new($DcrResourceId, $_.Exception)
         } 
 
         if (!($exceptionMessage -match "status code '([^\s]+)'")) {
@@ -707,7 +708,7 @@ function NewDCRAssociationVm {
 
     #Tmp fix task :- 21191002
     if (($null -eq $dcrAssociation) -or ($dcrAssociation -is [Microsoft.Azure.Management.Monitor.Models.ErrorResponseCommonV2Exception])) {
-        throw [VirtualMachineUnknownException]::new($VMObject, "Failed to create Data Collection Rule Association with $DcrResourceId", $dcrassociation)
+        throw [VirtualMachineUnknownException]::new($VMObject, "Failed to create Data Collection Rule Association with $DcrResourceId", $_.Exception)
     }
 
     Write-Host "$vmlogheader : Successfully created Data Collection Rule Association"
@@ -763,7 +764,7 @@ function NewDCRAssociationVmss {
         $exceptionMessage = $_.Exception.Message
         
         if ($exceptionMessage.Contains('Invalid format of the resource identifier')) {
-            throw [DataCollectionRuleIncorrect]::new($DcrResourceId)
+            throw [DataCollectionRuleIncorrect]::new($DcrResourceId, $_.Exception)
         } 
         
         if (!($exceptionMessage -match "status code '([^\s]+)'")) {
@@ -785,7 +786,7 @@ function NewDCRAssociationVmss {
     }
     #Tmp fix task :- 21191002
     if (($null -eq $dcrAssociation) -or ($dcrAssociation -is [Microsoft.Azure.Management.Monitor.Models.ErrorResponseCommonV2Exception])) {
-        throw [VirtualMachineScaleSetDoesNotExist]::new($VMssObject, "Failed to create Data Collection Rule Association with $DcrResourceId", $dcrAssociation)
+        throw [VirtualMachineScaleSetDoesNotExist]::new($VMssObject, "Failed to create Data Collection Rule Association with $DcrResourceId", $_.Exception)
     }
 }
 
@@ -1050,7 +1051,7 @@ function SetManagedIdentityRoles {
                 throw [FatalException]::new("$uamiName : User Assigned Managed Identity doesn't exist", $_.Exception)
             }
             if ($excepMessage.Contains('NotFound')) {
-                throw [ResourceGroupDoesNotExist]::new($($VMObject.ResourceGroupName))
+                throw [ResourceGroupDoesNotExist]::new($($VMObject.ResourceGroupName), $_.Exception)
             }
         }
         Write-Verbose "$ResourceGroupId : $role has been successfully assigned to $uamiName"
@@ -1301,7 +1302,7 @@ function UpgradeVmssExtensionManualUpdateEnabled {
             }
 
             if ($errorCode -eq "OperationNotAllowed") {
-                Write-Host "$vmsslogheader : Unable to locate VMSS instance name $scaleSetInstanceName. Continuing ..."
+                Write-Host "$vmsslogheader : Failed to locate VMSS instance name $scaleSetInstanceName. Continuing ..."
             } else {
                 Write-Host "$vmsslogheader : Failed to upgrade VMSS instance name $scaleSetInstanceName, $i of $instanceCount. ErrorCode $errorCode. Continuing ..." 
                 DisplayException -ErrorRecord $_
@@ -1486,10 +1487,10 @@ function SetManagedIdentityRolesAma {
     } catch { 
         $errorCode = ExtractExceptionErrorCode -ErrorRecord $_
         if ($errorCode -eq "ResourceGroupNotFound") {
-            throw [FatalException]::new("$ResourceGroupName : Not found.")
+            throw [FatalException]::new("$ResourceGroupName : Not found.", $_.Exception)
         }
          
-        throw [FatalException]::new("Unable to lookup Resource Group.")
+        throw [FatalException]::new("Unable to lookup Resource Group.", $_.Exception)
     }
 
     $roles = @("Virtual Machine Contributor", "Azure Connected Machine Resource Administrator", "Log Analytics Contributor")
@@ -1623,7 +1624,7 @@ try {
                 throw [UserAssignedManagedIdentityResourceGroupDoesNotExist]::new($UserAssignedManagedIdentityResourceGroup, $_.Exception)
             }
 
-            throw [UserAssignedManagedIdentityUnknownException]::new("($UserAssignedManagedIdentityResourceGroup) $UserAssignedManagedIdentityName : Unable to locate User Assigned Managed Identity.", $_.Exception)
+            throw [UserAssignedManagedIdentityUnknownException]::new("($UserAssignedManagedIdentityResourceGroup) $UserAssignedManagedIdentityName : Failed to locate User Assigned Managed Identity.", $_.Exception)
         }
         
         $local:amaSettings = @{
@@ -1780,7 +1781,7 @@ try {
         
         if ($vmssList.Length -gt 0) {
             $vmssList = Sort-Object -Property Name -InputObject $vmssList
-            $vmssList | ForEach-Object { Write-Host "  $($_.Name). Upgrade mode $($_.UpgradePolicy.Mode)"; `
+            $vmssList | ForEach-Object { Write-Host "  $($_.Name) - Upgrade mode $($_.UpgradePolicy.Mode)"; `
                                          if ($_.UpgradePolicy.Mode -eq "Manual") {$ManualUpgrade+=1}
                                        }
             $rgTableObj.VirtualMachineScaleSetList = $vmssList
