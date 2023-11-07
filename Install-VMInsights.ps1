@@ -410,11 +410,12 @@ function VerboseDisplayException {
     try {
         $ex = $ErrorRecord.Exception
         Write-Host "ExceptionMessage : $($ex.Message)"
-        while ($ex) {
+        Write-Verbose "StackTrace :"
+        Write-Verbose "$($ex.StackTrace)"
+        while ($ex = $ex.InnerException) {
+            Write-Verbose "InnerExceptionMessage : $($ex.Message)"
             Write-Verbose "StackTrace :"
             Write-Verbose "$($ex.StackTrace)"
-            $ex = $ex.InnerException
-            Write-Verbose "InnerExceptionMessage : $($ex.Message)"
         }
         Write-Verbose "ScriptStackTrace :" $ErrorRecord.ScriptStackTrace
     }
@@ -438,11 +439,12 @@ function DisplayException {
     try {
         $ex = $ErrorRecord.Exception
         Write-Host "ExceptionMessage : $($ex.Message)"
-        while ($ex) {
+        Write-Host "StackTrace :"
+        Write-Host "$($ex.StackTrace)"
+        while ($ex = $ex.InnerException) {
+            Write-Host "InnerExceptionMessage : $($ex.Message)"
             Write-Host "StackTrace :"
             Write-Host "$($ex.StackTrace)"
-            $ex = $ex.InnerException
-            Write-Host "InnerExceptionMessage : $($ex.Message)"
         }
         Write-Host "ScriptStackTrace :" $ErrorRecord.ScriptStackTrace
     }
