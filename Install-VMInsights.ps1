@@ -240,6 +240,7 @@ class UserAssignedManagedIdentityResourceGroupDoesNotExist : FatalException {
     UserAssignedManagedIdentityResourceGroupDoesNotExist($uamiResourceGroup,
                                             [Exception]$innerException) : base("$uamiResourceGroup : User Assigned Managed Identity does not exist.", $innerException) {}
 }
+
 class UserAssignedManagedIdentityUnknownException : FatalException {
     UserAssignedManagedIdentityUnknownException([String]$errorMessage,
                                                 [Exception]$innerException) : base($errorMessage, $innerException) {}
@@ -340,7 +341,7 @@ function ExtractCloudExceptionErrorMessage {
         $ErrorRecord
     )
 
-    if ($ErrorRecord.Exception.Message -match 'ErrorMessage *: ([^\s]+)') {
+    if ($ErrorRecord.Exception.Message -match 'ErrorMessage *: *(.*)') {
         return $matches[1]
     }
 
@@ -359,7 +360,7 @@ function ExtractExceptionErrorCode {
         $ErrorRecord
     )
 
-    if ($ErrorRecord.Exception.Message -match 'ErrorCode *: ([^\s]+)') {
+    if ($ErrorRecord.Exception.Message -match 'ErrorCode *: *([^\s]+)') {
         return $matches[1]
     }
 
@@ -393,10 +394,10 @@ function FormatVmssIdentifier {
     return "($($VMssObject.ResourceGroupName)) $($VMssObject.Name)"
 }
 
-function DisplayException {
+function VerboseDisplayException {
     <#
     .SYNOPSIS
-    Renders the given exception on the console.
+    Renders customer actionable message, inner exception and stack trace to verbose stream.
     Does not throw any exceptions.
     #>
     param (
@@ -407,14 +408,42 @@ function DisplayException {
 
     try {
         $ex = $ErrorRecord.Exception
+        Write-Host "ExceptionMessage : $($ex.Message)"
         while ($ex) {
-            Write-Host "ExceptionMessage : $($ex.Message)"
             Write-Verbose "StackTrace :"
             Write-Verbose "$($ex.StackTrace)"
             $ex = $ex.InnerException
+            Write-Verbose "InnerExceptionMessage : $($ex.Message)"
+        }
+        Write-Verbose "ScriptStackTrace :" $ErrorRecord.ScriptStackTrace
+    }
+    catch {
+        # silently ignore
+    }
+}
+
+function DisplayException {
+    <#
+    .SYNOPSIS
+    Renders customer actionable message, inner exception and stack trace to console.
+    Does not throw any exceptions.
+    #>
+    param (
+        [Parameter(Mandatory=$True)]
+        [System.Management.Automation.ErrorRecord]
+        $ErrorRecord
+    )
+
+    try {
+        $ex = $ErrorRecord.Exception
+        Write-Host "ExceptionMessage : $($ex.Message)"
+        while ($ex) {
+            Write-Host "StackTrace :"
+            Write-Host "$($ex.StackTrace)"
+            $ex = $ex.InnerException
+            Write-Host "InnerExceptionMessage : $($ex.Message)"
         }
         Write-Host "ScriptStackTrace :" $ErrorRecord.ScriptStackTrace
-
     }
     catch {
         # silently ignore
@@ -1005,7 +1034,6 @@ function SetManagedIdentityRoles {
         throw [CustomerSkip]::new()
     }
 
-    Write-Host "$ResourceGroupId : Assigning roles"
     foreach ($role in $Roles) {
         Write-Verbose "Assigning role $role"
         try {
@@ -1170,7 +1198,8 @@ function SetVMExtension {
     } catch [Microsoft.Azure.Commands.Compute.Common.ComputeCloudException] {
         $errorMessage = ExtractCloudExceptionErrorMessage -ErrorRecord $_
         $errorCode = ExtractExceptionErrorCode -ErrorRecord $_
-        if ($errorMessage -eq "Cannot modify extensions in the VM when the VM is not running") {
+        #Found by experimentation. 
+        if ($errorCode -eq "OperationNotAllowed" -and $errorMessage -eq "Cannot modify extensions in the VM when the VM is not running") {
             throw [VirtualMachinePoweredDown]::new($VMObject, $_.Exception)
         }
         
@@ -1238,7 +1267,7 @@ function UpgradeVmssExtensionManualUpdateEnabled {
         }
 
         $scaleSetInstanceName = $($scaleSetInstance.Name)
-        Write-Host "Upgrading $scaleSetInstanceName, $i of $instanceCount"
+        Write-Host "$vmsslogheader : Upgrading $scaleSetInstanceName, $i of $instanceCount"
 
         if ($scaleSetInstance.LatestModelApplied) {
             Write-Verbose "$vmsslogheader : Latest model already applied for $scaleSetInstanceName, $i of $instanceCount"
@@ -1262,18 +1291,23 @@ function UpgradeVmssExtensionManualUpdateEnabled {
             if ($errorCode -eq "ResourceNotFound") { 
                 throw [VirtualMachineScaleSetDoesNotExist]::new($VMssObject, $_.Exception)
             }
+
             if ($errorCode -eq "ResourceGroupNotFound") {
                 throw [ResourceGroupDoesNotExist]::new($VMssObject.ResourceGroupName ,$_.Exception)  
             }
-            if ($errorCode -eq "OperationNotAllowed") {
-                DisplayException -ErrorRecord $_
-                Write-Host "$vmsslogheader : Unable to locate VMSS instance name $scaleSetInstanceName. Continuing ..."
+
+            if ($unexpectedUpgradeExceptionCounter -gt $unexpectedUpgradeExceptionLimit) {
+                throw [VirtualMachineScaleSetUnknownException]::new($VMssObject, "More than $unexpectedUpgradeExceptionLimit unexpected exceptions encountered", $_.Exception)
             }
-            if ($unexpectedUpgradeExceptionCounter -lt $unexpectedUpgradeExceptionLimit) {
-                throw [VirtualMachineScaleSetUnknownException]::new($VMssObject, "Failed to upgrade VMSS instance name $scaleSetInstanceName", $_.Exception)
-            } 
-            Write-Host "$vmsslogheader : Failed to upgrade VMSS instance name $scaleSetInstanceName, $i of $instanceCount. ErrorCode $errorCode. Continuing ..." 
-            $unexpectedUpgradeExceptionCounter += 1
+
+            if ($errorCode -eq "OperationNotAllowed") {
+                Write-Host "$vmsslogheader : Unable to locate VMSS instance name $scaleSetInstanceName. Continuing ..."
+            } else {
+                Write-Host "$vmsslogheader : Failed to upgrade VMSS instance name $scaleSetInstanceName, $i of $instanceCount. ErrorCode $errorCode. Continuing ..." 
+                DisplayException -ErrorRecord $_
+                $unexpectedUpgradeExceptionCounter += 1
+            }
+            
             $InstanceUpgradeFailCounter.Value += 1
         }
     }
@@ -1459,6 +1493,7 @@ function SetManagedIdentityRolesAma {
     }
 
     $roles = @("Virtual Machine Contributor", "Azure Connected Machine Resource Administrator", "Log Analytics Contributor")
+    Write-Host "($ResourceGroupName) : Assigning roles"
     SetManagedIdentityRoles -ResourceGroupId $rgObj.ResourceId `
                             -UserAssignedManagedIdentity $UserAssignedManagedIdentityObject `
                             -Roles $roles
@@ -1689,6 +1724,7 @@ try {
             #quietly do nothing.
         } 
     } else {
+        Write-Host ""
         Write-Host "Getting list of VMs or VM Scale Sets matching specified criteria."
         try {
             Get-AzVM -ResourceGroupName $ResourceGroup -Name $Name
@@ -1732,18 +1768,19 @@ try {
         $rgTableObj = $entry.Value
         $vmList = $rgTableObj.VirtualMachineList
         $vmssList = $rgTableObj.VirtualMachineScaleSetList
+        Write-Host ""
         Write-Host "ResourceGroup : $rg"
 
 
         if ($vmList.Length -gt 0) {
             $vmList = Sort-Object -Property Name -InputObject $vmList
-            $vmList | ForEach-Object { Write-Host " $($_.Name)" }
+            $vmList | ForEach-Object { Write-Host "  $($_.Name)" }
             $rgTableObj.VirtualMachineList = $vmList
         }
         
         if ($vmssList.Length -gt 0) {
             $vmssList = Sort-Object -Property Name -InputObject $vmssList
-            $vmssList | ForEach-Object { Write-Host " $($_.Name). Upgrade mode $($_.UpgradePolicy.Mode)"; `
+            $vmssList | ForEach-Object { Write-Host "  $($_.Name). Upgrade mode $($_.UpgradePolicy.Mode)"; `
                                          if ($_.UpgradePolicy.Mode -eq "Manual") {$ManualUpgrade+=1}
                                        }
             $rgTableObj.VirtualMachineScaleSetList = $vmssList
@@ -1774,6 +1811,7 @@ try {
             
             foreach ($vm in $rgTableObj.VirtualMachineList) {
                 try {
+                    Write-Host ""
                     $vm = &$sb_vm -vmObj $vm
                     $vm = &$sb_da -vmObj $vm
                     Write-Host "$(FormatVmIdentifier -VMObject $vm) : Successfully onboarded VM insights"
@@ -1793,7 +1831,7 @@ try {
                     Write-Host "Continuing to the next VM ..."
                 } catch [VirtualMachineException] {
                     Write-Host "VM Exception :"
-                    DisplayException -ErrorRecord $_
+                    VerboseDisplayException -ErrorRecord $_
                     Write-Host "Continuing to the next VM ..."
                 } catch [CustomerSkip] {
                     Write-Host "Onboarding operation aborted"
@@ -1804,6 +1842,7 @@ try {
 
             foreach ($vmss in $rgTableObj.VirtualMachineScaleSetList) {
                 try {
+                    Write-Host ""
                     $vmsslogheader = FormatVmssIdentifier -VMssObject $vmss
                     $vmss = &$sb_vmss -vmssObj $vmss
                     $vmss = &$sb_da_vmss -vmssObj $vmss
@@ -1832,7 +1871,7 @@ try {
                     Write-Host "Continuing to the next VMSS ..."
                 } catch [VirtualMachineScaleSetException] {
                     Write-Host "VMSS Exception :"
-                    DisplayException -ErrorRecord $_
+                    VerboseDisplayException -ErrorRecord $_
                     Write-Host "Continuing to the next VMSS ..."
                 } catch [CustomerSkip] {
                     Write-Host "Onboarding operation aborted"
@@ -1842,7 +1881,7 @@ try {
             }
         } catch [ResourceGroupDoesNotExist] {
             Write-Host "Resource Group Exception :"
-            DisplayException -ErrorRecord $_
+            VerboseDisplayException -ErrorRecord $_
             Write-Host "Continuing to the next Resource Group ..."
         } catch [CustomerSkip] {
             Write-Host "Onboarding operation aborted"
@@ -1850,17 +1889,24 @@ try {
         }
     }
 }
-catch [FatalException] {
+catch [UserAssignedManagedIdentityUnknownException] {
     Write-Host "Fatal Exception :"
     DisplayException -ErrorRecord $_
     Write-Host "Exiting ..."
     exit 2
 }
+# Customer actionable exceptions
+catch [FatalException] {
+    Write-Host "Fatal Exception :"
+    VerboseDisplayException -ErrorRecord $_
+    Write-Host "Exiting ..."
+    exit 3
+}
 catch {
     Write-Host "Unexpected Fatal Exception :"
     DisplayException -ErrorRecord $_
     Write-Host "Exiting ..."
-    exit 3
+    exit 4
 }
 finally {
     PrintSummaryMessage  $onboardingCounters
