@@ -395,6 +395,47 @@ function FormatVmssIdentifier {
     return "($($VMssObject.ResourceGroupName)) $($VMssObject.Name)"
 }
 
+function IsVmAndGuestAgentUpAndHealthy {
+    <#
+    .SYNOPSIS
+    Checks whether a VM is up and Guest agent is in a healthy state.
+    #>
+    param (
+        [Parameter(Mandatory=$True)]
+        [Microsoft.Azure.Commands.Compute.Models.PSVirtualMachine]
+        $VMObject
+    )
+  
+    try {
+        $vmResourceGroupName = $VMObject.ResourceGroupName
+        $vmlogheader = FormatVmIdentifier -VMObject $VMObject
+        $vmStatus = Get-AzVm -ResourceGroupName $vmResourceGroupName -Name $VMObject.Name -Status
+        $guestAgentHealthCode = $vmStatus.VMAgent.Statuses.Code
+        $vmhealthStatusCode = $vmStatus.Statuses.Code
+        if ($vmhealthStatusCode -contains 'ProvisioningState/succeeded' -and $vmhealthStatusCode -contains 'PowerState/running' -and $guestAgentHealthCode -contains 'ProvisioningState/succeeded') {
+            return $True
+        }
+        
+        if (!($vmhealthStatusCode -contains 'ProvisioningState/succeeded' -and $vmhealthStatusCode -contains 'PowerState/running')) {
+            Write-Host "$vmlogheader : Virtual Machine is not operational - $($vmStatus.Statuses.DisplayStatus)"
+        } else {
+            Write-Host "$vmlogheader : Guest Agent is not healthy - $($vmStatus.VMAgent.Statuses.DisplayStatus)"
+        }
+        return $False
+    } catch [Microsoft.Azure.Commands.Compute.Common.ComputeCloudException] {
+        $errorCode = ExtractExceptionErrorCode -ErrorRecord $_
+        if ($errorCode -eq "ResourceNotFound") { 
+            throw [VirtualMachineDoesNotExist]::new($VMObject, $_.Exception)
+        }
+
+        if ($errorCode -eq "ResourceGroupNotFound") {
+            throw [ResourceGroupDoesNotExist]::new($vmResourceGroupName ,$_.Exception)  
+        }
+
+        throw [VirtualMachineUnknownException]::new($VMObject, "Failed to get status of virtual machine", $_.Exception)
+    }
+}
+
 function VerboseDisplayException {
     <#
     .SYNOPSIS
@@ -1368,7 +1409,7 @@ function UpdateVMssExtension {
 function AssignVmssUserManagedIdentity {
     <#
 	.SYNOPSIS
-	Assign User Assigned Managed Identity to VMSS
+	Checking if User Assigning Managed Identity is already assigned to VMSS, if not Assigning it.
 	#>
     [CmdletBinding(SupportsShouldProcess = $True, ConfirmImpact = 'Medium')]
     param
@@ -1380,7 +1421,15 @@ function AssignVmssUserManagedIdentity {
 
     $userAssignedManagedIdentityName = $UserAssignedManagedIdentityObject.Name
     $vmsslogheader = FormatVmssIdentifier -VMssObject $VmssObject
-    
+    $vmssResourceGroupName = $VMssObject.ResourceGroupName
+
+    foreach ($uami in $VMssObject.Identity.UserAssignedIdentities.Keys) {
+        if ($uami -eq $UserAssignedManagedIdentityObject.Id) {
+            Write-Host "$vmsslogheader : User Assigned Managed Identity $userAssignedManagedIdentityName already assigned."
+            return $VMssObject
+        }
+    }
+
     if (!($PSCmdlet.ShouldProcess($vmsslogheader, "Assign User Assigned Managed Identity $userAssignedManagedIdentityName"))) {
         #-WhatIf skip processing here, return to the caller as we have completed our work.
         if ($WhatIfPreference) {
@@ -1392,7 +1441,7 @@ function AssignVmssUserManagedIdentity {
     Write-Host "$vmsslogheader : Assigning User Assigned Managed Identity $userAssignedManagedIdentityName"
     try {
         $VMssObject = Update-AzVmss -VMScaleSetName $VMssObject.Name `
-                                -ResourceGroupName  $VMssObject.ResourceGroupName `
+                                -ResourceGroupName  $vmssResourceGroupName `
                                 -VirtualMachineScaleSet $VMssObject `
                                 -IdentityType "UserAssigned" `
                                 -IdentityID $UserAssignedManagedIdentityObject.Id `
@@ -1409,7 +1458,7 @@ function AssignVmssUserManagedIdentity {
             throw [UserAssignedManagedIdentityDoesNotExist]::new($userAssignedManagedIdentityName, $_.Exception)
         }
         if ($errorCode -eq "ResourceGroupNotFound") {
-            throw [ResourceGroupDoesNotExist]::new($VMssObject.ResourceGroupName, $_.Exception)       
+            throw [ResourceGroupDoesNotExist]::new($vmssResourceGroupName, $_.Exception)       
         } 
         if ($errorCode -eq "InvalidParameter") {
             throw [VirtualMachineScaleSetDoesNotExist]::new($VMssObject, $_.Exception) 
@@ -1422,8 +1471,8 @@ function AssignVmssUserManagedIdentity {
 function AssignVmUserManagedIdentity {
      <#
 	.SYNOPSIS
-	Assign User Assigned Managed Identity to VM
-	#>
+	Checking if User Assigning Managed Identity is already assigned to VM, if not Assigning it.	
+    #>
     [CmdletBinding(SupportsShouldProcess = $True, ConfirmImpact = 'Medium')]
     param
     (
@@ -1434,7 +1483,15 @@ function AssignVmUserManagedIdentity {
 
     $userAssignedManagedIdentityName = $UserAssignedManagedIdentityObject.Name
     $vmlogheader = FormatVmIdentifier -VMObject $VMObject
+    $vmResourceGroupName = $VMObject.ResourceGroupName 
     
+    foreach ($uami in $VMObject.Identity.UserAssignedIdentities.Keys) {
+        if ($uami -eq $UserAssignedManagedIdentityObject.Id) {
+            Write-Host "$vmlogheader : User Assigned Managed Identity $userAssignedManagedIdentityName already assigned."
+            return $VMObject
+        }
+    }
+
     if (!($PSCmdlet.ShouldProcess($vmlogheader, "Assign User Assigned Managed Identity $userAssignedManagedIdentityName"))) {
         #-WhatIf skip processing here, return to the caller as we have completed our work.
         if ($WhatIfPreference) {
@@ -1447,7 +1504,7 @@ function AssignVmUserManagedIdentity {
 
     try {
         $result = Update-AzVM -VM $VMObject `
-                                -ResourceGroupName $VMObject.ResourceGroupName `
+                                -ResourceGroupName $vmResourceGroupName `
                                 -IdentityType "UserAssigned" `
                                 -IdentityID $UserAssignedManagedIdentityObject.Id `
                                 -Confirm:$false
@@ -1457,7 +1514,7 @@ function AssignVmUserManagedIdentity {
             throw [UserAssignedManagedIdentityDoesNotExist]::new($userAssignedManagedIdentityName, $_.Exception)
         }
         if ($errorCode -eq "ResourceGroupNotFound") {
-            throw [ResourceGroupDoesNotExist]::new($($VMObject.ResourceGroupName), $_.Exception)       
+            throw [ResourceGroupDoesNotExist]::new($vmResourceGroupName, $_.Exception)       
         }
         if ($errorCode -eq "InvalidParameter") {
             throw [VirtualMachineDoesNotExist]::new($VMObject, $_.Exception)
@@ -1730,6 +1787,7 @@ try {
     } else {
         Write-Host ""
         Write-Host "Getting list of VMs or VM Scale Sets matching specified criteria."
+        #Skipping heath status check as API output throttling noticed at scale and wild-cards are not accepted with Get-AzVM -Status. 
         try {
             Get-AzVM -ResourceGroupName $ResourceGroup -Name $Name
                 | Where-Object {!($_.VirtualMachineScaleSet)}
@@ -1816,6 +1874,12 @@ try {
             foreach ($vm in $rgTableObj.VirtualMachineList) {
                 try {
                     Write-Host ""
+                    #This is on best-effort basis. State can change later.
+                    if (!(IsVmAndGuestAgentUpAndHealthy -VMObject $vm)) {
+                        "Continuing to the next VM ..."
+                        $onboardingCounters.Skipped +=1
+                        continue
+                    }
                     $vm = &$sb_vm -vmObj $vm
                     $vm = &$sb_da -vmObj $vm
                     Write-Host "$(FormatVmIdentifier -VMObject $vm) : Successfully onboarded VM insights"
