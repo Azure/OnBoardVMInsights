@@ -1264,7 +1264,7 @@ function UpgradeVmssExtensionManualUpdateEnabled {
         $healthstatus = $scaleSetInstance.InstanceView.Statuses.Code
 
         if (!($healthstatus -contains 'ProvisioningState/succeeded' -and $healthstatus -contains 'PowerState/running')) {
-            Write-Host "VMSS instance $scaleSetInstanceName, $i of $instanceCount is not operational. State = $healthstatus"
+            Write-Host "VMSS instance $scaleSetInstanceName, $i of $instanceCount is not operational. State = $($scaleSetInstance.InstanceView.Statuses.DisplayStatus)"
             Write-Host "Continuing ..."
             $InstanceUpgradeFailCounter.Value += 1
             continue
