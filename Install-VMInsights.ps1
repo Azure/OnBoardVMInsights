@@ -1409,6 +1409,29 @@ function UpdateVMssExtension {
     }
 }
 
+function IsUserManagedIdentityAlreadyAssigned {
+    <#
+	.SYNOPSIS
+	Checking if User Assigning Managed Identity is already assigned to VM/VMSS
+	#>
+    [CmdletBinding(SupportsShouldProcess = $True, ConfirmImpact = 'Medium')]
+    param
+    (
+        [Parameter(Mandatory = $True)]
+        [String[]] 
+        $AlreadyAssignedIdentityIdList,
+        [Parameter(Mandatory = $True)]
+        [String]
+        $IdentityIdToAssign
+    )
+
+    if ($AlreadyAssignedIdentityIdList -contains $IdentityIdToAssign) {
+        return $True
+    }
+
+    return $False
+}
+
 function AssignVmssUserManagedIdentity {
     <#
 	.SYNOPSIS
@@ -1427,7 +1450,7 @@ function AssignVmssUserManagedIdentity {
     $vmssResourceGroupName = $VMssObject.ResourceGroupName
 
     $keys = $VMssObject.Identity.UserAssignedIdentities.Keys
-    if ($null -ne $keys -and $keys -contains $UserAssignedManagedIdentityObject.Id) {
+    if ($null -ne $keys -and $(IsUserManagedIdentityAlreadyAssigned -AlreadyAssignedIdentityIdList $keys -IdentityIdToAssign $UserAssignedManagedIdentityObject.Id)) {
         Write-Host "$vmsslogheader : User Assigned Managed Identity $userAssignedManagedIdentityName already assigned."
         return $VMssObject
     }
@@ -1488,7 +1511,7 @@ function AssignVmUserManagedIdentity {
     $vmResourceGroupName = $VMObject.ResourceGroupName 
     
     $keys = $VMObject.Identity.UserAssignedIdentities.Keys
-    if ($null -ne $keys -and $keys -contains $UserAssignedManagedIdentityObject.Id) {
+    if ($null -ne $keys -and $(IsUserManagedIdentityAlreadyAssigned -AlreadyAssignedIdentityIdList $keys -IdentityIdToAssign $UserAssignedManagedIdentityObject.Id)) {
         Write-Host "$vmlogheader : User Assigned Managed Identity $userAssignedManagedIdentityName already assigned."
         return $VMObject
     }
