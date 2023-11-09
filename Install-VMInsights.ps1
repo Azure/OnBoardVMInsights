@@ -1412,7 +1412,7 @@ function UpdateVMssExtension {
 function IsUserManagedIdentityAlreadyAssigned {
     <#
 	.SYNOPSIS
-	Checking if User Assigning Managed Identity is already assigned to VM/VMSS
+	Checking if User Assigned Managed Identity is already assigned to VM/VMSS
 	#>
     [CmdletBinding(SupportsShouldProcess = $True, ConfirmImpact = 'Medium')]
     param
@@ -1435,7 +1435,7 @@ function IsUserManagedIdentityAlreadyAssigned {
 function AssignVmssUserManagedIdentity {
     <#
 	.SYNOPSIS
-	Checking if User Assigning Managed Identity is already assigned to VMSS, if not assigning it
+	Checking if User Assigned Managed Identity is already assigned to VMSS, if not assigning it
 	#>
     [CmdletBinding(SupportsShouldProcess = $True, ConfirmImpact = 'Medium')]
     param
@@ -1496,7 +1496,7 @@ function AssignVmssUserManagedIdentity {
 function AssignVmUserManagedIdentity {
      <#
 	.SYNOPSIS
-	Checking if User Assigning Managed Identity is already assigned to VM, if not assigning it
+	Checking if User Assigned Managed Identity is already assigned to VM, if not assigning it
     #>
     [CmdletBinding(SupportsShouldProcess = $True, ConfirmImpact = 'Medium')]
     param
