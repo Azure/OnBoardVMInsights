@@ -1427,7 +1427,7 @@ function AssignVmssUserManagedIdentity {
     $vmssResourceGroupName = $VMssObject.ResourceGroupName
 
     $keys = $VMssObject.Identity.UserAssignedIdentities.Keys
-    if ($null -ne $keys -and $keys.contains($UserAssignedManagedIdentityObject.Id)) {
+    if ($null -ne $keys -and $keys -contains $UserAssignedManagedIdentityObject.Id) {
         Write-Host "$vmsslogheader : User Assigned Managed Identity $userAssignedManagedIdentityName already assigned."
         return $VMssObject
     }
@@ -1488,7 +1488,7 @@ function AssignVmUserManagedIdentity {
     $vmResourceGroupName = $VMObject.ResourceGroupName 
     
     $keys = $VMObject.Identity.UserAssignedIdentities.Keys
-    if ($null -ne $keys -and $keys.contains($UserAssignedManagedIdentityObject.Id)) {
+    if ($null -ne $keys -and $keys -contains $UserAssignedManagedIdentityObject.Id) {
         Write-Host "$vmlogheader : User Assigned Managed Identity $userAssignedManagedIdentityName already assigned."
         return $VMObject
     }
