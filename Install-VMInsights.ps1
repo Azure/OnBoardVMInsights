@@ -409,19 +409,22 @@ function IsVmAndGuestAgentUpAndHealthy {
     try {
         $vmResourceGroupName = $VMObject.ResourceGroupName
         $vmlogheader = FormatVmIdentifier -VMObject $VMObject
-        $vmStatus = Get-AzVm -ResourceGroupName $vmResourceGroupName -Name $VMObject.Name -Status
-        $guestAgentHealthCode = $vmStatus.VMAgent.Statuses.Code
-        $vmhealthStatusCode = $vmStatus.Statuses.Code
-        if ($vmhealthStatusCode -contains 'ProvisioningState/succeeded' -and $vmhealthStatusCode -contains 'PowerState/running' -and $guestAgentHealthCode -contains 'ProvisioningState/succeeded') {
-            return $True
-        }
         
+        $vmWithStatus = Get-AzVm -ResourceGroupName $vmResourceGroupName -Name $VMObject.Name -Status
+        
+        $vmhealthStatusCode = $vmWithStatus.Statuses.Code
         if (!($vmhealthStatusCode -contains 'ProvisioningState/succeeded' -and $vmhealthStatusCode -contains 'PowerState/running')) {
-            Write-Host "$vmlogheader : Virtual Machine is not operational - $($vmStatus.Statuses.DisplayStatus)"
-        } else {
-            Write-Host "$vmlogheader : Guest Agent is not healthy - $($vmStatus.VMAgent.Statuses.DisplayStatus)"
+            Write-Host "$vmlogheader : Virtual Machine is not operational - $($vmWithStatus.Statuses.DisplayStatus)"
+            return $False
         }
-        return $False
+
+        $guestAgentHealthCode = $vmWithStatus.VMAgent.Statuses.Code
+        if (!($guestAgentHealthCode -contains 'ProvisioningState/succeeded')) {
+            Write-Host "$vmlogheader : Guest Agent is not healthy - $($vmWithStatus.VMAgent.Statuses.DisplayStatus)"
+            return $False
+        }
+
+        return $True
     } catch [Microsoft.Azure.Commands.Compute.Common.ComputeCloudException] {
         $errorCode = ExtractExceptionErrorCode -ErrorRecord $_
         if ($errorCode -eq "ResourceNotFound") { 
@@ -429,7 +432,7 @@ function IsVmAndGuestAgentUpAndHealthy {
         }
 
         if ($errorCode -eq "ResourceGroupNotFound") {
-            throw [ResourceGroupDoesNotExist]::new($vmResourceGroupName ,$_.Exception)  
+            throw [ResourceGroupDoesNotExist]::new($vmResourceGroupName, $_.Exception)  
         }
 
         throw [VirtualMachineUnknownException]::new($VMObject, "Failed to get status of virtual machine", $_.Exception)
@@ -1409,7 +1412,7 @@ function UpdateVMssExtension {
 function AssignVmssUserManagedIdentity {
     <#
 	.SYNOPSIS
-	Checking if User Assigning Managed Identity is already assigned to VMSS, if not Assigning it.
+	Checking if User Assigning Managed Identity is already assigned to VMSS, if not assigning it
 	#>
     [CmdletBinding(SupportsShouldProcess = $True, ConfirmImpact = 'Medium')]
     param
@@ -1423,11 +1426,10 @@ function AssignVmssUserManagedIdentity {
     $vmsslogheader = FormatVmssIdentifier -VMssObject $VmssObject
     $vmssResourceGroupName = $VMssObject.ResourceGroupName
 
-    foreach ($uami in $VMssObject.Identity.UserAssignedIdentities.Keys) {
-        if ($uami -eq $UserAssignedManagedIdentityObject.Id) {
-            Write-Host "$vmsslogheader : User Assigned Managed Identity $userAssignedManagedIdentityName already assigned."
-            return $VMssObject
-        }
+    $keys = $VMssObject.Identity.UserAssignedIdentities.Keys
+    if ($null -ne $keys -and $keys.contains($UserAssignedManagedIdentityObject.Id)) {
+        Write-Host "$vmsslogheader : User Assigned Managed Identity $userAssignedManagedIdentityName already assigned."
+        return $VMssObject
     }
 
     if (!($PSCmdlet.ShouldProcess($vmsslogheader, "Assign User Assigned Managed Identity $userAssignedManagedIdentityName"))) {
@@ -1471,7 +1473,7 @@ function AssignVmssUserManagedIdentity {
 function AssignVmUserManagedIdentity {
      <#
 	.SYNOPSIS
-	Checking if User Assigning Managed Identity is already assigned to VM, if not Assigning it.	
+	Checking if User Assigning Managed Identity is already assigned to VM, if not assigning it
     #>
     [CmdletBinding(SupportsShouldProcess = $True, ConfirmImpact = 'Medium')]
     param
@@ -1485,11 +1487,10 @@ function AssignVmUserManagedIdentity {
     $vmlogheader = FormatVmIdentifier -VMObject $VMObject
     $vmResourceGroupName = $VMObject.ResourceGroupName 
     
-    foreach ($uami in $VMObject.Identity.UserAssignedIdentities.Keys) {
-        if ($uami -eq $UserAssignedManagedIdentityObject.Id) {
-            Write-Host "$vmlogheader : User Assigned Managed Identity $userAssignedManagedIdentityName already assigned."
-            return $VMObject
-        }
+    $keys = $VMObject.Identity.UserAssignedIdentities.Keys
+    if ($null -ne $keys -and $keys.contains($UserAssignedManagedIdentityObject.Id)) {
+        Write-Host "$vmlogheader : User Assigned Managed Identity $userAssignedManagedIdentityName already assigned."
+        return $VMObject
     }
 
     if (!($PSCmdlet.ShouldProcess($vmlogheader, "Assign User Assigned Managed Identity $userAssignedManagedIdentityName"))) {
@@ -1876,7 +1877,7 @@ try {
                     Write-Host ""
                     #This is on best-effort basis. State can change later.
                     if (!(IsVmAndGuestAgentUpAndHealthy -VMObject $vm)) {
-                        "Continuing to the next VM ..."
+                        Write-Host "Continuing to the next VM ..."
                         $onboardingCounters.Skipped +=1
                         continue
                     }
