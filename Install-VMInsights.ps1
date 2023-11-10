@@ -1427,7 +1427,7 @@ function AssignVmssUserManagedIdentity {
     $vmssResourceGroupName = $VMssObject.ResourceGroupName
                                   
     if ($VMssObject.Identity.UserAssignedIdentities.Keys -contains $UserAssignedManagedIdentityObject.Id) {
-        Write-Host "$vmlogheader : User Assigned Managed Identity $userAssignedManagedIdentityName already assigned."
+        Write-Host "$vmsslogheader : User Assigned Managed Identity $userAssignedManagedIdentityName already assigned."
         return $VMssObject
     }
 
