@@ -1409,26 +1409,6 @@ function UpdateVMssExtension {
     }
 }
 
-function IsUserManagedIdentityPreAssigned {
-    <#
-	.SYNOPSIS
-	Checking if User Assigned Managed Identity is already assigned to VM/VMSS
-	#>
-    [CmdletBinding(SupportsShouldProcess = $True, ConfirmImpact = 'Medium')]
-    param
-    (
-        [Parameter(Mandatory = $True)]
-        [System.Collections.ArrayList]
-        $PreAssignedIdentityIdList,
-        [Parameter(Mandatory = $True)]
-        [String]
-        $IdentityId
-    )
-
-    return ($PreAssignedIdentityIdList -contains $Identity)
-
-}
-
 function AssignVmssUserManagedIdentity {
     <#
 	.SYNOPSIS
@@ -1445,10 +1425,8 @@ function AssignVmssUserManagedIdentity {
     $userAssignedManagedIdentityName = $UserAssignedManagedIdentityObject.Name
     $vmsslogheader = FormatVmssIdentifier -VMssObject $VmssObject
     $vmssResourceGroupName = $VMssObject.ResourceGroupName
-
-    $preAssignedUserIdentityList = [System.Collections.ArrayList]::new()                                         
-    $VMssObject.Identity.UserAssignedIdentities.GetEnumerator() | ForEach-Object { $PreAssignedUserIdentityList.add($_.Key.ToString()) > $null }
-    if (IsUserManagedIdentityPreAssigned -PreAssignedIdentityIdList $preAssignedUserIdentityList -IdentityIdToAssign $UserAssignedManagedIdentityObject.Id) {
+                                  
+    if ($VMssObject.Identity.UserAssignedIdentities.Keys -contains $UserAssignedManagedIdentityObject.Id) {
         Write-Host "$vmlogheader : User Assigned Managed Identity $userAssignedManagedIdentityName already assigned."
         return $VMssObject
     }
@@ -1508,9 +1486,7 @@ function AssignVmUserManagedIdentity {
     $vmlogheader = FormatVmIdentifier -VMObject $VMObject
     $vmResourceGroupName = $VMObject.ResourceGroupName 
     
-    $preAssignedUserIdentityList = [System.Collections.ArrayList]::new()                                         
-    $VMObject.Identity.UserAssignedIdentities.GetEnumerator() | ForEach-Object { $PreAssignedUserIdentityList.add($_.Key.ToString()) > $null }                                                        
-    if (IsUserManagedIdentityPreAssigned -PreAssignedIdentityIdList $preAssignedUserIdentityList -IdentityIdToAssign $UserAssignedManagedIdentityObject.Id) {
+    if ($VMObject.Identity.UserAssignedIdentities.Keys -contains $UserAssignedManagedIdentityObject.Id) {
         Write-Host "$vmlogheader : User Assigned Managed Identity $userAssignedManagedIdentityName already assigned."
         return $VMObject
     }
