@@ -1299,7 +1299,7 @@ function UpgradeVmssExtensionManualUpdateEnabled {
     }
 
     $i = 0
-    $instanceCount = $scaleSetInstances.Length
+    $instanceCount = $scaleSetInstances.Count
     $unexpectedUpgradeExceptionCounter = 0
     $unexpectedUpgradeExceptionLimit = 5 
     
@@ -1409,7 +1409,7 @@ function UpdateVMssExtension {
     }
 }
 
-function IsUserManagedIdentityAlreadyAssigned {
+function IsUserManagedIdentityPreAssigned {
     <#
 	.SYNOPSIS
 	Checking if User Assigned Managed Identity is already assigned to VM/VMSS
@@ -1418,18 +1418,15 @@ function IsUserManagedIdentityAlreadyAssigned {
     param
     (
         [Parameter(Mandatory = $True)]
-        [String[]] 
-        $AlreadyAssignedIdentityIdList,
+        [System.Collections.ArrayList]
+        $PreAssignedIdentityIdList,
         [Parameter(Mandatory = $True)]
         [String]
-        $IdentityIdToAssign
+        $IdentityId
     )
 
-    if ($AlreadyAssignedIdentityIdList -contains $IdentityIdToAssign) {
-        return $True
-    }
+    return ($PreAssignedIdentityIdList -contains $Identity)
 
-    return $False
 }
 
 function AssignVmssUserManagedIdentity {
@@ -1449,9 +1446,10 @@ function AssignVmssUserManagedIdentity {
     $vmsslogheader = FormatVmssIdentifier -VMssObject $VmssObject
     $vmssResourceGroupName = $VMssObject.ResourceGroupName
 
-    $keys = $VMssObject.Identity.UserAssignedIdentities.Keys
-    if ($null -ne $keys -and $(IsUserManagedIdentityAlreadyAssigned -AlreadyAssignedIdentityIdList $keys -IdentityIdToAssign $UserAssignedManagedIdentityObject.Id)) {
-        Write-Host "$vmsslogheader : User Assigned Managed Identity $userAssignedManagedIdentityName already assigned."
+    $preAssignedUserIdentityList = [System.Collections.ArrayList]::new()                                         
+    $VMssObject.Identity.UserAssignedIdentities.GetEnumerator() | ForEach-Object { $PreAssignedUserIdentityList.add($_.Key.ToString()) > $null }
+    if (IsUserManagedIdentityPreAssigned -PreAssignedIdentityIdList $preAssignedUserIdentityList -IdentityIdToAssign $UserAssignedManagedIdentityObject.Id) {
+        Write-Host "$vmlogheader : User Assigned Managed Identity $userAssignedManagedIdentityName already assigned."
         return $VMssObject
     }
 
@@ -1510,8 +1508,9 @@ function AssignVmUserManagedIdentity {
     $vmlogheader = FormatVmIdentifier -VMObject $VMObject
     $vmResourceGroupName = $VMObject.ResourceGroupName 
     
-    $keys = $VMObject.Identity.UserAssignedIdentities.Keys
-    if ($null -ne $keys -and $(IsUserManagedIdentityAlreadyAssigned -AlreadyAssignedIdentityIdList $keys -IdentityIdToAssign $UserAssignedManagedIdentityObject.Id)) {
+    $preAssignedUserIdentityList = [System.Collections.ArrayList]::new()                                         
+    $VMObject.Identity.UserAssignedIdentities.GetEnumerator() | ForEach-Object { $PreAssignedUserIdentityList.add($_.Key.ToString()) > $null }                                                        
+    if (IsUserManagedIdentityPreAssigned -PreAssignedIdentityIdList $preAssignedUserIdentityList -IdentityIdToAssign $UserAssignedManagedIdentityObject.Id) {
         Write-Host "$vmlogheader : User Assigned Managed Identity $userAssignedManagedIdentityName already assigned."
         return $VMObject
     }
@@ -1858,13 +1857,13 @@ try {
         Write-Host "ResourceGroup : $rg"
 
 
-        if ($vmList.Length -gt 0) {
+        if ($vmList.Count -gt 0) {
             $vmList = Sort-Object -Property Name -InputObject $vmList
             $vmList | ForEach-Object { Write-Host "  $($_.Name)" }
             $rgTableObj.VirtualMachineList = $vmList
         }
         
-        if ($vmssList.Length -gt 0) {
+        if ($vmssList.Count -gt 0) {
             $vmssList = Sort-Object -Property Name -InputObject $vmssList
             $vmssList | ForEach-Object { Write-Host "  $($_.Name) - Upgrade mode $($_.UpgradePolicy.Mode)"; `
                                          if ($_.UpgradePolicy.Mode -eq "Manual") {$ManualUpgrade+=1}
@@ -1977,7 +1976,7 @@ try {
             Write-Host "Continuing to the next Resource Group ..."
         } catch [CustomerSkip] {
             Write-Host "Onboarding operation aborted"
-            $onboardingCounters.Skipped += $rgTableObj.VirtualMachineList.Length + $rgTableObj.VirtualMachineScaleSetList.Length
+            $onboardingCounters.Skipped += $rgTableObj.VirtualMachineList.Count + $rgTableObj.VirtualMachineScaleSetList.Count
         }
     }
 }
