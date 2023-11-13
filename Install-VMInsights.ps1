@@ -222,6 +222,11 @@ class VirtualMachineScaleSetOperationFailed : VirtualMachineScaleSetException {
                                           [String]$errorMessage) : base($vmssObject, $errorMessage, $null) {}
 }
 
+class VirtualMachineScaleSetExtensionError : VirtualMachineScaleSetException {
+    VirtualMachineScaleSetExtensionError ([Microsoft.Azure.Commands.Compute.Automation.Models.PSVirtualMachineScaleSet]$vmssObject,
+                                        [Exception]$innerException) : base($vmssObject, "VMSS extension error`n$($innerException.Message)", $innerException) {}
+}
+
 class DataCollectionRuleForbidden : FatalException {
     DataCollectionRuleForbidden([String]$dcrResourceId,
                                 [Exception]$innerException) : base("$dcrResourceId : Access to Data Collection Rule is forbidden", $innerException) {}
@@ -1360,9 +1365,14 @@ function UpgradeVmssExtensionManualUpdateEnabled {
 
             if ($errorCode -eq "OperationNotAllowed") {
                 Write-Host "$vmsslogheader : Failed to locate VMSS instance name $scaleSetInstanceName. Continuing ..."
+            } elseif ($errorCode -eq "VMExtensionHandlerNonTransientError") {
+                Write-Host "$vmsslogheader : Failed to upgrade extension for VMSS instance name $scaleSetInstanceName, $i of $instanceCount."
+                VerboseDisplayException -ErrorRecord $_
+                Write-Host "Continuing ..."
             } else {
-                Write-Host "$vmsslogheader : Failed to upgrade VMSS instance name $scaleSetInstanceName, $i of $instanceCount. ErrorCode $errorCode. Continuing ..." 
+                Write-Host "$vmsslogheader : Failed to upgrade VMSS instance name $scaleSetInstanceName, $i of $instanceCount. ErrorCode $errorCode." 
                 DisplayException -ErrorRecord $_
+                Write-Host "Continuing ..."
                 $unexpectedUpgradeExceptionCounter += 1
             }
             
@@ -1414,7 +1424,11 @@ function UpdateVMssExtension {
         if ($errorCode -eq "ResourceGroupNotFound") {
             throw [ResourceGroupDoesNotExist]::new($($VMssObject.ResourceGroupName), $_.Exception)       
         }
-            
+        
+        if ($errorCode -eq "VMExtensionHandlerNonTransientError") {
+            throw [VirtualMachineScaleSetExtensionError]::new($VMssObject, $_.Exception)   
+        }
+
         throw [VirtualMachineScaleSetUnknownException]::new($VMssObject, "Failed to update VMSS", $_.Exception)
     }
 }
