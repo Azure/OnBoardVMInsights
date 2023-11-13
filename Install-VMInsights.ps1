@@ -200,6 +200,12 @@ class VirtualMachinePoweredDown : VirtualMachineException {
                               [Exception]$innerException) : base($vmObject, "VM is powered down", $innerException) {}
 }
 
+class VirtualMachineExtensionError : VirtualMachineException {
+    VirtualMachineExtensionError ([Microsoft.Azure.Commands.Compute.Models.PSVirtualMachine]$vmObject,
+                                [String]$extension,
+                                [Exception]$innerException) : base($vmObject, "VM extension error for $extension`n$($innerException.Message)", $innerException) {}
+}
+
 class VirtualMachineScaleSetUnknownException : VirtualMachineScaleSetException {
     VirtualMachineScaleSetUnknownException([Microsoft.Azure.Commands.Compute.Automation.Models.PSVirtualMachineScaleSet]$vmssObject,
                                            [String]$errorMessage,
@@ -1259,6 +1265,10 @@ function SetVMExtension {
             throw [ResourceGroupDoesNotExist]::new($VMObject.ResourceGroupName, $_.Exception)       
         } 
         
+        if ($errorCode -eq "VMExtensionHandlerNonTransientError") {
+            throw [VirtualMachineExtensionError]::new($VMObject, "$($Publisher).$($ExtensionType)", $_.Exception)       
+        }
+
         throw [VirtualMachineUnknownException]::new($VMObject, "Failed to install/update extension $ExtensionName, type = $($Publisher).$($ExtensionType)", $_.Exception)
     }
 }
