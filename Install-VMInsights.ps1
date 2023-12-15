@@ -1,34 +1,42 @@
 <#PSScriptInfo
 
-.VERSION 1.10
+.VERSION 1.10.1
 
 .GUID 76a487ef-47bf-4537-8942-600a66a547b1
 
 .AUTHOR vpidatala@microsoft.com
 
-.COMPANYNAME
+.COMPANYNAME Microsoft Corporation
 
-.COPYRIGHT
+.COPYRIGHT Microsoft Corporation. All rights reserved.
 
-.TAGS
+.TAGS 
 
-.LICENSEURI
+.LICENSEURI 
 
-.PROJECTURI
+.PROJECTURI 
 
-.ICONURI
+.ICONURI 
 
-.EXTERNALMODULEDEPENDENCIES
+.EXTERNALMODULEDEPENDENCIES 
 
-.REQUIREDSCRIPTS
+.REQUIREDSCRIPTS 
 
-.EXTERNALSCRIPTDEPENDENCIES
+.EXTERNALSCRIPTDEPENDENCIES 
 
 .RELEASENOTES
+Adds support for using Azure Monitor Agent (AMA).
 
-.PRIVATEDATA
+#> 
 
-#>
+#Requires -Module @{ ModuleName = 'Az.Compute'; ModuleVersion = '7.1.0' }
+#Requires -Module @{ ModuleName = 'Az.Resources'; ModuleVersion = '6.12.1' }
+#Requires -Module @{ ModuleName = 'Az.Accounts'; ModuleVersion = '2.13.2' }
+#Requires -Module @{ ModuleName = 'Az.PolicyInsights'; ModuleVersion = '1.6.4' }
+#Requires -Module @{ ModuleName = 'Az.Monitor'; ModuleVersion = '5.0.0' }
+#Requires -Module @{ ModuleName = 'Az.ManagedServiceIdentity'; ModuleVersion = '1.2.0' }
+
+
 
 <#
 .SYNOPSIS
@@ -168,11 +176,15 @@ class FatalException : System.Exception {
 }
 
 class VirtualMachineException : System.Exception {
-    VirtualMachineException([Microsoft.Azure.Commands.Compute.Models.PSVirtualMachine]$vmObject, [String]$errorMessage, [Exception]$innerException)  : base("$(FormatVmIdentifier -VMObject $vmObject) : $errorMessage", $innerException) {}
+    VirtualMachineException(<#[Microsoft.Azure.Commands.Compute.Models.PSVirtualMachine]#>$vmObject,
+                            [String]$errorMessage,
+                            [Exception]$innerException) : base("$(FormatVmIdentifier -VMObject $vmObject) : $errorMessage", $innerException) {}
 }
 
 class VirtualMachineScaleSetException : System.Exception {
-    VirtualMachineScaleSetException([Microsoft.Azure.Commands.Compute.Automation.Models.PSVirtualMachineScaleSet]$vmssObject, [String]$errorMessage, [Exception]$innerException)  : base("$(FormatVmssIdentifier -VMssObject $vmssObject) : $errorMessage", $innerException) {}
+    VirtualMachineScaleSetException(<#[Microsoft.Azure.Commands.Compute.Automation.Models.PSVirtualMachineScaleSet]#>$vmssObject,
+                                    [String]$errorMessage,
+                                    [Exception]$innerException) : base("$(FormatVmssIdentifier -VMssObject $vmssObject) : $errorMessage", $innerException) {}
 }
 
 class ResourceGroupDoesNotExist : System.Exception {
@@ -180,51 +192,51 @@ class ResourceGroupDoesNotExist : System.Exception {
 }
 
 class VirtualMachineUnknownException : VirtualMachineException {
-    VirtualMachineUnknownException([Microsoft.Azure.Commands.Compute.Models.PSVirtualMachine]$vmObject,
+    VirtualMachineUnknownException(<#[Microsoft.Azure.Commands.Compute.Models.PSVirtualMachine]#>$vmObject,
                                    [String]$errorMessage,
                                    [Exception]$innerException) : base($vmObject, $errorMessage, $innerException) {}
 }
 
 class VirtualMachineDoesNotExist : VirtualMachineException {
-    VirtualMachineDoesNotExist ([Microsoft.Azure.Commands.Compute.Models.PSVirtualMachine]$vmObject,
+    VirtualMachineDoesNotExist (<#[Microsoft.Azure.Commands.Compute.Models.PSVirtualMachine]#>$vmObject,
                                 [Exception]$innerException) : base($vmObject, "VM does not exist", $innerException) {}
 }
 
 class VirtualMachineOperationFailed : VirtualMachineException {
-    VirtualMachineOperationFailed([Microsoft.Azure.Commands.Compute.Models.PSVirtualMachine]$vmObject,
+    VirtualMachineOperationFailed(<#[Microsoft.Azure.Commands.Compute.Models.PSVirtualMachine]#>$vmObject,
                                   [String]$errorMessage) : base($vmObject, $errorMessage, $null) {}
 }
 
 class VirtualMachinePoweredDown : VirtualMachineException {
-    VirtualMachinePoweredDown([Microsoft.Azure.Commands.Compute.Models.PSVirtualMachine]$vmObject,
+    VirtualMachinePoweredDown(<#[Microsoft.Azure.Commands.Compute.Models.PSVirtualMachine]#>$vmObject,
                               [Exception]$innerException) : base($vmObject, "VM is powered down", $innerException) {}
 }
 
 class VirtualMachineExtensionError : VirtualMachineException {
-    VirtualMachineExtensionError ([Microsoft.Azure.Commands.Compute.Models.PSVirtualMachine]$vmObject,
-                                [String]$extension,
-                                [Exception]$innerException) : base($vmObject, "VM extension error for $extension`n$($innerException.Message)", $innerException) {}
+    VirtualMachineExtensionError (<#[Microsoft.Azure.Commands.Compute.Models.PSVirtualMachine]#>$vmObject,
+                                  [String]$extension,
+                                  [Exception]$innerException) : base($vmObject, "VM extension error for $extension`n$($innerException.Message)", $innerException) {}
 }
 
 class VirtualMachineScaleSetUnknownException : VirtualMachineScaleSetException {
-    VirtualMachineScaleSetUnknownException([Microsoft.Azure.Commands.Compute.Automation.Models.PSVirtualMachineScaleSet]$vmssObject,
+    VirtualMachineScaleSetUnknownException(<#[Microsoft.Azure.Commands.Compute.Automation.Models.PSVirtualMachineScaleSet]#>$vmssObject,
                                            [String]$errorMessage,
                                            [Exception]$innerException) : base($vmssObject, $errorMessage, $innerException) {}
 }
 
 class VirtualMachineScaleSetDoesNotExist : VirtualMachineScaleSetException {
-    VirtualMachineScaleSetDoesNotExist ([Microsoft.Azure.Commands.Compute.Automation.Models.PSVirtualMachineScaleSet]$vmssObject,
+    VirtualMachineScaleSetDoesNotExist (<#[Microsoft.Azure.Commands.Compute.Automation.Models.PSVirtualMachineScaleSet]#>$vmssObject,
                                         [Exception]$innerException) : base($vmssObject, "VMSS does not exist", $innerException) {}
 }
 
 class VirtualMachineScaleSetOperationFailed : VirtualMachineScaleSetException {
-    VirtualMachineScaleSetOperationFailed([Microsoft.Azure.Commands.Compute.Automation.Models.PSVirtualMachineScaleSet]$vmssObject,
+    VirtualMachineScaleSetOperationFailed(<#[Microsoft.Azure.Commands.Compute.Automation.Models.PSVirtualMachineScaleSet]#>$vmssObject,
                                           [String]$errorMessage) : base($vmssObject, $errorMessage, $null) {}
 }
 
 class VirtualMachineScaleSetExtensionError : VirtualMachineScaleSetException {
-    VirtualMachineScaleSetExtensionError ([Microsoft.Azure.Commands.Compute.Automation.Models.PSVirtualMachineScaleSet]$vmssObject,
-                                        [Exception]$innerException) : base($vmssObject, "VMSS extension error`n$($innerException.Message)", $innerException) {}
+    VirtualMachineScaleSetExtensionError (<#[Microsoft.Azure.Commands.Compute.Automation.Models.PSVirtualMachineScaleSet]#>$vmssObject,
+                                          [Exception]$innerException) : base($vmssObject, "VMSS extension error`n$($innerException.Message)", $innerException) {}
 }
 
 class DataCollectionRuleForbidden : FatalException {
@@ -249,7 +261,7 @@ class UserAssignedManagedIdentityDoesNotExist : FatalException {
 
 class UserAssignedManagedIdentityResourceGroupDoesNotExist : FatalException {
     UserAssignedManagedIdentityResourceGroupDoesNotExist($uamiResourceGroup,
-                                            [Exception]$innerException) : base("$uamiResourceGroup : User Assigned Managed Identity Resource Group does not exist.", $innerException) {}
+                                                         [Exception]$innerException) : base("$uamiResourceGroup : User Assigned Managed Identity Resource Group does not exist.", $innerException) {}
 }
 
 class UserAssignedManagedIdentityUnknownException : FatalException {
@@ -373,6 +385,25 @@ function ExtractExceptionErrorCode {
     )
 
     if ($ErrorRecord.Exception.Message -match 'ErrorCode *: *([^\s]+)') {
+        return $matches[1]
+    }
+
+    return $null
+}
+
+function ExtractExceptionPrefixErrCode {
+    <#
+	.SYNOPSIS
+	Extract error code from the Cloud Exception. 
+	#>
+    param
+    (
+        [Parameter(Mandatory=$True)]
+        [System.Management.Automation.ErrorRecord]
+        $ErrorRecord
+    )
+
+    if ($ErrorRecord.Exception.Message -match '^[[]([^]]+)[]] *:') {
         return $matches[1]
     }
 
@@ -1695,10 +1726,11 @@ try {
         try {
             Write-Verbose "Validating ($UserAssignedManagedIdentityResourceGroup, $UserAssignedManagedIdentityName)"
             Set-Variable -WhatIf:$False -Confirm:$False -Name UserAssignedManagedIdentityObject -Option Constant -Value `
-                                $(Get-AzUserAssignedIdentity -Name $UserAssignedManagedIdentityName `
-                                                                -ResourceGroupName $UserAssignedManagedIdentityResourceGroup)
+                            (Get-AzUserAssignedIdentity -Name $UserAssignedManagedIdentityName `
+                                                        -ResourceGroupName $UserAssignedManagedIdentityResourceGroup `
+                                                        -ErrorAction Stop)
         } catch {
-            $errorCode = ExtractExceptionErrorCode -ErrorRecord $_
+            $errorCode = ExtractExceptionPrefixErrCode -ErrorRecord $_
             if ($errorCode -eq "ResourceNotFound") {
                 throw [UserAssignedManagedIdentityDoesNotExist]::new($UserAssignedManagedIdentityName, $_.Exception)
             }
@@ -1786,15 +1818,15 @@ try {
 
         $policyAssignmentNameResources = @{}
         Get-AzPolicyState `
-            -Filter "PolicyAssignmentName eq '$PolicyAssignmentName' and ResourceType eq 'Microsoft.Compute/virtualMachines'"
+            -Filter "PolicyAssignmentName eq '$PolicyAssignmentName' and ResourceType eq 'Microsoft.Compute/virtualMachines'" `
             | ForEach-Object {
                 $policyAssignmentNameResources.Add($_.ResourceId, $True)
               }
 
         try {
             #Virtual Machines part of a VMSS will be skipped.
-            Get-AzVM -ResourceGroupName $ResourceGroup -Name $Name
-                | Where-Object {!($_.VirtualMachineScaleSet) -and $policyAssignmentNameResources.ContainsKey($_.Id)}
+            Get-AzVM -ResourceGroupName $ResourceGroup -Name $Name `
+                | Where-Object {!($_.VirtualMachineScaleSet) -and $policyAssignmentNameResources.ContainsKey($_.Id)} `
                 | ForEach-Object {
                     $onboardingCounters.Total +=1 ;
                     PopulateRgHashTableVm -Rghashtable $Rghashtable -VMObject $_
@@ -1812,8 +1844,8 @@ try {
         Write-Host "Getting list of VMs or VM Scale Sets matching specified criteria."
         #Skipping heath status check as API output throttling noticed at scale and wild-cards are not accepted with Get-AzVM -Status. 
         try {
-            Get-AzVM -ResourceGroupName $ResourceGroup -Name $Name
-                | Where-Object {!($_.VirtualMachineScaleSet)}
+            Get-AzVM -ResourceGroupName $ResourceGroup -Name $Name `
+                | Where-Object {!($_.VirtualMachineScaleSet)} `
                 | ForEach-Object { 
                     $onboardingCounters.Total +=1 ; 
                     PopulateRgHashTableVm -Rghashtable $Rghashtable -VMObject $_
@@ -1829,8 +1861,8 @@ try {
 
         try {
             #VMI does not support VMSS with flexible orchestration.
-            Get-AzVmss -ResourceGroupName $ResourceGroup -Name $Name
-                | Where-Object {$_.OrchestrationMode -ne 'Flexible'}
+            Get-AzVmss -ResourceGroupName $ResourceGroup -Name $Name `
+                | Where-Object {$_.OrchestrationMode -ne 'Flexible'} `
                 | ForEach-Object {
                     $onboardingCounters.Total +=1 ; 
                     PopulateRgHashTableVmss -RgHashTable $Rghashtable -VMssObject $_
