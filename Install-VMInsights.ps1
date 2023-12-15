@@ -25,16 +25,17 @@
 .EXTERNALSCRIPTDEPENDENCIES 
 
 .RELEASENOTES
-
+Adds support for using Azure Monitor Agent (AMA).
 
 #> 
 
-#Requires -Module @{ModuleName = 'Az.Compute'; ModuleVersion = '7.1.0'}
-#Requires -Module @{ModuleName = 'Az.Resources'; ModuleVersion = '6.12.1'}
-#Requires -Module @{ModuleName = 'Az.Accounts'; ModuleVersion = '2.13.2'}
-#Requires -Module @{ModuleName = 'Az.PolicyInsights'; ModuleVersion = '1.6.4'}
-#Requires -Module @{ModuleName = 'Az.Monitor'; ModuleVersion = '5.0.0'}
-#Requires -Module @{ModuleName = 'Az.ManagedServiceIdentity'; ModuleVersion = '1.2.0'}
+#Requires -Module @{ ModuleName = 'Az.Compute'; ModuleVersion = '7.1.0' }
+#Requires -Module @{ ModuleName = 'Az.Resources'; ModuleVersion = '6.12.1' }
+#Requires -Module @{ ModuleName = 'Az.Accounts'; ModuleVersion = '2.13.2' }
+#Requires -Module @{ ModuleName = 'Az.PolicyInsights'; ModuleVersion = '1.6.4' }
+#Requires -Module @{ ModuleName = 'Az.Monitor'; ModuleVersion = '5.0.0' }
+#Requires -Module @{ ModuleName = 'Az.ManagedServiceIdentity'; ModuleVersion = '1.2.0' }
+
 
 
 <#
