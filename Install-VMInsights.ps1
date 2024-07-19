@@ -1,6 +1,6 @@
 <#PSScriptInfo
 
-.VERSION 1.10.1
+.VERSION 1.10.2
 
 .GUID 76a487ef-47bf-4537-8942-600a66a547b1
 
@@ -25,7 +25,8 @@
 .EXTERNALSCRIPTDEPENDENCIES 
 
 .RELEASENOTES
-Adds support for using Azure Monitor Agent (AMA).
+Addressed an issue with using a User Assigned Managed Identity
+when a VM or VMSS already has a System or User Assigned Managed Identity.
 
 #> 
 
@@ -1494,13 +1495,19 @@ function AssignVmssUserManagedIdentity {
         throw [CustomerSkip]::new()
     }
 
+    $identityType = if ("$($VMssObject.Identity.Type)".StartsWith("SystemAssigned")) { "SystemAssignedUserAssigned" } else { "UserAssigned" }
+    $identityList = [System.Collections.Generic.List[string]]@($UserAssignedManagedIdentityObject.Id)
+    if ($VMssObject.Identity.UserAssignedIdentities) {
+        $identityList += $VMssObject.Identity.UserAssignedIdentities.Keys
+    }
+
     Write-Host "$vmsslogheader : Assigning User Assigned Managed Identity $userAssignedManagedIdentityName"
     try {
         $VMssObject = Update-AzVmss -VMScaleSetName $VMssObject.Name `
                                 -ResourceGroupName  $vmssResourceGroupName `
                                 -VirtualMachineScaleSet $VMssObject `
-                                -IdentityType "UserAssigned" `
-                                -IdentityID $UserAssignedManagedIdentityObject.Id `
+                                -IdentityType $identityType `
+                                -IdentityID $identityList `
                                 -Confirm:$false
         if ($VMssObject.ProvisioningState -ne "Succeeded") {
             throw [VirtualMachineOperationScaleSetFailed]::new($VMssObject, "Failed to assign User Assigned Managed Identity $userAssignedManagedIdentityName")
@@ -1554,13 +1561,19 @@ function AssignVmUserManagedIdentity {
         throw [CustomerSkip]::new()
     }
 
+    $identityType = if ("$($VMObject.Identity.Type)".StartsWith("SystemAssigned")) { "SystemAssignedUserAssigned" } else { "UserAssigned" }
+    $identityList = [System.Collections.Generic.List[string]]@($UserAssignedManagedIdentityObject.Id)
+    if ($VMObject.Identity.UserAssignedIdentities) {
+        $identityList += $VMObject.Identity.UserAssignedIdentities.Keys
+    }
+
     Write-Host "$vmlogheader : Assigning User Assigned Managed Identity $userAssignedManagedIdentityName"
 
     try {
         $result = Update-AzVM -VM $VMObject `
                                 -ResourceGroupName $vmResourceGroupName `
-                                -IdentityType "UserAssigned" `
-                                -IdentityID $UserAssignedManagedIdentityObject.Id `
+                                -IdentityType $identityType `
+                                -IdentityID $identityList `
                                 -Confirm:$false
     } catch [Microsoft.Azure.Commands.Compute.Common.ComputeCloudException] {
         $errorCode = ExtractExceptionErrorCode -ErrorRecord $_
