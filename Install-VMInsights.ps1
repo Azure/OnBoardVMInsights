@@ -1672,6 +1672,11 @@ try {
     $Rghashtable = @{}
     
     if (!$isAma) {
+        Write-Warning -WarningAction Continue `
+                      ( "The Log Analytics agent was retired on August 31, 2024. " + `
+                        "Please see our retirement announcement more details: " + `
+                        "https://azure.microsoft.com/en-us/updates?id=were-retiring-the-log-analytics-agent-in-azure-monitor-on-31-august-2024" )
+
         #Cannot validate Workspace existence with WorkspaceId, WorkspaceKey parameters.
         $local:laSettings = @{"workspaceId" = $WorkspaceId; "stopOnMultipleConnections" = "true"}
         $local:laProtectedSettings = @{"workspaceKey" = $WorkspaceKey}
@@ -1787,6 +1792,12 @@ try {
             Set-Variable -WhatIf:$False -Confirm:$False -Name sb_da -Option Constant -Value $sb_nop_block_vm
             Set-Variable -WhatIf:$False -Confirm:$False -Name sb_da_vmss -Option Constant -Value $sb_nop_block_vmss
         } else {
+
+            Write-Warning -WarningAction Continue `
+                          ( "VM Insights Map and the associated Dependency agent will be retired on June 30th, 2028. " + `
+                            "Please see our retirement guidance for more details: https://aka.ms/DependencyAgentRetirement." )
+
+
             $local:daSettings = @{"enableAMA" = "true"}
             Set-Variable -WhatIf:$False -Confirm:$False -Name daExtensionSettingsVm -Option Constant -Value `
             @{
