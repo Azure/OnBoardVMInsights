@@ -1,10 +1,10 @@
 <#PSScriptInfo
 
-.VERSION 1.10.2
+.VERSION 1.10.3
 
 .GUID 76a487ef-47bf-4537-8942-600a66a547b1
 
-.AUTHOR vpidatala@microsoft.com
+.AUTHOR mithomps@microsoft.com
 
 .COMPANYNAME Microsoft Corporation
 
@@ -25,8 +25,7 @@
 .EXTERNALSCRIPTDEPENDENCIES 
 
 .RELEASENOTES
-Addressed an issue with using a User Assigned Managed Identity
-when a VM or VMSS already has a System or User Assigned Managed Identity.
+Added retirement announcement.
 
 #> 
 
