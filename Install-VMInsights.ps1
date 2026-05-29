@@ -1471,7 +1471,8 @@ function Get-MissingUserAssignedIdentities {
     Returns names of UAMIs that are referenced but have been deleted.
     #>
 
-    [CmdletBinding()]
+    [CmdletBinding()]
+
     param(
         [Parameter(Mandatory = $True)]
         [string[]]$IdentityIds
@@ -1479,6 +1480,7 @@ function Get-MissingUserAssignedIdentities {
     
     $missingUamis = @()
     
+        $uamiName = $uamiId
     foreach ($uamiId in $IdentityIds) {
         try {
             $uamiParts = $uamiId -split '/'
@@ -1503,6 +1505,7 @@ function Get-MissingUserAssignedIdentities {
                 Write-Verbose "Unable to validate UAMI $uamiName (error: $errorCode), skipping validation"
             }
         }
+    }
     }
     
     return $missingUamis
