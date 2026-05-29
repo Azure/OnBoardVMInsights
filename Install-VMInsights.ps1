@@ -1471,7 +1471,7 @@ function Get-MissingUserAssignedIdentities {
     Returns names of UAMIs that are referenced but have been deleted.
     #>
 
-    [CmdletBinding(SupportsShouldProcess = $True, ConfirmImpact = 'Medium')]
+    [CmdletBinding()]
     param(
         [Parameter(Mandatory = $True)]
         [string[]]$IdentityIds
