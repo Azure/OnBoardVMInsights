@@ -1569,7 +1569,7 @@ function AssignVmssUserManagedIdentity {
                                 "The following UAMIs are associated with this VMSS but no longer exist: $($missingUamis -join ', '). " +
                                 "Please disassociate the deleted UAMIs from the VMSS before onboarding. " +
                                 "See: https://learn.microsoft.com/entra/identity/managed-identities-azure-resources/how-to-configure-managed-identities-scale-sets"
-                    Write-Error $errorMsg
+                    Write-Host $errorMsg
                     throw [UserAssignedManagedIdentityDoesNotExist]::new($missingUamis[0], $_.Exception)
                 }
             }
@@ -1641,7 +1641,7 @@ function AssignVmUserManagedIdentity {
                                 "The following UAMIs are associated with this VM but no longer exist: $($missingUamis -join ', '). " +
                                 "Please disassociate the deleted UAMIs from the VM before onboarding. " +
                                 "See: https://learn.microsoft.com/azure/active-directory/managed-identities-azure-resources/qs-configure-portal-windows-vm"
-                    Write-Error $errorMsg
+                    Write-Host $errorMsg
                     throw [UserAssignedManagedIdentityDoesNotExist]::new($missingUamis[0], $_.Exception)
                 }
             }
