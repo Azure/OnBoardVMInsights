@@ -1493,8 +1493,15 @@ function Get-MissingUserAssignedIdentities {
             # Try to get the UAMI - if it doesn't exist, this will throw
             $null = Get-AzUserAssignedIdentity -ResourceGroupName $uamiResourceGroup -Name $uamiName -ErrorAction Stop
         } catch {
-            Write-Verbose "UAMI no longer exists: $uamiName (ID: $uamiId)"
-            $missingUamis += $uamiName
+            $errorCode = ExtractExceptionPrefixErrCode -ErrorRecord $_
+            if ($errorCode -eq "ResourceNotFound") {
+                Write-Verbose "UAMI no longer exists: $uamiName (ID: $uamiId)"
+                $missingUamis += $uamiName
+            } else {
+                # For other errors (throttling, network, permission), log and skip validation for this UAMI
+                # Re-throwing would fail the entire operation; skipping allows the Update call to fail with its own error
+                Write-Verbose "Unable to validate UAMI $uamiName (error: $errorCode), skipping validation"
+            }
         }
     }
     
