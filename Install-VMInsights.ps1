@@ -1575,7 +1575,10 @@ function AssignVmssUserManagedIdentity {
                 if ($missingExistingUamis.Count -gt 0) {
                     $missingUamisList = $missingExistingUamis -join ', '
                     Write-Host "$vmsslogheader : Cannot assign User Assigned Managed Identity because the VMSS has invalid UAMI associations. The following UAMIs are associated with this VMSS but no longer exist: $missingUamisList. Please disassociate the deleted UAMIs from the VMSS before onboarding. See: https://learn.microsoft.com/entra/identity/managed-identities-azure-resources/how-to-configure-managed-identities-scale-sets"
-                    throw [UserAssignedManagedIdentityDoesNotExist]::new($missingUamisList, $_.Exception)
+                    
+                    # Format exception message for plural UAMIs to avoid awkward "uami1, uami2 : User Assigned Managed Identity does not exist."
+                    $exceptionUamiName = if ($missingExistingUamis.Count -eq 1) { $missingExistingUamis[0] } else { "multiple UAMIs ($missingUamisList)" }
+                    throw [UserAssignedManagedIdentityDoesNotExist]::new($exceptionUamiName, $_.Exception)
                 }
             }
             
@@ -1655,7 +1658,10 @@ function AssignVmUserManagedIdentity {
                 if ($missingExistingUamis.Count -gt 0) {
                     $missingUamisList = $missingExistingUamis -join ', '
                     Write-Host "$vmlogheader : Cannot assign User Assigned Managed Identity because the VM has invalid UAMI associations. The following UAMIs are associated with this VM but no longer exist: $missingUamisList. Please disassociate the deleted UAMIs from the VM before onboarding. See: https://learn.microsoft.com/azure/active-directory/managed-identities-azure-resources/qs-configure-portal-windows-vm"
-                    throw [UserAssignedManagedIdentityDoesNotExist]::new($missingUamisList, $_.Exception)
+                    
+                    # Format exception message for plural UAMIs to avoid awkward "uami1, uami2 : User Assigned Managed Identity does not exist."
+                    $exceptionUamiName = if ($missingExistingUamis.Count -eq 1) { $missingExistingUamis[0] } else { "multiple UAMIs ($missingUamisList)" }
+                    throw [UserAssignedManagedIdentityDoesNotExist]::new($exceptionUamiName, $_.Exception)
                 }
             }
             
