@@ -1464,6 +1464,43 @@ function UpdateVMssExtension {
     }
 }
 
+function Get-MissingUserAssignedIdentities {
+    <#
+    .SYNOPSIS
+    Validates that all User Assigned Managed Identities in the list still exist.
+    Returns names of UAMIs that are referenced but have been deleted.
+    #>
+
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory = $True)]
+        [string[]]$IdentityIds
+    )
+    
+    $missingUamis = @()
+    
+    foreach ($uamiId in $IdentityIds) {
+        try {
+            $uamiParts = $uamiId -split '/'
+            if ($uamiParts.Count -lt 9) {
+                Write-Verbose "Invalid UAMI resource ID format: $uamiId"
+                continue
+            }
+            
+            $uamiResourceGroup = $uamiParts[4]
+            $uamiName = $uamiParts[8]
+            
+            # Try to get the UAMI - if it doesn't exist, this will throw
+            $null = Get-AzUserAssignedIdentity -ResourceGroupName $uamiResourceGroup -Name $uamiName -ErrorAction Stop
+        } catch {
+            Write-Verbose "UAMI no longer exists: $uamiName (ID: $uamiId)"
+            $missingUamis += $uamiName
+        }
+    }
+    
+    return $missingUamis
+}
+
 function AssignVmssUserManagedIdentity {
     <#
 	.SYNOPSIS
@@ -1517,6 +1554,18 @@ function AssignVmssUserManagedIdentity {
     } catch [Microsoft.Azure.Commands.Compute.Common.ComputeCloudException] {
         $errorCode = ExtractExceptionErrorCode -ErrorRecord $_
         if ($errorCode -eq "FailedIdentityOperation") {
+            if ($VMssObject.Identity.UserAssignedIdentities) {
+                $missingUamis = Get-MissingUserAssignedIdentities -IdentityIds $VMssObject.Identity.UserAssignedIdentities.Keys
+                
+                if ($missingUamis.Count -gt 0) {
+                    $errorMsg = "$vmsslogheader : Cannot assign User Assigned Managed Identity because the VMSS has invalid UAMI associations. " +
+                                "The following UAMIs are associated with this VMSS but no longer exist: $($missingUamis -join ', '). " +
+                                "Please disassociate the deleted UAMIs from the VMSS before onboarding. " +
+                                "See: https://learn.microsoft.com/entra/identity/managed-identities-azure-resources/how-to-configure-managed-identities-scale-sets"
+                    Write-Error $errorMsg
+                    throw [UserAssignedManagedIdentityDoesNotExist]::new($missingUamis[0], $_.Exception)
+                }
+            }
             throw [UserAssignedManagedIdentityDoesNotExist]::new($userAssignedManagedIdentityName, $_.Exception)
         }
         if ($errorCode -eq "ResourceGroupNotFound") {
@@ -1577,6 +1626,18 @@ function AssignVmUserManagedIdentity {
     } catch [Microsoft.Azure.Commands.Compute.Common.ComputeCloudException] {
         $errorCode = ExtractExceptionErrorCode -ErrorRecord $_
         if ($errorCode -eq "FailedIdentityOperation") {
+            if ($VMObject.Identity.UserAssignedIdentities) {
+                $missingUamis = Get-MissingUserAssignedIdentities -IdentityIds $VMObject.Identity.UserAssignedIdentities.Keys
+                
+                if ($missingUamis.Count -gt 0) {
+                    $errorMsg = "$vmlogheader : Cannot assign User Assigned Managed Identity because the VM has invalid UAMI associations. " +
+                                "The following UAMIs are associated with this VM but no longer exist: $($missingUamis -join ', '). " +
+                                "Please disassociate the deleted UAMIs from the VM before onboarding. " +
+                                "See: https://learn.microsoft.com/azure/active-directory/managed-identities-azure-resources/qs-configure-portal-windows-vm"
+                    Write-Error $errorMsg
+                    throw [UserAssignedManagedIdentityDoesNotExist]::new($missingUamis[0], $_.Exception)
+                }
+            }
             throw [UserAssignedManagedIdentityDoesNotExist]::new($userAssignedManagedIdentityName, $_.Exception)
         }
         if ($errorCode -eq "ResourceGroupNotFound") {
