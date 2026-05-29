@@ -1561,14 +1561,25 @@ function AssignVmssUserManagedIdentity {
     } catch [Microsoft.Azure.Commands.Compute.Common.ComputeCloudException] {
         $errorCode = ExtractExceptionErrorCode -ErrorRecord $_
         if ($errorCode -eq "FailedIdentityOperation") {
+            # First, check if the NEW UAMI being added has been deleted
+            $missingNewUami = Get-MissingUserAssignedIdentities -IdentityIds @($UserAssignedManagedIdentityObject.Id)
+            if ($missingNewUami.Count -gt 0) {
+                Write-Host "$vmsslogheader : Cannot assign User Assigned Managed Identity '$userAssignedManagedIdentityName' because it no longer exists. The UAMI may have been deleted after the script started. Please verify the UAMI exists and try again."
+                throw [UserAssignedManagedIdentityDoesNotExist]::new($userAssignedManagedIdentityName, $_.Exception)
+            }
+            
+            # Then, check if any EXISTING UAMIs on the VMSS have been deleted
             if ($VMssObject.Identity.UserAssignedIdentities) {
-                $missingUamis = Get-MissingUserAssignedIdentities -IdentityIds $VMssObject.Identity.UserAssignedIdentities.Keys
+                $missingExistingUamis = Get-MissingUserAssignedIdentities -IdentityIds $VMssObject.Identity.UserAssignedIdentities.Keys
                 
-                if ($missingUamis.Count -gt 0) {
-                    Write-Host "$vmsslogheader : Cannot assign User Assigned Managed Identity because the VMSS has invalid UAMI associations. The following UAMIs are associated with this VMSS but no longer exist: $($missingUamis -join ', '). Please disassociate the deleted UAMIs from the VMSS before onboarding. See: https://learn.microsoft.com/entra/identity/managed-identities-azure-resources/how-to-configure-managed-identities-scale-sets"
-                    throw [UserAssignedManagedIdentityDoesNotExist]::new($missingUamis[0], $_.Exception)
+                if ($missingExistingUamis.Count -gt 0) {
+                    Write-Host "$vmsslogheader : Cannot assign User Assigned Managed Identity because the VMSS has invalid UAMI associations. The following UAMIs are associated with this VMSS but no longer exist: $($missingExistingUamis -join ', '). Please disassociate the deleted UAMIs from the VMSS before onboarding. See: https://learn.microsoft.com/entra/identity/managed-identities-azure-resources/how-to-configure-managed-identities-scale-sets"
+                    throw [UserAssignedManagedIdentityDoesNotExist]::new($missingExistingUamis[0], $_.Exception)
                 }
             }
+            
+            # If we get here, the FailedIdentityOperation error occurred for an unknown reason
+            # This could be a transient issue or a permission problem we couldn't diagnose
             throw [UserAssignedManagedIdentityDoesNotExist]::new($userAssignedManagedIdentityName, $_.Exception)
         }
         if ($errorCode -eq "ResourceGroupNotFound") {
@@ -1629,14 +1640,25 @@ function AssignVmUserManagedIdentity {
     } catch [Microsoft.Azure.Commands.Compute.Common.ComputeCloudException] {
         $errorCode = ExtractExceptionErrorCode -ErrorRecord $_
         if ($errorCode -eq "FailedIdentityOperation") {
+            # First, check if the NEW UAMI being added has been deleted
+            $missingNewUami = Get-MissingUserAssignedIdentities -IdentityIds @($UserAssignedManagedIdentityObject.Id)
+            if ($missingNewUami.Count -gt 0) {
+                Write-Host "$vmlogheader : Cannot assign User Assigned Managed Identity '$userAssignedManagedIdentityName' because it no longer exists. The UAMI may have been deleted after the script started. Please verify the UAMI exists and try again."
+                throw [UserAssignedManagedIdentityDoesNotExist]::new($userAssignedManagedIdentityName, $_.Exception)
+            }
+            
+            # Then, check if any EXISTING UAMIs on the VM have been deleted
             if ($VMObject.Identity.UserAssignedIdentities) {
-                $missingUamis = Get-MissingUserAssignedIdentities -IdentityIds $VMObject.Identity.UserAssignedIdentities.Keys
+                $missingExistingUamis = Get-MissingUserAssignedIdentities -IdentityIds $VMObject.Identity.UserAssignedIdentities.Keys
                 
-                if ($missingUamis.Count -gt 0) {
-                    Write-Host "$vmlogheader : Cannot assign User Assigned Managed Identity because the VM has invalid UAMI associations. The following UAMIs are associated with this VM but no longer exist: $($missingUamis -join ', '). Please disassociate the deleted UAMIs from the VM before onboarding. See: https://learn.microsoft.com/azure/active-directory/managed-identities-azure-resources/qs-configure-portal-windows-vm"
-                    throw [UserAssignedManagedIdentityDoesNotExist]::new($missingUamis[0], $_.Exception)
+                if ($missingExistingUamis.Count -gt 0) {
+                    Write-Host "$vmlogheader : Cannot assign User Assigned Managed Identity because the VM has invalid UAMI associations. The following UAMIs are associated with this VM but no longer exist: $($missingExistingUamis -join ', '). Please disassociate the deleted UAMIs from the VM before onboarding. See: https://learn.microsoft.com/azure/active-directory/managed-identities-azure-resources/qs-configure-portal-windows-vm"
+                    throw [UserAssignedManagedIdentityDoesNotExist]::new($missingExistingUamis[0], $_.Exception)
                 }
             }
+            
+            # If we get here, the FailedIdentityOperation error occurred for an unknown reason
+            # This could be a transient issue or a permission problem we couldn't diagnose
             throw [UserAssignedManagedIdentityDoesNotExist]::new($userAssignedManagedIdentityName, $_.Exception)
         }
         if ($errorCode -eq "ResourceGroupNotFound") {
