@@ -1468,7 +1468,7 @@ function Get-MissingUserAssignedIdentities {
     <#
     .SYNOPSIS
     Validates that all User Assigned Managed Identities in the list still exist.
-    Returns names of UAMIs that are referenced but have been deleted.
+    Returns resource IDs of UAMIs that are referenced but have been deleted.
     #>
 
     [CmdletBinding()]
@@ -1481,7 +1481,6 @@ function Get-MissingUserAssignedIdentities {
     $missingUamis = @()
 
     foreach ($uamiId in $IdentityIds) {
-        $uamiName = $uamiId
         try {
             $uamiParts = $uamiId -split '/'
             if ($uamiParts.Count -lt 9) {
@@ -1498,7 +1497,7 @@ function Get-MissingUserAssignedIdentities {
             $errorCode = ExtractExceptionPrefixErrCode -ErrorRecord $_
             if ($errorCode -eq "ResourceNotFound") {
                 Write-Verbose "UAMI no longer exists: $uamiId"
-                $missingUamis += $uamiName
+                $missingUamis += $uamiId
             } else {
                 # For other errors (throttling, network, permission), log and skip validation for this UAMI
                 # Re-throwing would fail the entire operation; skipping allows the Update call to fail with its own error
@@ -1509,6 +1508,33 @@ function Get-MissingUserAssignedIdentities {
     }
     
     return $missingUamis
+}
+
+function Format-UamiForDisplay {
+    <#
+    .SYNOPSIS
+    Formats a UAMI resource ID for user-friendly display.
+    Returns format: "name (RG: resourceGroup)" which is unique and readable.
+    #>
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory = $True)]
+        [string]$UamiId
+    )
+    
+    try {
+        $parts = $UamiId -split '/'
+        if ($parts.Count -ge 9) {
+            $resourceGroup = $parts[4]
+            $uamiName = $parts[8]
+            return "$uamiName (RG: $resourceGroup)"
+        }
+    } catch {
+        Write-Verbose "Failed to parse UAMI ID for display: $UamiId"
+    }
+    
+    # Fallback: return full ID if parsing fails
+    return $UamiId
 }
 
 function Handle-FailedIdentityOperation {
@@ -1550,7 +1576,9 @@ function Handle-FailedIdentityOperation {
         $missingExistingUamis = Get-MissingUserAssignedIdentities -IdentityIds $ExistingUamis.Keys
         
         if ($missingExistingUamis.Count -gt 0) {
-            $missingUamisList = $missingExistingUamis -join ', '
+            # Format UAMIs for readable display: "name (RG: resourceGroup)"
+            $formattedUamis = $missingExistingUamis | ForEach-Object { Format-UamiForDisplay $_ }
+            $missingUamisList = $formattedUamis -join ', '
             
             # Resource-specific documentation links
             $docLink = if ($ResourceType -eq "VMSS") {
