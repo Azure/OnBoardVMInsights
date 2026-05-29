@@ -1517,7 +1517,16 @@ function AssignVmssUserManagedIdentity {
     } catch [Microsoft.Azure.Commands.Compute.Common.ComputeCloudException] {
         $errorCode = ExtractExceptionErrorCode -ErrorRecord $_
         if ($errorCode -eq "FailedIdentityOperation") {
-            throw [UserAssignedManagedIdentityDoesNotExist]::new($userAssignedManagedIdentityName, $_.Exception)
+            try {
+                $null = Get-AzUserAssignedIdentity -ResourceGroupName $UserAssignedManagedIdentityObject.ResourceGroupName `
+                                                   -Name $userAssignedManagedIdentityName `
+                                                   -ErrorAction Stop
+            } catch {
+                if ((ExtractExceptionPrefixErrCode -ErrorRecord $_) -eq "ResourceNotFound") {
+                    throw [UserAssignedManagedIdentityDoesNotExist]::new($userAssignedManagedIdentityName, $_.Exception)
+                }
+            }
+            throw [UserAssignedManagedIdentityUnknownException]::new("$vmsslogheader : Failed to assign User Assigned Managed Identity $userAssignedManagedIdentityName due to an invalid managed identity association. Verify the managed identities associated with this VMSS and retry.", $_.Exception)
         }
         if ($errorCode -eq "ResourceGroupNotFound") {
             throw [ResourceGroupDoesNotExist]::new($vmssResourceGroupName, $_.Exception)       
@@ -1577,7 +1586,16 @@ function AssignVmUserManagedIdentity {
     } catch [Microsoft.Azure.Commands.Compute.Common.ComputeCloudException] {
         $errorCode = ExtractExceptionErrorCode -ErrorRecord $_
         if ($errorCode -eq "FailedIdentityOperation") {
-            throw [UserAssignedManagedIdentityDoesNotExist]::new($userAssignedManagedIdentityName, $_.Exception)
+            try {
+                $null = Get-AzUserAssignedIdentity -ResourceGroupName $UserAssignedManagedIdentityObject.ResourceGroupName `
+                                                   -Name $userAssignedManagedIdentityName `
+                                                   -ErrorAction Stop
+            } catch {
+                if ((ExtractExceptionPrefixErrCode -ErrorRecord $_) -eq "ResourceNotFound") {
+                    throw [UserAssignedManagedIdentityDoesNotExist]::new($userAssignedManagedIdentityName, $_.Exception)
+                }
+            }
+            throw [UserAssignedManagedIdentityUnknownException]::new("$vmlogheader : Failed to assign User Assigned Managed Identity $userAssignedManagedIdentityName due to an invalid managed identity association. Verify the managed identities associated with this VM and retry.", $_.Exception)
         }
         if ($errorCode -eq "ResourceGroupNotFound") {
             throw [ResourceGroupDoesNotExist]::new($vmResourceGroupName, $_.Exception)       
