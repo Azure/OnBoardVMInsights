@@ -1479,9 +1479,9 @@ function Get-MissingUserAssignedIdentities {
     )
     
     $missingUamis = @()
-    
-        $uamiName = $uamiId
+
     foreach ($uamiId in $IdentityIds) {
+        $uamiName = $uamiId
         try {
             $uamiParts = $uamiId -split '/'
             if ($uamiParts.Count -lt 9) {
@@ -1505,7 +1505,7 @@ function Get-MissingUserAssignedIdentities {
                 Write-Verbose "Unable to validate UAMI $uamiName (error: $errorCode), skipping validation"
             }
         }
-    }
+
     }
     
     return $missingUamis
