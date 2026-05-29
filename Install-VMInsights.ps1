@@ -1493,8 +1493,13 @@ function Get-MissingUserAssignedIdentities {
             # Try to get the UAMI - if it doesn't exist, this will throw
             $null = Get-AzUserAssignedIdentity -ResourceGroupName $uamiResourceGroup -Name $uamiName -ErrorAction Stop
         } catch {
-            Write-Verbose "UAMI no longer exists: $uamiName (ID: $uamiId)"
-            $missingUamis += $uamiName
+            $errorCode = ExtractExceptionErrorCode -ErrorRecord $_
+            if ($errorCode -eq "ResourceNotFound") {
+                Write-Verbose "UAMI no longer exists: $uamiName (ID: $uamiId)"
+                $missingUamis += $uamiName
+            } else {
+                throw
+            }
         }
     }
     
