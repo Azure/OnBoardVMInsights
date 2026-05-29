@@ -1573,8 +1573,9 @@ function AssignVmssUserManagedIdentity {
                 $missingExistingUamis = Get-MissingUserAssignedIdentities -IdentityIds $VMssObject.Identity.UserAssignedIdentities.Keys
                 
                 if ($missingExistingUamis.Count -gt 0) {
-                    Write-Host "$vmsslogheader : Cannot assign User Assigned Managed Identity because the VMSS has invalid UAMI associations. The following UAMIs are associated with this VMSS but no longer exist: $($missingExistingUamis -join ', '). Please disassociate the deleted UAMIs from the VMSS before onboarding. See: https://learn.microsoft.com/entra/identity/managed-identities-azure-resources/how-to-configure-managed-identities-scale-sets"
-                    throw [UserAssignedManagedIdentityDoesNotExist]::new($missingExistingUamis[0], $_.Exception)
+                    $missingUamisList = $missingExistingUamis -join ', '
+                    Write-Host "$vmsslogheader : Cannot assign User Assigned Managed Identity because the VMSS has invalid UAMI associations. The following UAMIs are associated with this VMSS but no longer exist: $missingUamisList. Please disassociate the deleted UAMIs from the VMSS before onboarding. See: https://learn.microsoft.com/entra/identity/managed-identities-azure-resources/how-to-configure-managed-identities-scale-sets"
+                    throw [UserAssignedManagedIdentityDoesNotExist]::new($missingUamisList, $_.Exception)
                 }
             }
             
@@ -1652,8 +1653,9 @@ function AssignVmUserManagedIdentity {
                 $missingExistingUamis = Get-MissingUserAssignedIdentities -IdentityIds $VMObject.Identity.UserAssignedIdentities.Keys
                 
                 if ($missingExistingUamis.Count -gt 0) {
-                    Write-Host "$vmlogheader : Cannot assign User Assigned Managed Identity because the VM has invalid UAMI associations. The following UAMIs are associated with this VM but no longer exist: $($missingExistingUamis -join ', '). Please disassociate the deleted UAMIs from the VM before onboarding. See: https://learn.microsoft.com/azure/active-directory/managed-identities-azure-resources/qs-configure-portal-windows-vm"
-                    throw [UserAssignedManagedIdentityDoesNotExist]::new($missingExistingUamis[0], $_.Exception)
+                    $missingUamisList = $missingExistingUamis -join ', '
+                    Write-Host "$vmlogheader : Cannot assign User Assigned Managed Identity because the VM has invalid UAMI associations. The following UAMIs are associated with this VM but no longer exist: $missingUamisList. Please disassociate the deleted UAMIs from the VM before onboarding. See: https://learn.microsoft.com/azure/active-directory/managed-identities-azure-resources/qs-configure-portal-windows-vm"
+                    throw [UserAssignedManagedIdentityDoesNotExist]::new($missingUamisList, $_.Exception)
                 }
             }
             
