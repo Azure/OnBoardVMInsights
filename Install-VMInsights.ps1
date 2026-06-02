@@ -1597,7 +1597,7 @@ function Handle-FailedIdentityOperation {
     
     # If we get here, the FailedIdentityOperation error occurred for an unknown reason
     # This could be a transient issue or a permission problem we couldn't diagnose
-    throw [UserAssignedManagedIdentityDoesNotExist]::new($NewUamiName, $ErrorRecord.Exception)
+    throw [UserAssignedManagedIdentityUnknownException]::new("$NewUamiName : FailedIdentityOperation error occurred for an unknown reason. This may be a transient issue or a permission problem. Please try again or verify that the script has sufficient permissions to assign identities on this $ResourceType.", $ErrorRecord.Exception)
 }
 
 function AssignVmssUserManagedIdentity {
