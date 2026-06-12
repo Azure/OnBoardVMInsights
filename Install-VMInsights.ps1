@@ -1,6 +1,6 @@
 <#PSScriptInfo
 
-.VERSION 1.10.3
+.VERSION 1.10.4
 
 .GUID 76a487ef-47bf-4537-8942-600a66a547b1
 
@@ -25,7 +25,7 @@
 .EXTERNALSCRIPTDEPENDENCIES 
 
 .RELEASENOTES
-Added retirement announcement.
+Block Dependency Agent installation. -ProcessAndDependencies now errors. DA install removed from LA path.
 
 #> 
 
@@ -40,13 +40,13 @@ Added retirement announcement.
 
 <#
 .SYNOPSIS
-This script installs VM extensions for Log Analytics/Azure Monitoring Agent (AMA) and Dependency Agent if needed for VM Insights.
+This script installs VM extensions for Log Analytics/Azure Monitoring Agent (AMA) for VM Insights.
 If AMA is onboarded, a Data Collection Rule (DCR) and a User Assigned Managed Identity (UAMI) is also associated with the VM's and VMSS.
 
 .DESCRIPTION
 This script installs or re-configures the following on VM's and VMSS under a Subscription.
-1. Log Analytics VM Extension configured to supply Log Analytics Workspace and Dependency Agent VM Extension.
-2. Azure Monitor Agent along with Data Collection Rule association, User Assigned Managed Identity, and Dependency Agent VM Extension (optional).
+1. Log Analytics VM Extension configured to supply Log Analytics Workspace.
+2. Azure Monitor Agent along with Data Collection Rule association and User Assigned Managed Identity.
 
 
 Scope can further narrowed down to :
@@ -108,7 +108,9 @@ Name of User Assigned Managed Identity (UAMI) resource group.
 Name of User Assigned Managed Identity (UAMI).
 
 .PARAMETER ProcessAndDependencies
-<Optional> Set this flag to onboard Dependency Agent with Azure Monitoring Agent (AMA) settings.
+<Deprecated> This flag previously onboarded the Dependency Agent alongside AMA. VM Insights Map and the
+Dependency Agent are being retired on June 30th, 2028. Using this flag now results in an error.
+See: https://aka.ms/DependencyAgentRetirement
 
 .EXAMPLE
 Install-VMInsights.ps1 -WorkspaceId <WorkspaceId> -WorkspaceKey <WorkspaceKey> -SubscriptionId <SubscriptionId> -ResourceGroup <ResourceGroup>
@@ -130,8 +132,8 @@ Specify UserAssignedManagedIdentityName and UserAssignedManagedIdentityResourceG
 
 .EXAMPLE
 Install-VMInsights.ps1 -SubscriptionId <SubscriptionId> -ResourceGroup <ResourceGroup> -ProcessAndDependencies -DcrResourceId <DataCollectionRuleResourceId> -UserAssignedManagedIdentityName <UserAssignedIdentityName> -UserAssignedManagedIdentityResourceGroup <UserAssignedIdentityResourceGroup>
-The above command will onboard Assign a UAMI to a VM/VMss for AMA, Onboard AMA and associate a DCR with the VM/Vmss
-Specify ProcessAndDependencies to onboard VM's or VMSS with Dependency Agent (DA).
+NOTE: -ProcessAndDependencies is no longer supported. Dependency Agent onboarding has been retired.
+See: https://aka.ms/DependencyAgentRetirement
 
 .EXAMPLE
 Install-VMInsights.ps1 -SubscriptionId <SubscriptionId> -PolicyAssignmentName a4f79f8ce891455198c08736  -DcrResourceId <DataCollectionRuleResourceId> -UserAssignedManagedIdentityName <UserAssignedIdentityName> -UserAssignedManagedIdentityResourceGroup <UserAssignedIdentityResourceGroup>
@@ -1840,17 +1842,6 @@ try {
             "ProtectedSetting" = $local:laProtectedSettings
         }
             
-        $local:daSettings = @{"enableAMA" = "false"}
-        Set-Variable -WhatIf:$False -Confirm:$False -Name daExtensionSettingsVm -Option Constant -Value `
-        @{
-            "Settings" = $local:daSettings
-        }
-        Set-Variable -WhatIf:$False -Confirm:$False -Name daExtensionSettingsVmss -Option Constant -Value `
-        @{  
-            "Setting" = $local:daSettings
-        }
-        
-        
         if ($ReInstall) {
             Set-Variable -WhatIf:$False -Confirm:$False -Name sb_vm -Option Constant -Value { `
                 param([Microsoft.Azure.Commands.Compute.Models.PSVirtualMachine]$vmObj) `
@@ -1873,18 +1864,10 @@ try {
                                  -ExtensionSettings $laExtensionSettingsVmss
         }
         
-        Set-Variable -WhatIf:$False -Confirm:$False -Name sb_da -Option Constant -Value { `
-            param([Microsoft.Azure.Commands.Compute.Models.PSVirtualMachine]$vmObj) `
-            OnboardDaVm -VMObject $vmObj -ExtensionSettings $daExtensionSettingsVm
-        }
+        # Dependency Agent installation removed — DA is retired (https://aka.ms/DependencyAgentRetirement)
+        Set-Variable -WhatIf:$False -Confirm:$False -Name sb_da -Option Constant -Value $sb_nop_block_vm
 
-        Set-Variable -WhatIf:$False -Confirm:$False -Name sb_da_vmss -Option Constant -Value { `
-            param([Microsoft.Azure.Commands.Compute.Automation.Models.PSVirtualMachineScaleSet]$vmssObj) `
-            OnboardVMssExtension -VMssObject $vmssObj `
-                                 -ExtensionName $daDefaultExtensionName `
-                                 -ExtensionConstantMap $daExtensionConstantsMap `
-                                 -ExtensionSettings $daExtensionSettingsVmss
-        }
+        Set-Variable -WhatIf:$False -Confirm:$False -Name sb_da_vmss -Option Constant -Value $sb_nop_block_vmss
 
         Set-Variable -WhatIf:$False -Confirm:$False -Name sb_roles -Option Constant -Value $sb_nop_block_roles
     } else {
@@ -1940,33 +1923,10 @@ try {
             Set-Variable -WhatIf:$False -Confirm:$False -Name sb_da -Option Constant -Value $sb_nop_block_vm
             Set-Variable -WhatIf:$False -Confirm:$False -Name sb_da_vmss -Option Constant -Value $sb_nop_block_vmss
         } else {
-
-            Write-Warning -WarningAction Continue `
-                          ( "VM Insights Map and the associated Dependency agent will be retired on June 30th, 2028. " + `
-                            "Please see our retirement guidance for more details: https://aka.ms/DependencyAgentRetirement." )
-
-            $local:daSettings = @{"enableAMA" = "true"}
-            Set-Variable -WhatIf:$False -Confirm:$False -Name daExtensionSettingsVm -Option Constant -Value `
-            @{
-                "Settings" = $local:daSettings
-            }
-            Set-Variable -WhatIf:$False -Confirm:$False -Name daExtensionSettingsVmss -Option Constant -Value `
-            @{  
-                "Setting" = $local:daSettings
-            }
-            
-            Set-Variable -WhatIf:$False -Confirm:$False -Name sb_da -Option Constant -Value { `
-                param([Microsoft.Azure.Commands.Compute.Models.PSVirtualMachine]$vmObj) `
-                OnboardDaVm -VMObject $vmObj -ExtensionSettings $daExtensionSettingsVm
-            }
-
-            Set-Variable -WhatIf:$False -Confirm:$False -Name sb_da_vmss -Option Constant -Value { `
-                param([Microsoft.Azure.Commands.Compute.Automation.Models.PSVirtualMachineScaleSet]$vmssObj) `
-                OnboardVMssExtension -VMssObject $vmssObj `
-                                     -ExtensionName $daDefaultExtensionName `
-                                     -ExtensionConstantMap $daExtensionConstantsMap `
-                                     -ExtensionSettings $daExtensionSettingsVmss
-            }
+            Write-Error ( "The -ProcessAndDependencies flag is no longer supported. " + `
+                          "VM Insights Map and the Dependency Agent are being retired on June 30th, 2028. " + `
+                          "Please see our retirement guidance for more details: https://aka.ms/DependencyAgentRetirement." ) `
+                        -ErrorAction Stop
         }
     
         Set-Variable -WhatIf:$False -Confirm:$False -Name sb_roles -Option Constant -Value { `
