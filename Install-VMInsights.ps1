@@ -309,18 +309,6 @@ Set-Variable -WhatIf:$False -Confirm:$False -Name amaExtensionConstantMap -Optio
 }
 Set-Variable -WhatIf:$False -Confirm:$False -Name amaDefaultExtensionName -Option Constant -Value "AzureMonitoringAgent"
 
-# Dependency Agent Extension constants
-Set-Variable -WhatIf:$False -Confirm:$False -Name daExtensionConstantsMap -Option Constant -Value @{
-    "Windows" = @{ ExtensionType = "DependencyAgentWindows"
-                   TypeHandlerVersion = "9.10"
-                   Publisher = "Microsoft.Azure.Monitoring.DependencyAgent"
-                }
-    "Linux" = @{ ExtensionType = "DependencyAgentLinux"
-                 TypeHandlerVersion = "9.10"
-                 Publisher = "Microsoft.Azure.Monitoring.DependencyAgent"
-               }
-}
-Set-Variable -WhatIf:$False -Confirm:$False -Name daDefaultExtensionName -Option Constant -Value "DA-Extension"
 $extensionVmDefaultUpgradeSettings = @{
     EnableAutomaticUpgrade = $True
     DisableAutoUpgradeMinorVersion = $False
@@ -897,39 +885,6 @@ function RetainExtensionUpgradeSettings {
 
     $ExtUpgradeSettings.DisableAutoUpgradeMinorVersion = !($Extension.AutoUpgradeMinorVersion)
     $ExtUpgradeSettings.EnableAutomaticUpgrade = $Extension.EnableAutomaticUpgrade
-}
-
-function OnboardDaVm {
-    <#
-	.SYNOPSIS
-	Onboard DA on VM, handling if already installed.
-	#>
-    param
-    (
-        [Parameter(mandatory = $True)]
-        [Microsoft.Azure.Commands.Compute.Models.PSVirtualMachine]
-        $VMObject,
-        [Parameter(mandatory = $True)]
-        [hashtable]
-        $ExtensionSettings
-    )
-
-    $extensionName = $daDefaultExtensionName
-    $extUpgradeSettings = $extensionVmDefaultUpgradeSettings.clone()
-    $daExtensionConstantProperties = $daExtensionConstantsMap[$VMObject.StorageProfile.OsDisk.OsType.ToString()]
-    $extension = GetVMExtension -VMObject $VMObject -ExtensionProperties $daExtensionConstantProperties
-    # Use supplied name unless already deployed, use same name.
-    if ($extension) {
-        $extensionName = $extension.Name
-        RetainExtensionUpgradeSettings -Extension $extension -ExtUpgradeSettings $extUpgradeSettings
-        Write-Host "$(FormatVmIdentifier -VMObject $VMObject) : Extension $extensionName, type $($daExtensionConstantProperties.Publisher).$($daExtensionConstantProperties.ExtensionType) already installed. Provisioning State : $($extension.ProvisioningState)"
-    }
-    
-    return SetVMExtension -VMObject $VMObject `
-                          -ExtensionName $extensionName `
-                          @daExtensionConstantProperties `
-                          -ExtensionUpgradeSettings $extUpgradeSettings `
-                          -ExtensionSettings $ExtensionSettings
 }
 
 function OnboardAmaVm {
@@ -1865,9 +1820,6 @@ try {
         }
         
         # Dependency Agent installation removed — DA is retired (https://aka.ms/DependencyAgentRetirement)
-        Set-Variable -WhatIf:$False -Confirm:$False -Name sb_da -Option Constant -Value $sb_nop_block_vm
-
-        Set-Variable -WhatIf:$False -Confirm:$False -Name sb_da_vmss -Option Constant -Value $sb_nop_block_vmss
 
         Set-Variable -WhatIf:$False -Confirm:$False -Name sb_roles -Option Constant -Value $sb_nop_block_roles
     } else {
@@ -1920,8 +1872,7 @@ try {
         }
         
         if (!$ProcessAndDependencies) {
-            Set-Variable -WhatIf:$False -Confirm:$False -Name sb_da -Option Constant -Value $sb_nop_block_vm
-            Set-Variable -WhatIf:$False -Confirm:$False -Name sb_da_vmss -Option Constant -Value $sb_nop_block_vmss
+            # DA retired — no-op (https://aka.ms/DependencyAgentRetirement)
         } else {
             Write-Error ( "The -ProcessAndDependencies flag is no longer supported. " + `
                           "VM Insights Map and the Dependency Agent are being retired on June 30th, 2028. " + `
@@ -2067,7 +2018,6 @@ try {
                         continue
                     }
                     $vm = &$sb_vm -vmObj $vm
-                    $vm = &$sb_da -vmObj $vm
                     Write-Host "$(FormatVmIdentifier -VMObject $vm) : Successfully onboarded VM insights"
                     $onboardingCounters.Succeeded +=1
                     $unknownExceptionVirtualMachineConsequentCounter = 0
@@ -2099,7 +2049,6 @@ try {
                     Write-Host ""
                     $vmsslogheader = FormatVmssIdentifier -VMssObject $vmss
                     $vmss = &$sb_vmss -vmssObj $vmss
-                    $vmss = &$sb_da_vmss -vmssObj $vmss
                     $vmss = UpdateVMssExtension -VMssObject $vmss
                     $instanceUpgradeFailCounter = 0
                     if ($vmss.UpgradePolicy.Mode -eq 'Manual') {
