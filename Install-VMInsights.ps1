@@ -1766,12 +1766,6 @@ try {
     Set-Variable -WhatIf:$False -Confirm:$False -Name sb_nop_block_upgrade -Option Constant -Value { `
         param([Microsoft.Azure.Commands.Compute.Automation.Models.PSVirtualMachineScaleSet]$vmssObj, [ref]$instanceUpgradeFailCounter)
     }
-    Set-Variable -WhatIf:$False -Confirm:$False -Name sb_nop_block_vm -Option Constant -Value { `
-        param([Microsoft.Azure.Commands.Compute.Models.PSVirtualMachine]$vmObj) $vmObj
-    }
-    Set-Variable -WhatIf:$False -Confirm:$False -Name sb_nop_block_vmss -Option Constant -Value { `
-        param([Microsoft.Azure.Commands.Compute.Automation.Models.PSVirtualMachineScaleSet]$vmssObj) $vmssObj
-    }
     
     if ($ProcessAndDependencies) {
         Write-Error ( "The -ProcessAndDependencies flag is no longer supported. " + `
