@@ -1773,6 +1773,13 @@ try {
         param([Microsoft.Azure.Commands.Compute.Automation.Models.PSVirtualMachineScaleSet]$vmssObj) $vmssObj
     }
     
+    if ($ProcessAndDependencies) {
+        Write-Error ( "The -ProcessAndDependencies flag is no longer supported. " + `
+                      "VM Insights Map and the Dependency Agent are being retired on June 30th, 2028. " + `
+                      "Please see our retirement guidance for more details: https://aka.ms/DependencyAgentRetirement." ) `
+                    -ErrorAction Stop
+    }
+
     $Rghashtable = @{}
     
     if (!$isAma) {
@@ -1871,15 +1878,6 @@ try {
             OnboardVmiWithAmaVmss -VMssObject $vmssObj -ExtensionSettings $amaExtensionSettingsVmss
         }
         
-        if (!$ProcessAndDependencies) {
-            # DA retired — no-op (https://aka.ms/DependencyAgentRetirement)
-        } else {
-            Write-Error ( "The -ProcessAndDependencies flag is no longer supported. " + `
-                          "VM Insights Map and the Dependency Agent are being retired on June 30th, 2028. " + `
-                          "Please see our retirement guidance for more details: https://aka.ms/DependencyAgentRetirement." ) `
-                        -ErrorAction Stop
-        }
-    
         Set-Variable -WhatIf:$False -Confirm:$False -Name sb_roles -Option Constant -Value { `
             param([String]$rgName) SetManagedIdentityRolesAma -ResourceGroupName $rgName
         }
