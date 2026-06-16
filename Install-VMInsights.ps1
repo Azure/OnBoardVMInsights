@@ -1768,10 +1768,7 @@ try {
     }
     
     if ($ProcessAndDependencies) {
-        Write-Error ( "The -ProcessAndDependencies flag is no longer supported. " + `
-                      "VM Insights Map and the Dependency Agent are being retired on June 30th, 2028. " + `
-                      "Please see our retirement guidance for more details: https://aka.ms/DependencyAgentRetirement." ) `
-                    -ErrorAction Stop
+        throw [FatalException]::new("The -ProcessAndDependencies flag is no longer supported. VM Insights Map and the Dependency Agent are being retired on June 30th, 2028. Please see our retirement guidance for more details: https://aka.ms/DependencyAgentRetirement.", $null)
     }
 
     $Rghashtable = @{}
