@@ -97,7 +97,7 @@ Name of User Assigned Managed Identity (UAMI) resource group.
 Name of User Assigned Managed Identity (UAMI).
 
 .PARAMETER ProcessAndDependencies
-<Retired> This flag is no longer functional. VM Insights Map and the Dependency Agent were retired on
+<Retired> This flag is no longer functional. VM Insights Map and the Dependency Agent will be retired on
 June 30th, 2028. Using this flag results in an error.
 See: https://aka.ms/DependencyAgentRetirement
 
