@@ -101,6 +101,18 @@ Name of User Assigned Managed Identity (UAMI).
 June 30th, 2028. Using this flag results in an error.
 See: https://aka.ms/DependencyAgentRetirement
 
+.PARAMETER WorkspaceId
+<Retired> The Log Analytics agent was retired on August 31, 2024. Using this parameter results in an error.
+See: https://aka.ms/MigrateToAMA
+
+.PARAMETER WorkspaceKey
+<Retired> The Log Analytics agent was retired on August 31, 2024. Using this parameter results in an error.
+See: https://aka.ms/MigrateToAMA
+
+.PARAMETER ReInstall
+<Retired> The Log Analytics agent was retired on August 31, 2024. Using this parameter results in an error.
+See: https://aka.ms/MigrateToAMA
+
 .EXAMPLE
 Install-VMInsights.ps1 -SubscriptionId <SubscriptionId> -ResourceGroup <ResourceGroup>  -DcrResourceId <DataCollectionRuleResourceId> -UserAssignedManagedIdentityName <UserAssignedIdentityName> -UserAssignedManagedIdentityResourceGroup <UserAssignedIdentityResourceGroup>
 Onboard VMI for all VM's or VMSS in a Resource Group in a subscription with Azure Monitoring Agent (AMA).
@@ -125,7 +137,7 @@ http://aka.ms/OnBoardVMInsights
                                            Medium - Everything else that changes the system configuration. 
 #>
 #Assumption - The script assumes the entity running the script has access to all VMs/VMSS in the script.
-[CmdletBinding(SupportsShouldProcess = $True, ConfirmImpact = 'High')]
+[CmdletBinding(SupportsShouldProcess = $True, ConfirmImpact = 'High', DefaultParameterSetName = 'AzureMonitoringAgent')]
 param(
     [Parameter(mandatory = $True)][String]$SubscriptionId,
     [Parameter(mandatory = $False)][Switch]$TriggerVmssManualVMUpdate,
@@ -133,11 +145,15 @@ param(
     [Parameter(mandatory = $False)][String]$ResourceGroup = "*",
     [Parameter(mandatory = $False)][String]$Name = "*",
     [Parameter(mandatory = $False)][String]$PolicyAssignmentName,
-    
-    [Parameter(mandatory = $False)][Switch]$ProcessAndDependencies,
-    [Parameter(mandatory = $True)][String]$DcrResourceId,
-    [Parameter(mandatory = $True)][String]$UserAssignedManagedIdentityResourceGroup,
-    [Parameter(mandatory = $True)][String]$UserAssignedManagedIdentityName
+
+    [Parameter(mandatory = $False, ParameterSetName = 'AzureMonitoringAgent')][Switch]$ProcessAndDependencies,
+    [Parameter(mandatory = $True,  ParameterSetName = 'AzureMonitoringAgent')][String]$DcrResourceId,
+    [Parameter(mandatory = $True,  ParameterSetName = 'AzureMonitoringAgent')][String]$UserAssignedManagedIdentityResourceGroup,
+    [Parameter(mandatory = $True,  ParameterSetName = 'AzureMonitoringAgent')][String]$UserAssignedManagedIdentityName,
+
+    [Parameter(mandatory = $True,  ParameterSetName = 'LogAnalyticsAgent')][String]$WorkspaceId,
+    [Parameter(mandatory = $True,  ParameterSetName = 'LogAnalyticsAgent')][String]$WorkspaceKey,
+    [Parameter(mandatory = $False, ParameterSetName = 'LogAnalyticsAgent')][Switch]$ReInstall
 )
 
 $ErrorActionPreference = "Stop"
@@ -1615,6 +1631,10 @@ try {
         throw [FatalException]::new("The -ProcessAndDependencies flag is no longer supported. VM Insights Map and the Dependency Agent are being retired on June 30th, 2028. Please see our retirement guidance for more details: https://aka.ms/DependencyAgentRetirement.", $null)
     }
 
+    if ($PSCmdlet.ParameterSetName -eq 'LogAnalyticsAgent') {
+        throw [FatalException]::new("The -WorkspaceId, -WorkspaceKey, and -ReInstall parameters are no longer supported. The Log Analytics agent was retired on August 31, 2024. Please use Azure Monitor Agent (AMA) onboarding instead. See: https://aka.ms/MigrateToAMA", $null)
+    }
+
     # First make sure we are authenticed and Select the subscription supplied and input parameters are valid.
     $account =  Get-AzContext
     if ($null -eq $account.Account) {
@@ -1921,3 +1941,5 @@ catch {
 finally {
     PrintSummaryMessage  $onboardingCounters
 }
+
+
