@@ -1,6 +1,6 @@
 <#PSScriptInfo
 
-.VERSION 1.10.3
+.VERSION 1.10.4
 
 .GUID 76a487ef-47bf-4537-8942-600a66a547b1
 
@@ -25,7 +25,8 @@
 .EXTERNALSCRIPTDEPENDENCIES 
 
 .RELEASENOTES
-Added retirement announcement.
+Remove Legacy Agent (LA/MMA/OMS) support. AMA is now the only supported onboarding path.
+Remove Dependency Agent (DA) support. -ProcessAndDependencies now throws a retirement error.
 
 #> 
 
@@ -40,13 +41,12 @@ Added retirement announcement.
 
 <#
 .SYNOPSIS
-This script installs VM extensions for Log Analytics/Azure Monitoring Agent (AMA) and Dependency Agent if needed for VM Insights.
-If AMA is onboarded, a Data Collection Rule (DCR) and a User Assigned Managed Identity (UAMI) is also associated with the VM's and VMSS.
+This script installs VM extensions for Azure Monitor Agent (AMA) for VM Insights.
+A Data Collection Rule (DCR) and a User Assigned Managed Identity (UAMI) are associated with the VM's and VMSS.
 
 .DESCRIPTION
 This script installs or re-configures the following on VM's and VMSS under a Subscription.
-1. Log Analytics VM Extension configured to supply Log Analytics Workspace and Dependency Agent VM Extension.
-2. Azure Monitor Agent along with Data Collection Rule association, User Assigned Managed Identity, and Dependency Agent VM Extension (optional).
+Azure Monitor Agent along with Data Collection Rule association and User Assigned Managed Identity.
 
 
 Scope can further narrowed down to :
@@ -57,7 +57,6 @@ Scope can further narrowed down to :
 Script will show you list of VM's/VMSS that will apply to and let you confirm to continue.
 Use -Approve Switch to run without prompting, if all required parameters are provided.
 
-If the Log Analyitcs Agent extension is already configured with a workspace, use -ReInstall Switch to update the workspace.
 Use -WhatIf to get info about expected effect of the commands in the script.
 
 .PARAMETER SubscriptionId
@@ -88,16 +87,6 @@ If using PolicyAssignmentName parameter, VMs part of the parameter SubscriptionI
 
 
 
-.PARAMETER WorkspaceId
-Log Analytics WorkspaceID (GUID).
-
-.PARAMETER WorkspaceKey
-Log Analytics Workspace primary or secondary key.
-
-.PARAMETER ReInstall
-<Optional> Set this flag to trigger removal of existing Log analytics extension and re-installation to migrate log analytics workspaces. 
-
-
 .PARAMETER DcrResourceId
 Data Collection Rule (DCR) azure resource ID identifier.
 
@@ -108,19 +97,21 @@ Name of User Assigned Managed Identity (UAMI) resource group.
 Name of User Assigned Managed Identity (UAMI).
 
 .PARAMETER ProcessAndDependencies
-<Optional> Set this flag to onboard Dependency Agent with Azure Monitoring Agent (AMA) settings.
+<Retired> This flag is no longer functional. VM Insights Map and the Dependency Agent will be retired on
+June 30th, 2028. Using this flag results in an error.
+See: https://aka.ms/DependencyAgentRetirement
 
-.EXAMPLE
-Install-VMInsights.ps1 -WorkspaceId <WorkspaceId> -WorkspaceKey <WorkspaceKey> -SubscriptionId <SubscriptionId> -ResourceGroup <ResourceGroup>
-Onboard VMI for all VM's or VMSS in a Resource Group in a subscription with Legacy Agent (LA).
+.PARAMETER WorkspaceId
+<Retired> The Log Analytics agent was retired on August 31, 2024. Using this parameter results in an error.
+See: https://aka.ms/MigrateToAMA
 
-.EXAMPLE
-Install-VMInsights.ps1 -WorkspaceId <WorkspaceId> -WorkspaceKey <WorkspaceKey> -SubscriptionId <SubscriptionId> -ResourceGroup <ResourceGroup> -ReInstall
-Specify ReInstall to switch workspace with Legacy Agent (Linux) - OMSAgent.
+.PARAMETER WorkspaceKey
+<Retired> The Log Analytics agent was retired on August 31, 2024. Using this parameter results in an error.
+See: https://aka.ms/MigrateToAMA
 
-.EXAMPLE
-Install-VMInsights.ps1 -WorkspaceId <WorkspaceId> -WorkspaceKey <WorkspaceKey> -SubscriptionId <SubscriptionId> -PolicyAssignmentName a4f79f8ce891455198c08736
-Specify PolicyAssignmentName to onboard VMI for VMs part of the policy assignment scope with Legacy Agent (LA).
+.PARAMETER ReInstall
+<Retired> The Log Analytics agent was retired on August 31, 2024. Using this parameter results in an error.
+See: https://aka.ms/MigrateToAMA
 
 .EXAMPLE
 Install-VMInsights.ps1 -SubscriptionId <SubscriptionId> -ResourceGroup <ResourceGroup>  -DcrResourceId <DataCollectionRuleResourceId> -UserAssignedManagedIdentityName <UserAssignedIdentityName> -UserAssignedManagedIdentityResourceGroup <UserAssignedIdentityResourceGroup>
@@ -130,8 +121,8 @@ Specify UserAssignedManagedIdentityName and UserAssignedManagedIdentityResourceG
 
 .EXAMPLE
 Install-VMInsights.ps1 -SubscriptionId <SubscriptionId> -ResourceGroup <ResourceGroup> -ProcessAndDependencies -DcrResourceId <DataCollectionRuleResourceId> -UserAssignedManagedIdentityName <UserAssignedIdentityName> -UserAssignedManagedIdentityResourceGroup <UserAssignedIdentityResourceGroup>
-The above command will onboard Assign a UAMI to a VM/VMss for AMA, Onboard AMA and associate a DCR with the VM/Vmss
-Specify ProcessAndDependencies to onboard VM's or VMSS with Dependency Agent (DA).
+NOTE: -ProcessAndDependencies is no longer supported. Dependency Agent onboarding has been retired.
+See: https://aka.ms/DependencyAgentRetirement
 
 .EXAMPLE
 Install-VMInsights.ps1 -SubscriptionId <SubscriptionId> -PolicyAssignmentName a4f79f8ce891455198c08736  -DcrResourceId <DataCollectionRuleResourceId> -UserAssignedManagedIdentityName <UserAssignedIdentityName> -UserAssignedManagedIdentityResourceGroup <UserAssignedIdentityResourceGroup>
@@ -146,7 +137,7 @@ http://aka.ms/OnBoardVMInsights
                                            Medium - Everything else that changes the system configuration. 
 #>
 #Assumption - The script assumes the entity running the script has access to all VMs/VMSS in the script.
-[CmdletBinding(SupportsShouldProcess = $True, ConfirmImpact = 'High')]
+[CmdletBinding(SupportsShouldProcess = $True, ConfirmImpact = 'High', DefaultParameterSetName = 'AzureMonitoringAgent')]
 param(
     [Parameter(mandatory = $True)][String]$SubscriptionId,
     [Parameter(mandatory = $False)][Switch]$TriggerVmssManualVMUpdate,
@@ -154,11 +145,11 @@ param(
     [Parameter(mandatory = $False)][String]$ResourceGroup = "*",
     [Parameter(mandatory = $False)][String]$Name = "*",
     [Parameter(mandatory = $False)][String]$PolicyAssignmentName,
-    
+
     [Parameter(mandatory = $False, ParameterSetName = 'AzureMonitoringAgent')][Switch]$ProcessAndDependencies,
-    [Parameter(mandatory = $True, ParameterSetName = 'AzureMonitoringAgent')][String]$DcrResourceId,
-    [Parameter(mandatory = $True, ParameterSetName = 'AzureMonitoringAgent')][String]$UserAssignedManagedIdentityResourceGroup,
-    [Parameter(mandatory = $True, ParameterSetName = 'AzureMonitoringAgent')][String]$UserAssignedManagedIdentityName,
+    [Parameter(mandatory = $True,  ParameterSetName = 'AzureMonitoringAgent')][String]$DcrResourceId,
+    [Parameter(mandatory = $True,  ParameterSetName = 'AzureMonitoringAgent')][String]$UserAssignedManagedIdentityResourceGroup,
+    [Parameter(mandatory = $True,  ParameterSetName = 'AzureMonitoringAgent')][String]$UserAssignedManagedIdentityName,
 
     [Parameter(mandatory = $True,  ParameterSetName = 'LogAnalyticsAgent')][String]$WorkspaceId,
     [Parameter(mandatory = $True,  ParameterSetName = 'LogAnalyticsAgent')][String]$WorkspaceKey,
@@ -281,19 +272,6 @@ class OnboardingCounters {
     [Decimal]$VMSSInstanceUpgradeFailure = 0
 }
 
-# Log Analytics Extension constants
-Set-Variable -WhatIf:$False -Confirm:$False -Name laExtensionMap -Option Constant -Value @{ 
-    "Windows" = @{  ExtensionType = "MicrosoftMonitoringAgent"
-                    TypeHandlerVersion = "1.0"
-                    Publisher = "Microsoft.EnterpriseCloud.Monitoring"
-                }
-    "Linux" =  @{   ExtensionType  = "OmsAgentForLinux"
-                    TypeHandlerVersion  = "1.6"
-                    Publisher = "Microsoft.EnterpriseCloud.Monitoring"
-                }
-}
-Set-Variable -WhatIf:$False -Confirm:$False -Name laDefaultExtensionName -Option Constant -Value "MMAExtension"
-
 # Azure Monitoring Agent Extension constants
 Set-Variable -WhatIf:$False -Confirm:$False -Name amaExtensionConstantMap -Option Constant -Value @{ 
        "Windows" = @{  ExtensionType = "AzureMonitorWindowsAgent"
@@ -307,18 +285,6 @@ Set-Variable -WhatIf:$False -Confirm:$False -Name amaExtensionConstantMap -Optio
 }
 Set-Variable -WhatIf:$False -Confirm:$False -Name amaDefaultExtensionName -Option Constant -Value "AzureMonitoringAgent"
 
-# Dependency Agent Extension constants
-Set-Variable -WhatIf:$False -Confirm:$False -Name daExtensionConstantsMap -Option Constant -Value @{
-    "Windows" = @{ ExtensionType = "DependencyAgentWindows"
-                   TypeHandlerVersion = "9.10"
-                   Publisher = "Microsoft.Azure.Monitoring.DependencyAgent"
-                }
-    "Linux" = @{ ExtensionType = "DependencyAgentLinux"
-                 TypeHandlerVersion = "9.10"
-                 Publisher = "Microsoft.Azure.Monitoring.DependencyAgent"
-               }
-}
-Set-Variable -WhatIf:$False -Confirm:$False -Name daDefaultExtensionName -Option Constant -Value "DA-Extension"
 $extensionVmDefaultUpgradeSettings = @{
     EnableAutomaticUpgrade = $True
     DisableAutoUpgradeMinorVersion = $False
@@ -327,9 +293,6 @@ $extensionVmDefaultUpgradeSettings = @{
 Set-Variable -WhatIf:$False -Confirm:$False -Name unknownExceptionVirtualMachineConsequentCounterLimit -Option Constant -Value 3
 Set-Variable -WhatIf:$False -Confirm:$False -Name unknownExceptionVirtualMachineScaleSetConsequentCounterLimit -Option Constant -Value 3
 Set-Variable -WhatIf:$False -Confirm:$False -Name unknownExceptionTotalCounterLimit -Option Constant -Value 6
-
-#Presence of DCR Resource Id indicates AMA onboarding.
-$isAma = "" -ne $DcrResourceId
 
 #
 # FUNCTIONS
@@ -897,39 +860,6 @@ function RetainExtensionUpgradeSettings {
     $ExtUpgradeSettings.EnableAutomaticUpgrade = $Extension.EnableAutomaticUpgrade
 }
 
-function OnboardDaVm {
-    <#
-	.SYNOPSIS
-	Onboard DA on VM, handling if already installed.
-	#>
-    param
-    (
-        [Parameter(mandatory = $True)]
-        [Microsoft.Azure.Commands.Compute.Models.PSVirtualMachine]
-        $VMObject,
-        [Parameter(mandatory = $True)]
-        [hashtable]
-        $ExtensionSettings
-    )
-
-    $extensionName = $daDefaultExtensionName
-    $extUpgradeSettings = $extensionVmDefaultUpgradeSettings.clone()
-    $daExtensionConstantProperties = $daExtensionConstantsMap[$VMObject.StorageProfile.OsDisk.OsType.ToString()]
-    $extension = GetVMExtension -VMObject $VMObject -ExtensionProperties $daExtensionConstantProperties
-    # Use supplied name unless already deployed, use same name.
-    if ($extension) {
-        $extensionName = $extension.Name
-        RetainExtensionUpgradeSettings -Extension $extension -ExtUpgradeSettings $extUpgradeSettings
-        Write-Host "$(FormatVmIdentifier -VMObject $VMObject) : Extension $extensionName, type $($daExtensionConstantProperties.Publisher).$($daExtensionConstantProperties.ExtensionType) already installed. Provisioning State : $($extension.ProvisioningState)"
-    }
-    
-    return SetVMExtension -VMObject $VMObject `
-                          -ExtensionName $extensionName `
-                          @daExtensionConstantProperties `
-                          -ExtensionUpgradeSettings $extUpgradeSettings `
-                          -ExtensionSettings $ExtensionSettings
-}
-
 function OnboardAmaVm {
     <#
 	.SYNOPSIS
@@ -959,95 +889,6 @@ function OnboardAmaVm {
     return SetVMExtension -VMObject $VMObject `
                           -ExtensionName $extensionName `
                           @amaExtensionConstantProperties `
-                          -ExtensionUpgradeSettings $extUpgradeSettings `
-                          -ExtensionSettings $ExtensionSettings
-}
-
-function OnboardLaVmWithReInstall {
-    <#
-	.SYNOPSIS
-	Onboard LA on VM, ReInstall flag provided.
-	#>
-    param
-    (
-        [Parameter(mandatory = $True)]
-        [Microsoft.Azure.Commands.Compute.Models.PSVirtualMachine]
-        $VMObject,
-        [Parameter(mandatory = $True)]
-        [hashtable]
-        $ExtensionSettings
-    )
-
-    $osType = $VMObject.StorageProfile.OsDisk.OsType.ToString()
-    $laExtensionConstantProperties = $laExtensionMap[$osType]
-    # Use supplied name unless already deployed, use same name.
-    $extensionName = $laDefaultExtensionName
-    $vmlogheader = FormatVmIdentifier -VMObject $VMObject
-    $extUpgradeSettings = $extensionVmDefaultUpgradeSettings.clone()
-
-    $extension = GetVMExtension -VMObject $VMObject -ExtensionProperties $laExtensionConstantProperties
-    # Use supplied name unless already deployed, use same name.
-    if ($extension) {
-        $extensionName = $extension.Name
-        RetainExtensionUpgradeSettings -Extension $extension -ExtUpgradeSettings $extUpgradeSettings
-        Write-Host "$vmlogheader : Extension $extensionName, type $($laExtensionConstantProperties.Publisher).$($laExtensionConstantProperties.ExtensionType) already installed. Provisioning State : $($extension.ProvisioningState)"
-        if ($osType -eq "Linux" -and $extension.PublicSettings) {
-            $extensionPublicSettingsJson = $extension.PublicSettings | ConvertFrom-Json
-            if ($extensionPublicSettingsJson.workspaceId -ne $ExtensionSettings.Settings.workspaceId) {
-                Write-Host "$vmlogheader : OmsAgentForLinux requires an uninstall followed by a re-install to change the workspace."
-                RemoveVMExtension -VMObject $VMObject `
-                                  -ExtensionName $extensionName `
-                                  -ExtensionProperties $laExtensionConstantProperties
-            }
-        }
-    }
-    
-    return SetVMExtension -VMObject $VMObject `
-                          -ExtensionName $extensionName `
-                          @laExtensionConstantProperties `
-                          -ExtensionUpgradeSettings $extUpgradeSettings `
-                          -ExtensionSettings $ExtensionSettings
-}
-
-function OnboardLaVmWithoutReInstall {
-    <#
-	.SYNOPSIS
-	Onboard LA on VM, ReInstall flag not provided.
-	#>
-    param
-    (
-        [Parameter(mandatory = $True)]
-        [Microsoft.Azure.Commands.Compute.Models.PSVirtualMachine]
-        $VMObject,
-        [Parameter(mandatory = $True)]
-        [hashtable]
-        $ExtensionSettings
-    )
-
-    $osType = $VMObject.StorageProfile.OsDisk.OsType.ToString()
-    $laExtensionConstantProperties = $laExtensionMap[$osType]
-    $extensionName = $laDefaultExtensionName
-    $extUpgradeSettings = $extensionVmDefaultUpgradeSettings.clone()
-
-    $extension = GetVMExtension -VMObject $VMObject -ExtensionProperties $laExtensionConstantProperties
-    $vmlogheader = FormatVmIdentifier -VMObject $VMObject
-    # Use supplied name unless already deployed, use same name
-    if ($extension) {
-        $extensionName = $extension.Name
-        RetainExtensionUpgradeSettings -Extension $extension -ExtUpgradeSettings $extUpgradeSettings
-        Write-Host "$vmlogheader : Extension $extensionName, type $($laExtensionConstantProperties.Publisher).$($laExtensionConstantProperties.ExtensionType) already installed. Provisioning State : $($extension.ProvisioningState)"
-        if ($osType -eq "Linux" -and $extension.PublicSettings) {
-            $extensionPublicSettingsJson = $extension.PublicSettings | ConvertFrom-Json 
-            if ($extensionPublicSettingsJson.workspaceId -ne $ExtensionSettings.Settings.workspaceId) {
-                Write-Host "$vmlogheader : OmsAgentForLinux does not support changing the workspace. Use the -Reinstall flag to make the change."
-                return $VMObject
-            }
-        }
-    }
-
-    return SetVMExtension -VMObject $VMObject `
-                          -ExtensionName $extensionName `
-                          @laExtensionConstantProperties `
                           -ExtensionUpgradeSettings $extUpgradeSettings `
                           -ExtensionSettings $ExtensionSettings
 }
@@ -1785,6 +1626,15 @@ try {
     $unknownExceptionVirtualMachineScaleSetConsequentCounter = 0
     $unknownExceptionVirtualMachineConsequentCounter = 0
     $unknownExceptionTotalCounter = 0
+
+    if ($ProcessAndDependencies) {
+        throw [FatalException]::new("The -ProcessAndDependencies flag is no longer supported. VM Insights Map and the Dependency Agent are being retired on June 30th, 2028. Please see our retirement guidance for more details: https://aka.ms/DependencyAgentRetirement.", $null)
+    }
+
+    if ($PSCmdlet.ParameterSetName -eq 'LogAnalyticsAgent') {
+        throw [FatalException]::new("The -WorkspaceId, -WorkspaceKey, and -ReInstall parameters are no longer supported. The Log Analytics agent was retired on August 31, 2024. Please use Azure Monitor Agent (AMA) onboarding instead. See: https://aka.ms/MigrateToAMA", $null)
+    }
+
     # First make sure we are authenticed and Select the subscription supplied and input parameters are valid.
     $account =  Get-AzContext
     if ($null -eq $account.Account) {
@@ -1805,173 +1655,61 @@ try {
     }
 
     #script block
-    Set-Variable -WhatIf:$False -Confirm:$False -Name sb_nop_block_roles -Option Constant -Value { param([String]$rgName)} 
     Set-Variable -WhatIf:$False -Confirm:$False -Name sb_nop_block_upgrade -Option Constant -Value { `
         param([Microsoft.Azure.Commands.Compute.Automation.Models.PSVirtualMachineScaleSet]$vmssObj, [ref]$instanceUpgradeFailCounter)
-    }
-    Set-Variable -WhatIf:$False -Confirm:$False -Name sb_nop_block_vm -Option Constant -Value { `
-        param([Microsoft.Azure.Commands.Compute.Models.PSVirtualMachine]$vmObj) $vmObj
-    }
-    Set-Variable -WhatIf:$False -Confirm:$False -Name sb_nop_block_vmss -Option Constant -Value { `
-        param([Microsoft.Azure.Commands.Compute.Automation.Models.PSVirtualMachineScaleSet]$vmssObj) $vmssObj
     }
     
     $Rghashtable = @{}
     
-    if (!$isAma) {
-
-        Write-Warning -WarningAction Continue `
-                      ( "The Log Analytics agent was retired on August 31, 2024. " + `
-                        "Please see our retirement announcement for more details: " + `
-                        "https://azure.microsoft.com/en-us/updates?id=were-retiring-the-log-analytics-agent-in-azure-monitor-on-31-august-2024" )
-
-        #Cannot validate Workspace existence with WorkspaceId, WorkspaceKey parameters.
-        $local:laSettings = @{"workspaceId" = $WorkspaceId; "stopOnMultipleConnections" = "true"}
-        $local:laProtectedSettings = @{"workspaceKey" = $WorkspaceKey}
-        Set-Variable -WhatIf:$False -Confirm:$False -Name laExtensionSettingsVm -Option Constant -Value `
-        @{
-            "Settings" = $local:laSettings
-            "ProtectedSettings" = $local:laProtectedSettings
+    try {
+        Write-Verbose "Validating ($UserAssignedManagedIdentityResourceGroup, $UserAssignedManagedIdentityName)"
+        Set-Variable -WhatIf:$False -Confirm:$False -Name UserAssignedManagedIdentityObject -Option Constant -Value `
+                        (Get-AzUserAssignedIdentity -Name $UserAssignedManagedIdentityName `
+                                                    -ResourceGroupName $UserAssignedManagedIdentityResourceGroup `
+                                                    -ErrorAction Stop)
+    } catch {
+        $errorCode = ExtractExceptionPrefixErrCode -ErrorRecord $_
+        if ($errorCode -eq "ResourceNotFound") {
+            throw [UserAssignedManagedIdentityDoesNotExist]::new($UserAssignedManagedIdentityName, $_.Exception)
         }
         
-        Set-Variable -WhatIf:$False -Confirm:$False -Name laExtensionSettingsVmss -Option Constant -Value `
-        @{ 
-            "Setting" = $local:laSettings
-            "ProtectedSetting" = $local:laProtectedSettings
-        }
-            
-        $local:daSettings = @{"enableAMA" = "false"}
-        Set-Variable -WhatIf:$False -Confirm:$False -Name daExtensionSettingsVm -Option Constant -Value `
-        @{
-            "Settings" = $local:daSettings
-        }
-        Set-Variable -WhatIf:$False -Confirm:$False -Name daExtensionSettingsVmss -Option Constant -Value `
-        @{  
-            "Setting" = $local:daSettings
-        }
-        
-        
-        if ($ReInstall) {
-            Set-Variable -WhatIf:$False -Confirm:$False -Name sb_vm -Option Constant -Value { `
-                param([Microsoft.Azure.Commands.Compute.Models.PSVirtualMachine]$vmObj) `
-                OnboardLaVmWithReInstall -VMObject $vmObj `
-                                         -ExtensionSettings $laExtensionSettingsVm
-            }
-        } else {
-            Set-Variable -WhatIf:$False -Confirm:$False -Name sb_vm -Option Constant -Value { `
-                param([Microsoft.Azure.Commands.Compute.Models.PSVirtualMachine]$vmObj) `
-                OnboardLaVmWithoutReInstall -VMObject $vmObj `
-                                            -ExtensionSettings $laExtensionSettingsVm
-            }
-        }
-        
-        Set-Variable -WhatIf:$False -Confirm:$False -Name sb_vmss -Option Constant -Value { `
-            param([Microsoft.Azure.Commands.Compute.Automation.Models.PSVirtualMachineScaleSet]$vmssObj) `
-            OnboardVMssExtension -VMssObject $vmssObj `
-                                 -ExtensionName $laDefaultExtensionName `
-                                 -ExtensionConstantMap $laExtensionMap `
-                                 -ExtensionSettings $laExtensionSettingsVmss
-        }
-        
-        Set-Variable -WhatIf:$False -Confirm:$False -Name sb_da -Option Constant -Value { `
-            param([Microsoft.Azure.Commands.Compute.Models.PSVirtualMachine]$vmObj) `
-            OnboardDaVm -VMObject $vmObj -ExtensionSettings $daExtensionSettingsVm
+        if ($errorCode -eq "ResourceGroupNotFound") {
+            throw [UserAssignedManagedIdentityResourceGroupDoesNotExist]::new($UserAssignedManagedIdentityResourceGroup, $_.Exception)
         }
 
-        Set-Variable -WhatIf:$False -Confirm:$False -Name sb_da_vmss -Option Constant -Value { `
-            param([Microsoft.Azure.Commands.Compute.Automation.Models.PSVirtualMachineScaleSet]$vmssObj) `
-            OnboardVMssExtension -VMssObject $vmssObj `
-                                 -ExtensionName $daDefaultExtensionName `
-                                 -ExtensionConstantMap $daExtensionConstantsMap `
-                                 -ExtensionSettings $daExtensionSettingsVmss
-        }
-
-        Set-Variable -WhatIf:$False -Confirm:$False -Name sb_roles -Option Constant -Value $sb_nop_block_roles
-    } else {
-        
-        try {
-            Write-Verbose "Validating ($UserAssignedManagedIdentityResourceGroup, $UserAssignedManagedIdentityName)"
-            Set-Variable -WhatIf:$False -Confirm:$False -Name UserAssignedManagedIdentityObject -Option Constant -Value `
-                            (Get-AzUserAssignedIdentity -Name $UserAssignedManagedIdentityName `
-                                                        -ResourceGroupName $UserAssignedManagedIdentityResourceGroup `
-                                                        -ErrorAction Stop)
-        } catch {
-            $errorCode = ExtractExceptionPrefixErrCode -ErrorRecord $_
-            if ($errorCode -eq "ResourceNotFound") {
-                throw [UserAssignedManagedIdentityDoesNotExist]::new($UserAssignedManagedIdentityName, $_.Exception)
-            }
-            
-            if ($errorCode -eq "ResourceGroupNotFound") {
-                throw [UserAssignedManagedIdentityResourceGroupDoesNotExist]::new($UserAssignedManagedIdentityResourceGroup, $_.Exception)
-            }
-
-            throw [UserAssignedManagedIdentityUnknownException]::new("($UserAssignedManagedIdentityResourceGroup) $UserAssignedManagedIdentityName : Failed to locate User Assigned Managed Identity.", $_.Exception)
-        }
-        
-        $local:amaSettings = @{
-            'authentication' = @{ 
-                'managedIdentity' = @{
-                    'identifier-name' = 'mi_res_id'
-                    'identifier-value' = $($UserAssignedManagedIdentityObject.Id) 
-                }
-            }
-        }
-        
-        Set-Variable -WhatIf:$False -Confirm:$False -Name amaExtensionSettingsVm -Option Constant -Value `
-        @{
-            "Settings" = $local:amaSettings
-        }
-
-        Set-Variable -WhatIf:$False -Confirm:$False -Name amaExtensionSettingsVmss -Option Constant -Value `
-        @{
-            "Setting" = $local:amaSettings
-        }
-        
-        Set-Variable -WhatIf:$False -Confirm:$False -Name sb_vm -Option Constant -Value { `
-            param([Microsoft.Azure.Commands.Compute.Models.PSVirtualMachine]$vmObj) `
-            OnboardVmiWithAmaVm -VMObject $vmObj -ExtensionSettings $amaExtensionSettingsVm
-        }
-        Set-Variable -WhatIf:$False -Confirm:$False -Name sb_vmss -Option Constant -Value { `
-            param([Microsoft.Azure.Commands.Compute.Automation.Models.PSVirtualMachineScaleSet]$vmssObj) `
-            OnboardVmiWithAmaVmss -VMssObject $vmssObj -ExtensionSettings $amaExtensionSettingsVmss
-        }
-        
-        if (!$ProcessAndDependencies) {
-            Set-Variable -WhatIf:$False -Confirm:$False -Name sb_da -Option Constant -Value $sb_nop_block_vm
-            Set-Variable -WhatIf:$False -Confirm:$False -Name sb_da_vmss -Option Constant -Value $sb_nop_block_vmss
-        } else {
-
-            Write-Warning -WarningAction Continue `
-                          ( "VM Insights Map and the associated Dependency agent will be retired on June 30th, 2028. " + `
-                            "Please see our retirement guidance for more details: https://aka.ms/DependencyAgentRetirement." )
-
-            $local:daSettings = @{"enableAMA" = "true"}
-            Set-Variable -WhatIf:$False -Confirm:$False -Name daExtensionSettingsVm -Option Constant -Value `
-            @{
-                "Settings" = $local:daSettings
-            }
-            Set-Variable -WhatIf:$False -Confirm:$False -Name daExtensionSettingsVmss -Option Constant -Value `
-            @{  
-                "Setting" = $local:daSettings
-            }
-            
-            Set-Variable -WhatIf:$False -Confirm:$False -Name sb_da -Option Constant -Value { `
-                param([Microsoft.Azure.Commands.Compute.Models.PSVirtualMachine]$vmObj) `
-                OnboardDaVm -VMObject $vmObj -ExtensionSettings $daExtensionSettingsVm
-            }
-
-            Set-Variable -WhatIf:$False -Confirm:$False -Name sb_da_vmss -Option Constant -Value { `
-                param([Microsoft.Azure.Commands.Compute.Automation.Models.PSVirtualMachineScaleSet]$vmssObj) `
-                OnboardVMssExtension -VMssObject $vmssObj `
-                                     -ExtensionName $daDefaultExtensionName `
-                                     -ExtensionConstantMap $daExtensionConstantsMap `
-                                     -ExtensionSettings $daExtensionSettingsVmss
-            }
-        }
+        throw [UserAssignedManagedIdentityUnknownException]::new("($UserAssignedManagedIdentityResourceGroup) $UserAssignedManagedIdentityName : Failed to locate User Assigned Managed Identity.", $_.Exception)
+    }
     
-        Set-Variable -WhatIf:$False -Confirm:$False -Name sb_roles -Option Constant -Value { `
-            param([String]$rgName) SetManagedIdentityRolesAma -ResourceGroupName $rgName
+    $local:amaSettings = @{
+        'authentication' = @{ 
+            'managedIdentity' = @{
+                'identifier-name' = 'mi_res_id'
+                'identifier-value' = $($UserAssignedManagedIdentityObject.Id) 
+            }
         }
+    }
+    
+    Set-Variable -WhatIf:$False -Confirm:$False -Name amaExtensionSettingsVm -Option Constant -Value `
+    @{
+        "Settings" = $local:amaSettings
+    }
+
+    Set-Variable -WhatIf:$False -Confirm:$False -Name amaExtensionSettingsVmss -Option Constant -Value `
+    @{
+        "Setting" = $local:amaSettings
+    }
+    
+    Set-Variable -WhatIf:$False -Confirm:$False -Name sb_vm -Option Constant -Value { `
+        param([Microsoft.Azure.Commands.Compute.Models.PSVirtualMachine]$vmObj) `
+        OnboardVmiWithAmaVm -VMObject $vmObj -ExtensionSettings $amaExtensionSettingsVm
+    }
+    Set-Variable -WhatIf:$False -Confirm:$False -Name sb_vmss -Option Constant -Value { `
+        param([Microsoft.Azure.Commands.Compute.Automation.Models.PSVirtualMachineScaleSet]$vmssObj) `
+        OnboardVmiWithAmaVmss -VMssObject $vmssObj -ExtensionSettings $amaExtensionSettingsVmss
+    }
+    
+    Set-Variable -WhatIf:$False -Confirm:$False -Name sb_roles -Option Constant -Value { `
+        param([String]$rgName) SetManagedIdentityRolesAma -ResourceGroupName $rgName
     }
 
     if ($TriggerVmssManualVMUpdate) {
@@ -2107,7 +1845,6 @@ try {
                         continue
                     }
                     $vm = &$sb_vm -vmObj $vm
-                    $vm = &$sb_da -vmObj $vm
                     Write-Host "$(FormatVmIdentifier -VMObject $vm) : Successfully onboarded VM insights"
                     $onboardingCounters.Succeeded +=1
                     $unknownExceptionVirtualMachineConsequentCounter = 0
@@ -2139,7 +1876,6 @@ try {
                     Write-Host ""
                     $vmsslogheader = FormatVmssIdentifier -VMssObject $vmss
                     $vmss = &$sb_vmss -vmssObj $vmss
-                    $vmss = &$sb_da_vmss -vmssObj $vmss
                     $vmss = UpdateVMssExtension -VMssObject $vmss
                     $instanceUpgradeFailCounter = 0
                     if ($vmss.UpgradePolicy.Mode -eq 'Manual') {
@@ -2205,3 +1941,5 @@ catch {
 finally {
     PrintSummaryMessage  $onboardingCounters
 }
+
+
